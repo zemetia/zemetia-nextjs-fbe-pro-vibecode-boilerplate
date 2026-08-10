@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Warehouse, Package, ArrowRightLeft, ShieldCheck, Tag, FileText } from 'lucide-react';
-import { getMasterItems } from '../services/storageService';
+import React, { useState } from 'react';
+import { Warehouse, Package, ArrowRightLeft, ShieldCheck, FileText, Plus, CheckCircle2, X } from 'lucide-react';
 
 export default function WarehouseManagement() {
   const [warehouses, setWarehouses] = useState([
@@ -14,6 +13,58 @@ export default function WarehouseManagement() {
     { id: 2, itemCode: 'LM-VALCAMBI-1KG', itemName: 'Valcambi Suisse Gold Bar 1kg (999.9 LBMA)', warehouse: 'Vault Emas Impor Transit', inQty: 2000, outQty: 0, balanceQty: 2000, unit: 'gram', serialNo: 'VC-998811, VC-998812' },
     { id: 3, itemCode: 'JEWELRY-750', itemName: 'Perhiasan Emas 750 (18K) Ekspor', warehouse: 'Vault Perhiasan Siap Ekspor', inQty: 1300, outQty: 0, balanceQty: 1300, unit: 'gram', serialNo: 'EXP-BATCH-01' }
   ]);
+
+  // Transfer Modal State
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    fromVault: 'Vault Emas Impor Transit',
+    toVault: 'Vault Utama PT TAN',
+    itemCode: 'LM-VALCAMBI-1KG',
+    quantityGrams: 500,
+    transferNotes: 'Memindahkan stok impor dari transit ke brankas utama'
+  });
+
+  const handleExecuteTransfer = (e) => {
+    e.preventDefault();
+    if (transferForm.fromVault === transferForm.toVault) {
+      alert('Gudang asal dan gudang tujuan tidak boleh sama.');
+      return;
+    }
+    if (!transferForm.quantityGrams || transferForm.quantityGrams <= 0) {
+      alert('Jumlah gram transfer harus lebih besar dari 0.');
+      return;
+    }
+
+    // Add new transfer log into stock cards
+    const selectedItem = stockCards.find(s => s.itemCode === transferForm.itemCode) || { itemName: 'Valcambi Suisse 1kg' };
+
+    const newRecordFrom = {
+      id: Date.now(),
+      itemCode: transferForm.itemCode,
+      itemName: selectedItem.itemName,
+      warehouse: transferForm.fromVault,
+      inQty: 0,
+      outQty: Number(transferForm.quantityGrams),
+      balanceQty: 1500,
+      unit: 'gram',
+      serialNo: `TRANSFER OUT TO ${transferForm.toVault}`
+    };
+
+    const newRecordTo = {
+      id: Date.now() + 1,
+      itemCode: transferForm.itemCode,
+      itemName: selectedItem.itemName,
+      warehouse: transferForm.toVault,
+      inQty: Number(transferForm.quantityGrams),
+      outQty: 0,
+      balanceQty: 1500,
+      unit: 'gram',
+      serialNo: `TRANSFER IN FROM ${transferForm.fromVault}`
+    };
+
+    setStockCards([newRecordTo, newRecordFrom, ...stockCards]);
+    setShowTransferModal(false);
+  };
 
   return (
     <div>
@@ -72,13 +123,102 @@ export default function WarehouseManagement() {
         </div>
       </div>
 
+      {/* Interactive Transfer Modal */}
+      {showTransferModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px'
+        }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '24px', position: 'relative', border: '1px solid var(--accent-gold)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontFamily: 'var(--font-heading)', color: '#fbbf24', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowRightLeft size={20} /> Form Transfer Emas Antar Gudang Vault
+              </h3>
+              <button onClick={() => setShowTransferModal(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteTransfer}>
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label className="form-label">Gudang Vault Asal (Pengirim)</label>
+                <select
+                  className="form-select"
+                  value={transferForm.fromVault}
+                  onChange={e => setTransferForm({ ...transferForm, fromVault: e.target.value })}
+                >
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label className="form-label">Gudang Vault Tujuan (Penerima)</label>
+                <select
+                  className="form-select"
+                  value={transferForm.toVault}
+                  onChange={e => setTransferForm({ ...transferForm, toVault: e.target.value })}
+                >
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label className="form-label">Pilih Barang Emas Yang Ditransfer</label>
+                <select
+                  className="form-select"
+                  value={transferForm.itemCode}
+                  onChange={e => setTransferForm({ ...transferForm, itemCode: e.target.value })}
+                >
+                  <option value="LM-VALCAMBI-1KG">Valcambi Suisse Gold Bar 1kg (999.9)</option>
+                  <option value="LM-ANTAM-1000G">Emas Batangan Antam 1kg (999.9)</option>
+                  <option value="JEWELRY-750">Perhiasan Emas 750 (18K)</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label className="form-label">Jumlah Berat Emas (Gram)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={transferForm.quantityGrams}
+                  onChange={e => setTransferForm({ ...transferForm, quantityGrams: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label className="form-label">Catatan Keterangan Transfer</label>
+                <input
+                  className="form-input"
+                  value={transferForm.transferNotes}
+                  onChange={e => setTransferForm({ ...transferForm, transferNotes: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-primary" style={{ background: 'rgba(255,255,255,0.1)' }} onClick={() => setShowTransferModal(false)}>
+                  Batal
+                </button>
+                <button type="submit" className="btn-primary">
+                  <CheckCircle2 size={16} /> Proses Transfer Emas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Stock Movement Card Table */}
       <div className="glass-panel" style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FileText color="#38bdf8" size={20} /> Kartu Stok Bar / Vault Stock Position
           </h3>
-          <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => alert('🔄 Memproses Transfer Antar Gudang Vault...')}>
+          <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => setShowTransferModal(true)}>
             <ArrowRightLeft size={16} /> Transfer Antar Vault
           </button>
         </div>
@@ -102,8 +242,8 @@ export default function WarehouseManagement() {
                   <td><strong>{sc.itemCode}</strong></td>
                   <td>{sc.itemName}</td>
                   <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>{sc.warehouse}</span></td>
-                  <td style={{ color: '#34d399' }}>+{sc.inQty} g</td>
-                  <td style={{ color: '#ef4444' }}>-{sc.outQty} g</td>
+                  <td style={{ color: '#34d399' }}>{sc.inQty > 0 ? `+${sc.inQty} g` : '-'}</td>
+                  <td style={{ color: '#ef4444' }}>{sc.outQty > 0 ? `-${sc.outQty} g` : '-'}</td>
                   <td style={{ textAlign: 'right', fontWeight: 800, color: '#fbbf24', fontSize: '1rem' }}>{sc.balanceQty} g</td>
                   <td><small style={{ color: '#38bdf8' }}>{sc.serialNo}</small></td>
                 </tr>
