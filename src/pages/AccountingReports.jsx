@@ -1,0 +1,401 @@
+import React, { useState, useEffect } from 'react';
+import { BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { getCOA } from '../services/storageService';
+
+export default function AccountingReports() {
+  const [activeTab, setActiveTab] = useState('journals'); // journals, gl, income, balance, cashflow
+  const [journals, setJournals] = useState([]);
+  const [selectedAccountCode, setSelectedAccountCode] = useState('1157');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [coaList, setCoaList] = useState([]);
+
+  const [newJournal, setNewJournal] = useState({
+    date: new Date().toISOString().split('T')[0],
+    description: 'Jurnal Penyesuaian / Transaksi Kas Ops',
+    debitAccount: '1157',
+    creditAccount: '2110',
+    amount: 10000000
+  });
+
+  useEffect(() => {
+    setCoaList(getCOA().filter(a => a.type === 'detail'));
+    loadJournals();
+  }, [activeTab]);
+
+  const loadJournals = () => {
+    if (typeof window !== 'undefined' && window.Storage) {
+      const stored = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
+      setJournals(stored);
+    }
+  };
+
+  const handleCreateJournal = (e) => {
+    e.preventDefault();
+    if (!newJournal.amount || !newJournal.description) {
+      alert('Deskripsi dan nominal jurnal wajib diisi');
+      return;
+    }
+
+    const entry = {
+      id: Date.now(),
+      entryNumber: `JRN-${Date.now().toString().slice(-6)}`,
+      date: newJournal.date,
+      description: newJournal.description,
+      lines: [
+        { accountCode: newJournal.debitAccount, accountName: coaList.find(a => a.code === newJournal.debitAccount)?.name || newJournal.debitAccount, debit: Number(newJournal.amount), credit: 0 },
+        { accountCode: newJournal.creditAccount, accountName: coaList.find(a => a.code === newJournal.creditAccount)?.name || newJournal.creditAccount, debit: 0, credit: Number(newJournal.amount) }
+      ],
+      createdAt: new Date().toISOString()
+    };
+
+    if (typeof window !== 'undefined' && window.Storage) {
+      const list = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
+      list.unshift(entry);
+      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, list);
+      alert(`✅ Jurnal Mutasi (${entry.entryNumber}) Berhasil Diposting!`);
+      loadJournals();
+      setShowAddForm(false);
+    }
+  };
+
+  // Compute GL Mutations for selected account
+  const glMutations = [];
+  let runningBalance = 0;
+  journals.forEach(j => {
+    j.lines?.forEach(line => {
+      if (line.accountCode === selectedAccountCode) {
+        const debit = Number(line.debit || 0);
+        const credit = Number(line.credit || 0);
+        runningBalance += (debit - credit);
+        glMutations.push({
+          journalNo: j.entryNumber,
+          date: j.date,
+          description: j.description,
+          debit,
+          credit,
+          balance: runningBalance
+        });
+      }
+    });
+  });
+
+  return (
+    <div>
+      {/* Header Controls */}
+      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+          <div>
+            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <BookOpen color="#f59e0b" size={24} /> Modul Akuntansi & Laporan Keuangan SAK EMKM
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Mutasi Jurnal Umum, Buku Besar (GL), Laporan Laba Rugi, Posisi Keuangan (Neraca), & Arus Kas PT TAN
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="btn-primary" onClick={() => alert('🖨️ Mencetak Laporan Keuangan PDF...')}>
+              <Printer size={16} /> Cetak Laporan PDF
+            </button>
+            <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
+              <Plus size={16} /> Input Jurnal Manual
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+          {[
+            { id: 'journals', label: '📖 Mutasi Jurnal Umum' },
+            { id: 'gl', label: '📒 Buku Besar (General Ledger)' },
+            { id: 'income', label: '📈 Laporan Laba Rugi' },
+            { id: 'balance', label: '🏛️ Laporan Posisi Keuangan (Neraca)' },
+            { id: 'cashflow', label: '💵 Laporan Arus Kas' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-color)',
+                background: activeTab === tab.id ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)',
+                color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
+                fontWeight: activeTab === tab.id ? 700 : 500,
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Form Add Manual Journal */}
+        {showAddForm && (
+          <form onSubmit={handleCreateJournal} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '1px solid var(--accent-gold)' }}>
+            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Input Jurnal Manual</h4>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Tanggal Jurnal</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={newJournal.date}
+                  onChange={e => setNewJournal({ ...newJournal, date: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Akun Debet</label>
+                <select
+                  className="form-select"
+                  value={newJournal.debitAccount}
+                  onChange={e => setNewJournal({ ...newJournal, debitAccount: e.target.value })}
+                >
+                  {coaList.map(a => (
+                    <option key={a.code} value={a.code}>{a.code} - {a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Akun Kredit</label>
+                <select
+                  className="form-select"
+                  value={newJournal.creditAccount}
+                  onChange={e => setNewJournal({ ...newJournal, creditAccount: e.target.value })}
+                >
+                  {coaList.map(a => (
+                    <option key={a.code} value={a.code}>{a.code} - {a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nominal (IDR)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={newJournal.amount}
+                  onChange={e => setNewJournal({ ...newJournal, amount: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label">Deskripsi Keterangan Jurnal</label>
+                <input
+                  className="form-input"
+                  value={newJournal.description}
+                  onChange={e => setNewJournal({ ...newJournal, description: e.target.value })}
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
+              Posting Jurnal Ke Ledger
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* Tab 1: Mutasi Jurnal Umum */}
+      {activeTab === 'journals' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+            📖 Daftar Mutasi Jurnal Umum ({journals.length})
+          </h3>
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>No. Jurnal</th>
+                  <th>Tanggal</th>
+                  <th>Deskripsi Keterangan</th>
+                  <th>Kode & Nama Akun</th>
+                  <th style={{ textAlign: 'right' }}>Debet (IDR)</th>
+                  <th style={{ textAlign: 'right' }}>Kredit (IDR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {journals.map(j => (
+                  <React.Fragment key={j.id || j.entryNumber}>
+                    {j.lines?.map((line, idx) => (
+                      <tr key={idx} style={{ background: idx === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                        {idx === 0 && <td rowSpan={j.lines.length}><strong>{j.entryNumber}</strong></td>}
+                        {idx === 0 && <td rowSpan={j.lines.length}>{j.date}</td>}
+                        {idx === 0 && <td rowSpan={j.lines.length}>{j.description}</td>}
+                        <td>
+                          <span style={{ paddingLeft: line.credit > 0 ? '20px' : '0' }}>
+                            <strong>{line.accountCode}</strong> - {line.accountName}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {line.debit > 0 ? `Rp ${line.debit.toLocaleString()}` : '-'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {line.credit > 0 ? `Rp ${line.credit.toLocaleString()}` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Buku Besar (General Ledger) */}
+      {activeTab === 'gl' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <label className="form-label" style={{ marginBottom: 0 }}>Pilih Akun Buku Besar:</label>
+            <select
+              className="form-select"
+              style={{ maxWidth: '360px' }}
+              value={selectedAccountCode}
+              onChange={e => setSelectedAccountCode(e.target.value)}
+            >
+              {coaList.map(a => (
+                <option key={a.code} value={a.code}>{a.code} - {a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+            📒 Buku Besar Akun {selectedAccountCode} ({glMutations.length} Mutasi)
+          </h3>
+
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>No. Jurnal</th>
+                  <th>Tanggal</th>
+                  <th>Keterangan</th>
+                  <th style={{ textAlign: 'right' }}>Debet (IDR)</th>
+                  <th style={{ textAlign: 'right' }}>Kredit (IDR)</th>
+                  <th style={{ textAlign: 'right' }}>Saldo Akhir (IDR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {glMutations.length === 0 ? (
+                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Belum ada mutasi untuk akun ini</td></tr>
+                ) : (
+                  glMutations.map((m, i) => (
+                    <tr key={i}>
+                      <td><strong>{m.journalNo}</strong></td>
+                      <td>{m.date}</td>
+                      <td>{m.description}</td>
+                      <td style={{ textAlign: 'right', color: m.debit > 0 ? '#34d399' : 'inherit' }}>{m.debit > 0 ? `Rp ${m.debit.toLocaleString()}` : '-'}</td>
+                      <td style={{ textAlign: 'right', color: m.credit > 0 ? '#ef4444' : 'inherit' }}>{m.credit > 0 ? `Rp ${m.credit.toLocaleString()}` : '-'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#fbbf24' }}>Rp {m.balance.toLocaleString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Laporan Laba Rugi */}
+      {activeTab === 'income' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#fbbf24' }}>
+            📈 Laporan Laba Rugi SAK EMKM (Ekspor PPN 0%)
+          </h3>
+          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
+            <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '12px' }}>
+              <strong style={{ color: '#34d399' }}>PENDAPATAN EKSPOR (PPN 0%)</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+                <span>4110 - Pendapatan Ekspor Logam Mulia</span>
+                <span>Rp 1.500.000.000</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+                <span>4120 - Pendapatan Ekspor Perhiasan Emas</span>
+                <span>Rp 850.000.000</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#34d399', fontSize: '1.05rem', marginTop: '10px' }}>
+                <span>TOTAL PENDAPATAN EKSPOR</span>
+                <span>Rp 2.350.000.000</span>
+              </div>
+            </div>
+
+            <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '12px' }}>
+              <strong style={{ color: '#ef4444' }}>HARGA POKOK PENJUALAN (HPP)</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+                <span>5114 - HPP Ekspor LM Lokal</span>
+                <span>(Rp 1.200.000.000)</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+                <span>5115 - HPP Ekspor LM Import (Landed Cost)</span>
+                <span>(Rp 650.000.000)</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#ef4444', fontSize: '1.05rem', marginTop: '10px' }}>
+                <span>TOTAL HPP PENJUALAN</span>
+                <span>(Rp 1.850.000.000)</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.2rem', color: '#fbbf24', background: 'rgba(245,158,11,0.1)', padding: '14px', borderRadius: '10px' }}>
+              <span>LABA BERSIH USANA EKSPOR PT TAN</span>
+              <span>Rp 500.000.000</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Laporan Posisi Keuangan */}
+      {activeTab === 'balance' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#38bdf8' }}>
+            🏛️ Laporan Posisi Keuangan (Neraca SAK EMKM)
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
+              <h4 style={{ color: '#34d399', marginBottom: '12px' }}>ASET (ASSETS)</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1125 - Bank Valas USD</span><span>Rp 850.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1157 - Persediaan LM Lokal</span><span>Rp 1.250.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1158 - Persediaan LM Import</span><span>Rp 2.100.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1160 - Persediaan Perhiasan Ekspor</span><span>Rp 1.300.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#34d399', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                <span>TOTAL ASET</span><span>Rp 5.500.000.000</span>
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
+              <h4 style={{ color: '#38bdf8', marginBottom: '12px' }}>KEWAJIBAN & EKUITAS</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>2110 - Utang Usaha</span><span>Rp 1.500.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>3110 - Modal Disetor</span><span>Rp 3.500.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>3210 - Saldo Laba Bersih</span><span>Rp 500.000.000</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#38bdf8', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                <span>TOTAL KEWAJIBAN & EKUITAS</span><span>Rp 5.500.000.000</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 5: Laporan Arus Kas */}
+      {activeTab === 'cashflow' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#34d399' }}>
+            💵 Laporan Arus Kas (Direct Cash Flow Method)
+          </h3>
+          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
+            <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Arus Kas Dari Aktivitas Operasional (Penerimaan Ekspor & Pembelian LM)</span>
+              <strong style={{ color: '#34d399' }}>+ Rp 450.000.000</strong>
+            </div>
+            <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Arus Kas Dari Aktivitas Investasi (Peralatan & Brankas Vault)</span>
+              <strong style={{ color: '#ef4444' }}>- Rp 50.000.000</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.1rem', color: '#fbbf24', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <span>KENAIKAN BERSIH KAS & BANK VALAS</span>
+              <span>+ Rp 400.000.000</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

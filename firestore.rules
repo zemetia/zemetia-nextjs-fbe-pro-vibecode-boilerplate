@@ -1,0 +1,632 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // ERP Users Collection (for authentication lookup)
+    // ==========================================
+    match /erp_users/{userId} {
+      // Allow read for login purposes (username->email lookup before authentication)
+      allow read: if true;
+      // Admin can write any user doc; users can write/update their own doc BUT cannot escalate their role/permissions
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']));
+      allow delete: if isAdmin();
+    }
+
+    match /users/{document=**} {
+        allow read: if isSignedIn() && (request.auth.uid == document || isAdmin());
+        allow write: if isAdmin();
+    }
+    
+    // ==========================================
+    // ERP Roles Collection (for permission lookup)
+    // ==========================================
+    match /erp_roles/{document=**} {
+      // Allow read for authentication purposes
+      allow read: if true;
+      // Only admins can modify role definitions
+      allow write: if isAdmin();
+    }
+    
+    // ==========================================
+    // Login Attempts (Security: Brute Force Protection)
+    // ==========================================
+    match /loginAttempts/{username} {
+      // Allow read/write without auth since this happens before login
+      // We need to track failed attempts before user is authenticated
+      allow read, write: if true;
+    }
+    
+    // Helper function to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper function to get user data from erp_users collection
+    // This matches the collection used by firebase-auth.js
+    function getUserData() {
+      return get(/databases/$(database)/documents/erp_users/$(request.auth.uid)).data;
+    }
+    
+    // Helper function to check if user is admin
+    // Uses exists() to prevent errors if user document doesn't exist
+    function getRole() {
+      return get(/databases/$(database)/documents/erp_users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/erp_users/$(request.auth.uid)) &&
+             (getRole() == 'ADMIN' || getRole() == 'admin');
+    }
+    
+    // Helper function to check user role
+    function hasRole(role) {
+      let r = getRole();
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/erp_users/$(request.auth.uid)) && 
+             (r == role || 
+              (role == 'MANAGER_FINANCE' && r == 'manager_finance') ||
+              (role == 'DIRECTOR' && r == 'director') ||
+              (role == 'FINANCE' && r == 'finance') ||
+              (role == 'ADMIN' && r == 'admin') ||
+              (role == 'PURCHASING_HEAD' && r == 'purchasing_head') ||
+              (role == 'PRODUCTION' && r == 'production') ||
+              (role == 'PRODUCTION_HEAD' && r == 'production_head') ||
+              (role == 'WAREHOUSE_STAFF' && r == 'warehouse_staff') ||
+              (role == 'SALES' && r == 'sales') ||
+              (role == 'KASIR' && r == 'kasir') ||
+              (role == 'HR' && r == 'hr') ||
+              (role == 'HRD' && r == 'hrd') ||
+              (role == 'HRD_MANAGER' && r == 'hrd_manager') ||
+              (role == 'INVENTORY' && r == 'inventory')
+             );
+    }
+
+    function canAccessPayrollData() {
+      return isAdmin() ||
+             hasRole('DIRECTOR') ||
+             hasRole('HR') ||
+             hasRole('HRD') ||
+             hasRole('HRD_MANAGER');
+    }
+    
+    // ==========================================
+    // Users Collection
+    // ==========================================
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      
+      // Users can update their own profile (except role and permissions)
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']);
+      
+      // Only admins can create users or change roles
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
+    }
+    
+    // ==========================================
+    // Roles Collection
+    // ==========================================
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // ==========================================
+    // Chart of Accounts
+    // ==========================================
+    match /chartOfAccounts/{accountId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR') || hasRole('FINANCE');
+    }
+    
+    // ==========================================
+    // Journal Entries
+    // ==========================================
+    match /journalEntries/{entryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      // Allow update/delete for admin, director, finance manager, OR finance staff
+      allow update, delete: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR') || hasRole('FINANCE'); 
+    }
+    
+    // ==========================================
+    // Payment Vouchers
+    // ==========================================
+    match /paymentVouchers/{voucherId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      
+      // Only creator, finance manager, director, or admin can update
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin() ||
+        hasRole('MANAGER_FINANCE') ||
+        hasRole('DIRECTOR') ||
+        hasRole('FINANCE')
+      );
+      
+      // Only admin or creator (if draft) can delete
+      allow delete: if isAdmin() || 
+                      (resource.data.createdBy == request.auth.uid && resource.data.status == 'draft');
+    }
+    
+    // ==========================================
+    // Receipt Vouchers (BKM/BBM)
+    // ==========================================
+    match /receiptVouchers/{voucherId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      
+      // Only creator, finance manager, or admin can update
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin() ||
+        hasRole('MANAGER_FINANCE') ||
+        hasRole('KASIR') ||
+        hasRole('DIRECTOR') ||
+        hasRole('FINANCE')
+      );
+      
+      // Only admin or creator (if draft) can delete
+      allow delete: if isAdmin() || 
+                      (resource.data.createdBy == request.auth.uid && resource.data.status == 'draft');
+    }
+    
+    // ==========================================
+    // Purchase Requisitions
+    // ==========================================
+    match /purchaseRequisitions/{requisitionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      
+      // Only creator, purchasing head, finance manager, director, admin, OR staff can update
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.requestedBy == request.auth.uid || // Fallback for older docs
+        isAdmin() ||
+        hasRole('MANAGER_FINANCE') ||
+        hasRole('PURCHASING_HEAD') ||
+        hasRole('DIRECTOR') ||
+        hasRole('FINANCE') ||
+        hasRole('PRODUCTION') ||
+        hasRole('PRODUCTION_HEAD') ||
+        hasRole('WAREHOUSE_STAFF') || // Added Warehouse permission
+        hasRole('SALES') ||
+        // Generic: Allow any Head role to update (future proofing)
+        (exists(/databases/$(database)/documents/erp_users/$(request.auth.uid)) && getUserData().role.matches('.*_head'))
+      );
+      
+      // Only admin or creator (if draft) can delete
+      allow delete: if isAdmin() || 
+                      (resource.data.createdBy == request.auth.uid && resource.data.status == 'draft');
+    }
+
+    // ==========================================
+    // Master Employees
+    // ==========================================
+    match /employees/{employeeId} {
+      allow read, write: if canAccessPayrollData();
+    }
+    
+    // ==========================================
+    // Master Data (Suppliers, Customers, Items, etc.)
+    // ==========================================
+    match /suppliers/{supplierId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('PURCHASING_HEAD') || hasRole('DIRECTOR');
+    }
+    
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR');
+    }
+    
+    match /items/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('PURCHASING_HEAD') || hasRole('DIRECTOR') || hasRole('WAREHOUSE_STAFF') || hasRole('INVENTORY') || hasRole('PRODUCTION');
+    }
+    
+    match /warehouses/{warehouseId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('DIRECTOR');
+    }
+    
+    match /taxes/{taxId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR');
+    }
+    
+    match /bankAccounts/{bankId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR');
+    }
+    
+    match /paymentTerms/{termId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('DIRECTOR');
+    }
+    
+    match /departments/{deptId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('DIRECTOR');
+    }
+    
+    // ==========================================
+    // Configuration
+    // ==========================================
+    match /config/{configId} {
+      allow read: if isSignedIn();
+      // Only Admin, Director, or Finance Manager can update app configuration
+      allow write: if isAdmin() || hasRole('DIRECTOR') || hasRole('MANAGER_FINANCE');
+    }
+    
+    // ==========================================
+    // Transaction Counters
+    // ==========================================
+    match /transactionCounters/{counterId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // All authenticated users can increment counters
+    }
+    
+    // ==========================================
+    // Products/Items
+    // ==========================================
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE');
+    }
+    
+    // ==========================================
+    // Account Mapping Configuration
+    // ==========================================
+    match /accountMapping/{mappingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR');
+    }
+    
+    // ==========================================
+    // Production Batches
+    // ==========================================
+    match /productionBatches/{batchId} {
+      allow read, write: if isSignedIn();
+    }
+    match /erp_production_batches/{batchId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Master Metadata (Aliases for raw keys)
+    // ==========================================
+    match /masterShifts/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /erp_master_shifts/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /workCalendar/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /erp_work_calendar/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /serializedItems/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /serialized_items/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /packaging/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // DELETED RECORDS (TOMBSTONES)
+    // ==========================================
+    match /deletedRecords/{recordId} {
+      // Allow all authenticated users to read/write tombstones
+      // Crucial for the absolute deletion system
+      allow read, write: if isSignedIn();
+    }
+    match /erp_deleted_ids/{recordId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Warehouse Stock & Movements
+    // ==========================================
+    match /warehouseStock/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /warehouseStockMovements/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Gold Dust Recovery
+    // ==========================================
+    match /goldDustRecovery/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ==========================================
+    // Production Orders
+    // ==========================================
+    match /productionOrders/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /productionDetails/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /productionLogs/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Goods Receipts
+    // ==========================================
+    match /goodsReceipts/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ==========================================
+    // Audit Log
+    // ==========================================
+    match /auditLog/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /auditlog/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ==========================================
+    // Bug Reports
+    // ==========================================
+    match /bug_reports/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /bugReports/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Attendance (HR)
+    // ==========================================
+    match /attendance/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    match /attendance_raw/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /machine_commands/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Payroll (HR)
+    // ==========================================
+    match /payroll/{docId} {
+      allow read, write: if canAccessPayrollData();
+    }
+
+    match /payrollWorkdays/{docId} {
+      allow read, write: if canAccessPayrollData();
+    }
+
+    match /payrollWorkdaysAudit/{docId} {
+      allow read, write: if canAccessPayrollData();
+    }
+
+    // ==========================================
+    // Purchase Orders
+    // ==========================================
+    match /purchaseOrders/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Sales Orders
+    // ==========================================
+    match /salesOrders/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Quotations
+    // ==========================================
+    match /quotations/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Direct Swaps (Tukar Tambah)
+    // ==========================================
+    match /directSwaps/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // TTB Documents (Tanda Terima Barang)
+    // ==========================================
+    match /ttbDocuments/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Supplier Invoices
+    // ==========================================
+    match /supplierInvoices/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Fixed Assets
+    // ==========================================
+    match /fixedAssets/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('MANAGER_FINANCE') || hasRole('DIRECTOR') || hasRole('FINANCE');
+    }
+
+    // ==========================================
+    // KYC Records
+    // ==========================================
+    match /kycRecords/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Checks & Giro
+    // ==========================================
+    match /checksGiro/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Payment Schedules
+    // ==========================================
+    match /paymentSchedules/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Lab Tests
+    // ==========================================
+    match /labTests/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Supplier Returns
+    // ==========================================
+    match /supplierReturns/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Job Orders
+    // ==========================================
+    match /jobOrders/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /erp_job_orders/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Production & Lab
+    // ==========================================
+    match /boms/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /electrolysisLogs/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /qcLogs/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /labQualitySamples/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // HR & Leave Management
+    // ==========================================
+    match /leaveRequests/{docId} {
+      allow read, write: if isSignedIn();
+    }
+    match /leaveBalances/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Stock Cards
+    // ==========================================
+    match /stockCards/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    // ==========================================
+    // Master Purity & Refining Rules
+    // ==========================================
+    match /erp_master_purity_grades/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('DIRECTOR') || hasRole('MANAGER_FINANCE') || hasRole('PRODUCTION_HEAD');
+    }
+    match /erp_master_refining_rules/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || hasRole('DIRECTOR') || hasRole('MANAGER_FINANCE') || hasRole('PRODUCTION_HEAD');
+    }
+
+    // ==========================================
+    // Gold Transactions
+    // ==========================================
+    match /goldTransactions/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ==========================================
+    // Client Portal - Smelting Requests
+    // ==========================================
+    match /smelting_requests/{resi} {
+      // Anyone can create a new request
+      allow create: if true;
+      // Anyone can get a specific request if they know the exact ID
+      allow get: if true;
+      // Only authenticated users (admins) can list all or update/delete
+      allow list, update, delete: if isSignedIn();
+    }
+
+    // ==========================================
+    // Expense Claims (Reimbursement)
+    // ==========================================
+    match /expense_claims/{claimId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == request.auth.uid ||
+        isAdmin() ||
+        hasRole('MANAGER_FINANCE') ||
+        hasRole('DIRECTOR') ||
+        hasRole('FINANCE') ||
+        hasRole('KASIR')
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        (resource.data.employeeId == request.auth.uid && resource.data.status in ['draft', 'pending_review']) ||
+        isAdmin() ||
+        hasRole('MANAGER_FINANCE') ||
+        hasRole('DIRECTOR') ||
+        hasRole('FINANCE') ||
+        hasRole('KASIR')
+      );
+      allow delete: if isAdmin() || (resource.data.employeeId == request.auth.uid && resource.data.status == 'draft');
+    }
+    // ==========================================
+    // Refinery Simulations (Kalkulator Simulasi Awi)
+    // ==========================================
+    match /refinerySimulations/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
+

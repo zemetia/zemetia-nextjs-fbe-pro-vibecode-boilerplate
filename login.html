@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - ERP System</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 48px;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-header h1 {
+            color: #1a1a1a;
+            font-size: 28px;
+            margin: 0 0 8px 0;
+        }
+
+        .login-header p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .default-creds {
+            margin-top: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .default-creds strong {
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🔐 ERP System</h1>
+            <p>Silakan login untuk melanjutkan</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="login-btn">Login</button>
+        </form>
+
+        <div class="default-creds">
+            <strong>Default Admin:</strong><br>
+            Username: <code>admin</code><br>
+            Password: <code>admin123</code>
+        </div>
+    </div>
+
+    <!-- Firebase Configuration and Modules -->
+    <script type="module" src="firebase-config.js"></script>
+    <script type="module" src="data/firebase-storage.js"></script>
+    <script type="module" src="modules/firebase-auth.js"></script>
+
+    <!-- Fallback Storage -->
+    <script src="data/storage.js"></script>
+    <script type="module">
+        // Import Firebase Auth
+        import FirebaseAuth from './modules/firebase-auth.js';
+
+        // Initialize storage (fallback)
+        Storage.init();
+
+        // Handle login form submission
+        document.getElementById('loginForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMessage');
+
+            // Clear previous error
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+
+            // Attempt login with Firebase
+            const result = await FirebaseAuth.login(username, password);
+
+            if (result.success) {
+                // Redirect to main app
+                window.location.href = 'index.html';
+            } else {
+                // Show error message
+                errorDiv.textContent = result.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // If already logged in, redirect to main app
+        if (FirebaseAuth.isAuthenticated()) {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+
+</html>
