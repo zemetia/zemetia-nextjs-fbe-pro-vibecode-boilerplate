@@ -14,6 +14,7 @@ import MasterItemPage from './pages/MasterItemPage';
 import MasterCustomer from './pages/MasterCustomer';
 import MasterSupplier from './pages/MasterSupplier';
 import AccountingReports from './pages/AccountingReports';
+import SystemSettingsPage from './pages/SystemSettingsPage';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -33,6 +34,7 @@ export default function App() {
       case 'master-suppliers': return 'Master Supplier Emas (Impor & Lokal)';
       case 'accounting-reports': return 'Jurnal Mutasi & Laporan Keuangan SAK EMKM';
       case 'coa-setting': return 'Setting Chart of Accounts (COA SAK EMKM)';
+      case 'system-settings': return 'Setting Logo Perusahaan, Backup & Restore Database System';
       default: return 'PT TAN Enterprise ERP';
     }
   };
@@ -52,6 +54,7 @@ export default function App() {
       case 'master-suppliers': return <MasterSupplier />;
       case 'accounting-reports': return <AccountingReports />;
       case 'coa-setting': return <ChartOfAccounts />;
+      case 'system-settings': return <SystemSettingsPage />;
       default: return <Dashboard setActivePage={setActivePage} />;
     }
   };

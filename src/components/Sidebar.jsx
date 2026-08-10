@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, ShoppingCart, PlaneTakeoff, Flame, 
   FileText, CreditCard, Warehouse, BookOpen, Package, 
-  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3
+  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings
 } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage }) {
@@ -11,7 +11,8 @@ export default function Sidebar({ activePage, setActivePage }) {
     purchasing: true,
     sales: true,
     vault: true,
-    accounting: true
+    accounting: true,
+    system: true
   });
 
   const toggleCategory = (cat) => {
@@ -53,6 +54,13 @@ export default function Sidebar({ activePage, setActivePage }) {
         { id: 'accounting-reports', label: 'Jurnal Mutasi & Laporan Keuangan', icon: BarChart3 },
         { id: 'voucher-mgmt', label: 'Voucher Kas/Bank (BKK/BKM)', icon: CreditCard },
         { id: 'coa-setting', label: 'Setting COA SAK EMKM', icon: BookOpen },
+      ]
+    },
+    {
+      id: 'system',
+      title: '⚙️ SETTING & UTILITY',
+      items: [
+        { id: 'system-settings', label: 'Setting Logo, Backup & Restore', icon: Settings },
       ]
     }
   ];
