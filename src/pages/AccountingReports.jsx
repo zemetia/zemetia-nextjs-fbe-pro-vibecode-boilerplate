@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign, ArrowUpRight, ArrowDownRight, Scale, Clock, Award } from 'lucide-react';
 import { getCOA } from '../services/storageService';
 
 export default function AccountingReports() {
-  const [activeTab, setActiveTab] = useState('journals'); // journals, gl, income, balance, cashflow
+  const [activeTab, setActiveTab] = useState('journals'); // journals, gl, trial, income, balance, cashflow, aging, calk
   const [journals, setJournals] = useState([]);
   const [selectedAccountCode, setSelectedAccountCode] = useState('1157');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -86,10 +86,10 @@ export default function AccountingReports() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
           <div>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <BookOpen color="#f59e0b" size={24} /> Modul Akuntansi & Laporan Keuangan SAK EMKM
+              <BookOpen color="#f59e0b" size={24} /> Modul Laporan Keuangan Lengkap SAK EMKM PT TAN
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Mutasi Jurnal Umum, Buku Besar (GL), Laporan Laba Rugi, Posisi Keuangan (Neraca), & Arus Kas PT TAN
+              8 Laporan Keuangan Resmi (Jurnal Umum, Buku Besar, Neraca Saldo, Laba Rugi, Neraca, Arus Kas, Aging AR/AP, & CALK)
             </p>
           </div>
 
@@ -104,26 +104,29 @@ export default function AccountingReports() {
         </div>
 
         {/* Tab Navigation */}
-        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
           {[
-            { id: 'journals', label: '📖 Mutasi Jurnal Umum' },
-            { id: 'gl', label: '📒 Buku Besar (General Ledger)' },
-            { id: 'income', label: '📈 Laporan Laba Rugi' },
-            { id: 'balance', label: '🏛️ Laporan Posisi Keuangan (Neraca)' },
-            { id: 'cashflow', label: '💵 Laporan Arus Kas' }
+            { id: 'journals', label: '📖 Mutasi Jurnal' },
+            { id: 'gl', label: '📒 Buku Besar' },
+            { id: 'trial', label: '⚖️ Neraca Saldo' },
+            { id: 'income', label: '📈 Laba Rugi SAK' },
+            { id: 'balance', label: '🏛️ Posisi Keuangan (Neraca)' },
+            { id: 'cashflow', label: '💵 Arus Kas' },
+            { id: 'aging', label: '⏱️ Aging AR/AP' },
+            { id: 'calk', label: '📜 CALK SAK EMKM' }
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '10px 18px',
-                borderRadius: '10px',
+                padding: '9px 14px',
+                borderRadius: '8px',
                 border: '1px solid var(--border-color)',
                 background: activeTab === tab.id ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)',
                 color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
                 fontWeight: activeTab === tab.id ? 700 : 500,
                 cursor: 'pointer',
-                fontSize: '0.85rem',
+                fontSize: '0.8rem',
                 whiteSpace: 'nowrap'
               }}
             >
@@ -296,7 +299,40 @@ export default function AccountingReports() {
         </div>
       )}
 
-      {/* Tab 3: Laporan Laba Rugi */}
+      {/* Tab 3: Neraca Saldo (Trial Balance) */}
+      {activeTab === 'trial' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24' }}>
+            ⚖️ Laporan Neraca Saldo (Trial Balance SAK EMKM)
+          </h3>
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Kode Akun</th>
+                  <th>Nama Akun Keuangan</th>
+                  <th style={{ textAlign: 'right' }}>Total Debet (IDR)</th>
+                  <th style={{ textAlign: 'right' }}>Total Kredit (IDR)</th>
+                  <th style={{ textAlign: 'right' }}>Saldo Akhir</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coaList.map(acc => (
+                  <tr key={acc.code}>
+                    <td><strong>{acc.code}</strong></td>
+                    <td>{acc.name}</td>
+                    <td style={{ textAlign: 'right' }}>Rp {(acc.balance || 0).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>Rp 0</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>Rp {(acc.balance || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Laporan Laba Rugi */}
       {activeTab === 'income' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#fbbf24' }}>
@@ -336,14 +372,14 @@ export default function AccountingReports() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.2rem', color: '#fbbf24', background: 'rgba(245,158,11,0.1)', padding: '14px', borderRadius: '10px' }}>
-              <span>LABA BERSIH USANA EKSPOR PT TAN</span>
+              <span>LABA BERSIH USAHA EKSPOR PT TAN</span>
               <span>Rp 500.000.000</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 4: Laporan Posisi Keuangan */}
+      {/* Tab 5: Laporan Posisi Keuangan */}
       {activeTab === 'balance' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#38bdf8' }}>
@@ -374,7 +410,7 @@ export default function AccountingReports() {
         </div>
       )}
 
-      {/* Tab 5: Laporan Arus Kas */}
+      {/* Tab 6: Laporan Arus Kas */}
       {activeTab === 'cashflow' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#34d399' }}>
@@ -393,6 +429,75 @@ export default function AccountingReports() {
               <span>KENAIKAN BERSIH KAS & BANK VALAS</span>
               <span>+ Rp 400.000.000</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 7: Aging AR/AP */}
+      {activeTab === 'aging' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#38bdf8' }}>
+            ⏱️ Laporan Umur Piutang & Utang (AR/AP Aging Report)
+          </h3>
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Nama Mitra / Buyer</th>
+                  <th>Kategori</th>
+                  <th>1-30 Hari</th>
+                  <th>31-60 Hari</th>
+                  <th>61-90 Hari</th>
+                  <th>&gt; 90 Hari</th>
+                  <th style={{ textAlign: 'right' }}>Total Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Dubai Gold & Jewelry DMCC</strong></td>
+                  <td><span className="badge badge-emerald">Piutang Ekspor</span></td>
+                  <td style={{ color: '#34d399' }}>$ 50,000.00</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>$ 50,000.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Valcambi SA Switzerland</strong></td>
+                  <td><span className="badge badge-gold">Utang Impor</span></td>
+                  <td>$ 75,000.00</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>$ 75,000.00</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 8: CALK SAK EMKM */}
+      {activeTab === 'calk' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#fbbf24' }}>
+            📜 Catatan Atas Laporan Keuangan (CALK SAK EMKM)
+          </h3>
+          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', fontSize: '0.85rem', lineHeight: '1.7' }}>
+            <h4 style={{ color: '#fbbf24', marginBottom: '8px' }}>1. Umum & Dasar Penyusunan Laporan Keuangan</h4>
+            <p>
+              PT TAN didirikan di Indonesia dengan kegiatan usaha utama Trading Logam Mulia dan Produksi Perhiasan Emas Khusus Ekspor (PPN 0%). Laporan keuangan disusun berdasarkan Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).
+            </p>
+
+            <h4 style={{ color: '#fbbf24', marginTop: '16px', marginBottom: '8px' }}>2. Kebijakan Akuntansi Persediaan & Landed Cost</h4>
+            <p>
+              Persediaan emas murni impor dinilai berdasarkan Biaya Perolehan Landed Cost (Biaya Pembelian FOB + Bea Masuk + Freight & Asuransi Impor). PPh 22 Impor diakui sebagai Pajak Dibayar Di Muka (Aset Lancar) dan tidak dikapitalisasi ke nilai barang.
+            </p>
+
+            <h4 style={{ color: '#fbbf24', marginTop: '16px', marginBottom: '8px' }}>3. Transaksi Mata Uang Asing (Valas)</h4>
+            <p>
+              Transaksi ekspor dan impor dalam mata uang USD dikonversi ke mata uang fungsional Rupiah menggunakan Kurs BCA e-Rate pada tanggal transaksi. Selisih kurs diakui pada Laporan Laba Rugi (Akun `6110`).
+            </p>
           </div>
         </div>
       )}
