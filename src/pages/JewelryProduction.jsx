@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
-import { Hammer, Sparkles, Layers, RefreshCw, Plus, CheckCircle2, ArrowRight, Package } from 'lucide-react';
+import { Hammer, Sparkles, Layers, RefreshCw, Plus, CheckCircle2, Settings, Package, Sliders, Save } from 'lucide-react';
 
 export default function JewelryProduction() {
+  const [activeTab, setActiveTab] = useState('calculator'); // calculator, bom-settings, settlement
+
+  // Dynamic BOM Presets State (Manual Setting, NOT hardcoded)
+  const [bomFormulas, setBomFormulas] = useState([
+    { code: '750', name: 'Karat 750 (18K Standard Ekspor)', fineGoldPct: 75.0, safetyMarginPct: 0.2, alloyAgPct: 15.0, alloyCuPct: 10.0, description: 'Standar Ekspor Dubai 18K Yellow Gold' },
+    { code: '700', name: 'Karat 700 (17K Standard)', fineGoldPct: 70.0, safetyMarginPct: 0.2, alloyAgPct: 18.0, alloyCuPct: 12.0, description: 'Standar Perhiasan Lokal & Ekspor Asia' },
+    { code: '375', name: 'Karat 375 (8K Light Gold)', fineGoldPct: 37.5, safetyMarginPct: 0.2, alloyAgPct: 35.0, alloyCuPct: 27.5, description: 'Karat Ekonomis Ekspor Europe/USA' }
+  ]);
+
   // Calculator & SPK State
   const [orderForm, setOrderForm] = useState({
     buyerName: 'Dubai Gold & Jewelry DMCC',
@@ -12,19 +21,43 @@ export default function JewelryProduction() {
     masterAlloyType: 'Alloy Perak-Tembaga (Red/Yellow Gold)'
   });
 
-  // Calculate Materials
-  const purityFraction = orderForm.targetKarat === '750' ? 0.75 : orderForm.targetKarat === '700' ? 0.70 : 0.375;
-  const fineGoldNeeded = orderForm.grossWeight * purityFraction * (1 + orderForm.lossTolerancePct / 100);
-  const masterAlloyNeeded = orderForm.grossWeight * (1 - purityFraction);
+  // Active Selected Formula
+  const selectedFormula = bomFormulas.find(f => f.code === orderForm.targetKarat) || bomFormulas[0];
+
+  // Calculate Materials based on Dynamic Formula Settings
+  const effectiveFineGoldPct = selectedFormula.fineGoldPct + selectedFormula.safetyMarginPct;
+  const fineGoldNeeded = orderForm.grossWeight * (effectiveFineGoldPct / 100) * (1 + orderForm.lossTolerancePct / 100);
+  const masterAlloyNeeded = orderForm.grossWeight * ((100 - effectiveFineGoldPct) / 100);
+
+  // BOM Formula Edit State
+  const [editingFormula, setEditingFormula] = useState({
+    code: '750',
+    name: 'Karat 750 (18K Standard Ekspor)',
+    fineGoldPct: 75.0,
+    safetyMarginPct: 0.2,
+    alloyAgPct: 15.0,
+    alloyCuPct: 10.0,
+    description: 'Standar Ekspor Dubai 18K'
+  });
 
   // Settlement Form State (Hasil In-House Workshop)
   const [settlementForm, setSettlementForm] = useState({
     joNumber: 'JO-2026-001',
-    jewelryOutputWeight: 985, // Gram perhiasan jadi
-    scrapReturnWeight: 180, // Gram scrap leburan sisa
-    goldLossWeight: 15, // Gram susut lebur (Loss)
-    laborFeeIDR: 15000000 // Ongkos tukang
+    jewelryOutputWeight: 985,
+    scrapReturnWeight: 180,
+    goldLossWeight: 15,
+    laborFeeIDR: 15000000
   });
+
+  const handleSaveFormula = (e) => {
+    e.preventDefault();
+    const updated = bomFormulas.map(f => f.code === editingFormula.code ? editingFormula : f);
+    if (!bomFormulas.some(f => f.code === editingFormula.code)) {
+      updated.push(editingFormula);
+    }
+    setBomFormulas(updated);
+    alert(`✅ Rumus Formula BOM Karat ${editingFormula.code} Berhasil Diperbarui & Disimpan!`);
+  };
 
   const handleIssueToWIP = (e) => {
     e.preventDefault();
@@ -53,167 +86,317 @@ export default function JewelryProduction() {
 
   return (
     <div>
-      {/* 1. Raw Material Converter & Issue to WIP */}
+      {/* Header & Tab Navigation */}
       <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Hammer color="#8b5cf6" size={22} /> Konversi Pesanan Client Ekspor & Pengeluaran Bahan ke Vault WIP
-        </h2>
-
-        <form onSubmit={handleIssueToWIP}>
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">Nama Client / Buyer Ekspor</label>
-              <input
-                className="form-input"
-                value={orderForm.buyerName}
-                onChange={e => setOrderForm({ ...orderForm, buyerName: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Jenis Perhiasan Pesanan</label>
-              <input
-                className="form-input"
-                value={orderForm.jewelryType}
-                onChange={e => setOrderForm({ ...orderForm, jewelryType: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Target Kadar / Karat</label>
-              <select
-                className="form-select"
-                value={orderForm.targetKarat}
-                onChange={e => setOrderForm({ ...orderForm, targetKarat: e.target.value })}
-              >
-                <option value="750">Karat 750 (18K - 75% Fine Gold)</option>
-                <option value="700">Karat 700 (17K - 70% Fine Gold)</option>
-                <option value="375">Karat 375 (8K - 37.5% Fine Gold)</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Berat Pesanan Perhiasan (Gross Weight Gram)</label>
-              <input
-                type="number"
-                className="form-input"
-                value={orderForm.grossWeight}
-                onChange={e => setOrderForm({ ...orderForm, grossWeight: Number(e.target.value) })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Toleransi Loss Lebur (%)</label>
-              <input
-                type="number"
-                step="0.1"
-                className="form-input"
-                value={orderForm.lossTolerancePct}
-                onChange={e => setOrderForm({ ...orderForm, lossTolerancePct: Number(e.target.value) })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Jenis Master Alloy Campuran</label>
-              <input
-                className="form-input"
-                value={orderForm.masterAlloyType}
-                onChange={e => setOrderForm({ ...orderForm, masterAlloyType: e.target.value })}
-              />
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+          <div>
+            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Hammer color="#8b5cf6" size={24} /> Produksi Perhiasan & Dynamic BOM Karat Setting
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Kalkulator Raw Material Ekspor, Setting Formula BOM Karat Manual, & Settlement Hasil In-House Workshop
+            </p>
           </div>
+        </div>
 
-          {/* Real-time Material Conversion Output Card */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid rgba(139,92,246,0.4)' }}>
-            <h4 style={{ color: '#a78bfa', marginBottom: '12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles size={16} /> Rincian Konversi Kebutuhan Bahan Baku Emas Murni & Master Alloy:
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-              <div>
-                <span className="stat-lbl">Emas Murni 999.9 (Fine Gold) Dibutuhkan</span>
-                <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.3rem' }}>
-                  {fineGoldNeeded.toFixed(2)} Gram
-                </div>
-                <small style={{ color: 'var(--text-muted)' }}>(Termasuk toleransi loss {orderForm.lossTolerancePct}%)</small>
-              </div>
-              <div>
-                <span className="stat-lbl">Master Alloy Campuran (Perak/Tembaga)</span>
-                <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '1.3rem' }}>
-                  {masterAlloyNeeded.toFixed(2)} Gram
-                </div>
-              </div>
-              <div>
-                <span className="stat-lbl">Posting Ke Vault ERP</span>
-                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.9rem' }}>
-                  Debet: Akun 11502 (Vault Emas WIP)
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <button type="submit" className="btn-primary" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
-            <Layers size={18} /> Terbitkan SPK & Keluarkan Bahan Emas Murni Ke Vault WIP
-          </button>
-        </form>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
+          {[
+            { id: 'calculator', label: '🧮 Kalkulator Konversi & SPK WIP' },
+            { id: 'bom-settings', label: '⚙️ Setting Formula BOM Karat (Manual)' },
+            { id: 'settlement', label: '📦 Settlement Hasil In-House Workshop' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-color)',
+                background: activeTab === tab.id ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : 'rgba(15,23,42,0.6)',
+                color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
+                fontWeight: activeTab === tab.id ? 700 : 500,
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* 2. Production Settlement (Laporan Hasil In-House Workshop) */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Package color="#fbbf24" size={20} /> Form Settlement Laporan Hasil Produksi In-House Workshop
-        </h3>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          Input rekap fisik hasil produksi dari aplikasi in-house untuk melunasi saldo Vault WIP dan memindahkan perhiasan ke Vault Siap Ekspor (Akun 1160).
-        </p>
+      {/* Tab 1: Calculator & SPK Issue */}
+      {activeTab === 'calculator' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#a78bfa' }}>
+            🧮 Kalkulator Konversi Raw Material Pesanan Ekspor
+          </h3>
 
-        <form onSubmit={handleSettlementProduction}>
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">No. SPK / Job Order</label>
-              <input
-                className="form-input"
-                value={settlementForm.joNumber}
-                onChange={e => setSettlementForm({ ...settlementForm, joNumber: e.target.value })}
-              />
+          <form onSubmit={handleIssueToWIP}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Nama Client / Buyer Ekspor</label>
+                <input
+                  className="form-input"
+                  value={orderForm.buyerName}
+                  onChange={e => setOrderForm({ ...orderForm, buyerName: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Jenis Perhiasan Pesanan</label>
+                <input
+                  className="form-input"
+                  value={orderForm.jewelryType}
+                  onChange={e => setOrderForm({ ...orderForm, jewelryType: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Target Karat (Menggunakan Formula BOM)</label>
+                <select
+                  className="form-select"
+                  value={orderForm.targetKarat}
+                  onChange={e => setOrderForm({ ...orderForm, targetKarat: e.target.value })}
+                >
+                  {bomFormulas.map(f => (
+                    <option key={f.code} value={f.code}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Berat Pesanan Perhiasan (Gross Weight Gram)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={orderForm.grossWeight}
+                  onChange={e => setOrderForm({ ...orderForm, grossWeight: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Toleransi Loss Lebur / Polishing (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-input"
+                  value={orderForm.lossTolerancePct}
+                  onChange={e => setOrderForm({ ...orderForm, lossTolerancePct: Number(e.target.value) })}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Hasil Perhiasan Jadi (Gram)</label>
-              <input
-                type="number"
-                className="form-input"
-                value={settlementForm.jewelryOutputWeight}
-                onChange={e => setSettlementForm({ ...settlementForm, jewelryOutputWeight: Number(e.target.value) })}
-              />
+
+            {/* Real-time Dynamic BOM Output Card */}
+            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid rgba(139,92,246,0.4)' }}>
+              <h4 style={{ color: '#a78bfa', marginBottom: '12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={16} /> Rincian Konversi Bahan Baku berdasarkan Setting Formula BOM {selectedFormula.code}:
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                <div>
+                  <span className="stat-lbl">Emas Murni 999.9 (Fine Gold)</span>
+                  <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.3rem' }}>
+                    {fineGoldNeeded.toFixed(2)} Gram
+                  </div>
+                  <small style={{ color: 'var(--text-muted)' }}>Target: {selectedFormula.fineGoldPct}% + Safety Margin {selectedFormula.safetyMarginPct}%</small>
+                </div>
+                <div>
+                  <span className="stat-lbl">Master Alloy Campuran (Perak/Tembaga)</span>
+                  <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '1.3rem' }}>
+                    {masterAlloyNeeded.toFixed(2)} Gram
+                  </div>
+                  <small style={{ color: 'var(--text-muted)' }}>Perak: {selectedFormula.alloyAgPct}% | Tembaga: {selectedFormula.alloyCuPct}%</small>
+                </div>
+                <div>
+                  <span className="stat-lbl">Posting Ke Vault ERP</span>
+                  <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.9rem' }}>
+                    Debet: Akun 11502 (Vault Emas WIP)
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Emas Scrap Retur / Sisa Leburan (Gram)</label>
-              <input
-                type="number"
-                className="form-input"
-                value={settlementForm.scrapReturnWeight}
-                onChange={e => setSettlementForm({ ...settlementForm, scrapReturnWeight: Number(e.target.value) })}
-              />
+
+            <button type="submit" className="btn-primary" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+              <Layers size={18} /> Terbitkan SPK & Keluarkan Bahan Emas Murni Ke Vault WIP
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Tab 2: Manual Dynamic BOM Formula Settings */}
+      {activeTab === 'bom-settings' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Sliders color="#fbbf24" size={20} /> Form Setting Manual Formula BOM Karat (Dapat Disesuaikan)
+          </h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            BOM di ERP PT TAN <strong>TIDAK DI-HARDCODE</strong>. Tim Engineer / R&D dapat menyesuaikan persentase kemurnian emas, safety margin, dan komposisi alloy secara manual.
+          </p>
+
+          <form onSubmit={handleSaveFormula} style={{ background: 'rgba(15,23,42,0.6)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Kode Karat (misal 750, 700, 375)</label>
+                <input
+                  className="form-input"
+                  value={editingFormula.code}
+                  onChange={e => setEditingFormula({ ...editingFormula, code: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nama Formula Karat</label>
+                <input
+                  className="form-input"
+                  value={editingFormula.name}
+                  onChange={e => setEditingFormula({ ...editingFormula, name: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Kadar Standar Emas Murni (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-input"
+                  value={editingFormula.fineGoldPct}
+                  onChange={e => setEditingFormula({ ...editingFormula, fineGoldPct: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Safety Margin Tolerance (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-input"
+                  value={editingFormula.safetyMarginPct}
+                  onChange={e => setEditingFormula({ ...editingFormula, safetyMarginPct: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Komposisi Perak Ag (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-input"
+                  value={editingFormula.alloyAgPct}
+                  onChange={e => setEditingFormula({ ...editingFormula, alloyAgPct: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Komposisi Tembaga Cu (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="form-input"
+                  value={editingFormula.alloyCuPct}
+                  onChange={e => setEditingFormula({ ...editingFormula, alloyCuPct: Number(e.target.value) })}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Susut Emas Lebur / Gold Loss (Gram)</label>
-              <input
-                type="number"
-                className="form-input"
-                value={settlementForm.goldLossWeight}
-                onChange={e => setSettlementForm({ ...settlementForm, goldLossWeight: Number(e.target.value) })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Biaya Ongkos Tukang / Jasa Lebur (IDR)</label>
-              <input
-                type="number"
-                className="form-input"
-                value={settlementForm.laborFeeIDR}
-                onChange={e => setSettlementForm({ ...settlementForm, laborFeeIDR: Number(e.target.value) })}
-              />
-            </div>
+
+            <button type="submit" className="btn-primary" style={{ marginTop: '14px' }}>
+              <Save size={16} /> Simpan Pengaturan Formula BOM Karat
+            </button>
+          </form>
+
+          {/* Active Preset Formulas Table */}
+          <h4 style={{ color: '#38bdf8', fontSize: '0.95rem', marginBottom: '12px' }}>📋 Daftar Preset Formula BOM Karat Aktif</h4>
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Kode Karat</th>
+                  <th>Nama Formula</th>
+                  <th>Kadar Emas (%)</th>
+                  <th>Safety Margin (%)</th>
+                  <th>Effective Target (%)</th>
+                  <th>Komposisi Alloy (Ag/Cu)</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bomFormulas.map(f => (
+                  <tr key={f.code}>
+                    <td><strong>{f.code}</strong></td>
+                    <td>{f.name}</td>
+                    <td style={{ color: '#fbbf24', fontWeight: 700 }}>{f.fineGoldPct}%</td>
+                    <td>+{f.safetyMarginPct}%</td>
+                    <td style={{ color: '#34d399', fontWeight: 700 }}>{(f.fineGoldPct + f.safetyMarginPct).toFixed(1)}%</td>
+                    <td>Perak: {f.alloyAgPct}% | Tembaga: {f.alloyCuPct}%</td>
+                    <td>
+                      <button
+                        className="btn-primary"
+                        style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                        onClick={() => setEditingFormula(f)}
+                      >
+                        Edit Formula
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        </div>
+      )}
 
-          <button type="submit" className="btn-primary" style={{ marginTop: '16px' }}>
-            <CheckCircle2 size={16} /> Pelunasan WIP & Transfer Perhiasan Ke Vault Siap Ekspor
-          </button>
-        </form>
-      </div>
+      {/* Tab 3: Production Settlement */}
+      {activeTab === 'settlement' && (
+        <div className="glass-panel" style={{ padding: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Package color="#fbbf24" size={20} /> Form Settlement Laporan Hasil Produksi In-House Workshop
+          </h3>
+
+          <form onSubmit={handleSettlementProduction}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">No. SPK / Job Order</label>
+                <input
+                  className="form-input"
+                  value={settlementForm.joNumber}
+                  onChange={e => setSettlementForm({ ...settlementForm, joNumber: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Hasil Perhiasan Jadi (Gram)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={settlementForm.jewelryOutputWeight}
+                  onChange={e => setSettlementForm({ ...settlementForm, jewelryOutputWeight: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Emas Scrap Retur / Sisa Leburan (Gram)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={settlementForm.scrapReturnWeight}
+                  onChange={e => setSettlementForm({ ...settlementForm, scrapReturnWeight: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Susut Emas Lebur / Gold Loss (Gram)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={settlementForm.goldLossWeight}
+                  onChange={e => setSettlementForm({ ...settlementForm, goldLossWeight: Number(e.target.value) })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Biaya Ongkos Tukang / Jasa Lebur (IDR)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={settlementForm.laborFeeIDR}
+                  onChange={e => setSettlementForm({ ...settlementForm, laborFeeIDR: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn-primary" style={{ marginTop: '16px' }}>
+              <CheckCircle2 size={16} /> Pelunasan WIP & Transfer Perhiasan Ke Vault Siap Ekspor
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
