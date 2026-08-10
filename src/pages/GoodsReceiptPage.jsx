@@ -13,8 +13,9 @@ export default function GoodsReceiptPage() {
     grnNumber: 'GRN-2026-001',
     date: new Date().toISOString().split('T')[0],
     selectedPOId: '',
+    poNumber: 'PO-IMP-2026-001', // Ref No. Purchase Order PT TAN
     supplierName: 'Valcambi SA Switzerland (Overseas Refiner)',
-    supplierDoNumber: 'SJ-VALCAMBI-998811',
+    supplierDoNumber: 'SJ-SUP-VALCAMBI-998811', // No. Surat Jalan Supplier
     targetVault: '1158', // Vault Impor (1158) or Vault Utama (1157) or Scrap (1152)
     targetVaultName: 'Vault Impor 999.9 (Akun 1158)',
     itemDescription: 'Emas Batangan 999.9 Valcambi Cast Bar 1kg',
@@ -43,9 +44,9 @@ export default function GoodsReceiptPage() {
           id: 'GRN-2026-001',
           grnNumber: 'GRN-2026-001',
           poNumber: 'PO-IMP-2026-001',
+          supplierDoNumber: 'SJ-SUP-VAL-998811',
           date: '2026-08-10',
           supplierName: 'Valcambi SA Switzerland',
-          supplierDoNumber: 'SJ-VAL-998811',
           targetVault: '1158',
           targetVaultName: 'Vault Impor 999.9 (Akun 1158)',
           itemDescription: 'Emas Batangan 999.9 Valcambi Cast Bar 1kg',
@@ -71,7 +72,9 @@ export default function GoodsReceiptPage() {
       setForm({
         ...form,
         selectedPOId: poId,
+        poNumber: foundPO.poNumber || foundPO.id || poId,
         supplierName: foundPO.supplierName || 'Gold Supplier',
+        supplierDoNumber: foundPO.supplierDoNumber || form.supplierDoNumber || 'SJ-SUP-998811',
         itemDescription: foundPO.itemDescription || 'Emas Batangan 999.9',
         targetVault,
         targetVaultName,
@@ -79,20 +82,21 @@ export default function GoodsReceiptPage() {
         unitPriceIDRPerGram: foundPO.pricePerGramIDR || 1350000,
         totalValueIDR: (foundPO.weightGrams || 1000) * (foundPO.pricePerGramIDR || 1350000)
       });
-      alert(`✅ Penerimaan Barang Ditarik Otomatis Dari PO ${foundPO.poNumber}! Berat ${foundPO.weightGrams}g & Vault Tujuan ${targetVaultName} Terisi.`);
+      alert(`✅ Tanda Terima Ditarik Otomatis Dari PO PT TAN (${foundPO.poNumber})! Supplier: ${foundPO.supplierName} & Weight ${foundPO.weightGrams}g Terisi.`);
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.grnNumber || !form.supplierName || !form.receivedWeightGram) {
-      alert('Mohon lengkapi No TTB/GRN, Supplier, dan Berat Emas Diterima.');
+    if (!form.grnNumber || !form.supplierName || !form.receivedWeightGram || !form.poNumber || !form.supplierDoNumber) {
+      alert('Mohon lengkapi No TTB/GRN, Ref No. PO PT TAN, No. Surat Jalan Supplier, Supplier, dan Berat Emas.');
       return;
     }
 
     const newGRN = {
       id: form.grnNumber,
-      poNumber: form.selectedPOId || 'PO-IMP-2026-001',
+      poNumber: form.poNumber,
+      supplierDoNumber: form.supplierDoNumber,
       ...form,
       status: 'RECEIVED & VERIFIED',
       createdAt: new Date().toISOString()
@@ -110,7 +114,7 @@ export default function GoodsReceiptPage() {
         id: Date.now(),
         entryNumber: `JRN-GRN-${Date.now().toString().slice(-6)}`,
         date: form.date,
-        description: `Penerimaan Emas Fisk (${newGRN.grnNumber}) Ref PO: ${form.selectedPOId} - ${newGRN.supplierName} [Vault: ${newGRN.targetVault}]`,
+        description: `Penerimaan Emas Fisik (${newGRN.grnNumber}) Ref PO PT TAN: ${newGRN.poNumber} | SJ Supplier: ${newGRN.supplierDoNumber} - ${newGRN.supplierName} [Vault: ${newGRN.targetVault}]`,
         lines: [
           { accountCode: form.targetVault, accountName: form.targetVaultName, debit: form.totalValueIDR, credit: 0 },
           { accountCode: '2110', accountName: 'Utang Usaha / Supplier Emas', debit: 0, credit: form.totalValueIDR }
@@ -119,7 +123,7 @@ export default function GoodsReceiptPage() {
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
-      alert(`✅ Penerimaan Barang (TTB ${newGRN.grnNumber}) Berhasil Disimpan! Stok Vault ${form.targetVaultName} Bertambah ${newGRN.receivedWeightGram}g!`);
+      alert(`✅ Penerimaan Barang (TTB ${newGRN.grnNumber}) Berhasil Disimpan! Ref PO PT TAN: ${newGRN.poNumber} & No SJ Supplier: ${newGRN.supplierDoNumber}. Stok Vault ${form.targetVaultName} Bertambah ${newGRN.receivedWeightGram}g!`);
       loadInitialData();
       setActiveView('list');
     }
@@ -128,7 +132,8 @@ export default function GoodsReceiptPage() {
   const filteredReceipts = receipts.filter(r =>
     r.grnNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.supplierName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.poNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+    r.poNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.supplierDoNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -138,10 +143,10 @@ export default function GoodsReceiptPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <PackageCheck color="#34d399" size={24} /> Penerimaan Barang Vault (Goods Receipt Note - TTB)
+              <PackageCheck color="#34d399" size={24} /> Tanda Terima Barang Vault (Goods Receipt Note - TTB)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Modul Berita Acara Penerimaan Fisik Emas, Penambahan Stok Vault Brankas, & Verifikasi Certificate Assay
+              Modul Penerimaan Fisik Emas Dengan Referensi No. PO PT TAN & Input No. Surat Jalan Supplier
             </p>
           </div>
 
@@ -158,7 +163,7 @@ export default function GoodsReceiptPage() {
               style={{ background: activeView === 'create' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)' }}
               onClick={() => setActiveView('create')}
             >
-              <Plus size={18} /> Terima Barang Baru (TTB)
+              <Plus size={18} /> Buat TTB / Terima Barang Baru
             </button>
           </div>
         </div>
@@ -177,7 +182,7 @@ export default function GoodsReceiptPage() {
               <input
                 className="form-input"
                 style={{ paddingLeft: '38px', width: '100%' }}
-                placeholder="Cari TTB, PO, atau Supplier..."
+                placeholder="Cari TTB, PO PT TAN, SJ Supplier, atau Supplier..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -189,7 +194,8 @@ export default function GoodsReceiptPage() {
               <thead>
                 <tr>
                   <th>No. TTB (GRN)</th>
-                  <th>Ref No. PO</th>
+                  <th>Ref No. PO PT TAN</th>
+                  <th>No. SJ Supplier</th>
                   <th>Tanggal Terima</th>
                   <th>Supplier Emas</th>
                   <th>Vault Tujuan</th>
@@ -204,7 +210,8 @@ export default function GoodsReceiptPage() {
                 {filteredReceipts.map(r => (
                   <tr key={r.id || r.grnNumber}>
                     <td><strong>{r.grnNumber}</strong></td>
-                    <td><small style={{ color: '#fbbf24' }}>{r.poNumber}</small></td>
+                    <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>{r.poNumber}</span></td>
+                    <td><small style={{ color: '#38bdf8', fontWeight: 600 }}>{r.supplierDoNumber || 'SJ-SUP-998811'}</small></td>
                     <td>{r.date}</td>
                     <td><strong>{r.supplierName}</strong></td>
                     <td><span className="badge badge-emerald">{r.targetVaultName || r.targetVault}</span></td>
@@ -216,7 +223,7 @@ export default function GoodsReceiptPage() {
                       <button
                         className="btn-primary"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => alert(`🖨️ Mencetak Tanda Terima Barang (TTB / GRN PDF) ${r.grnNumber} untuk ${r.supplierName}...`)}
+                        onClick={() => alert(`🖨️ Mencetak Tanda Terima Barang (TTB / GRN PDF) ${r.grnNumber} [Ref PO PT TAN: ${r.poNumber} | SJ Supplier: ${r.supplierDoNumber}] untuk ${r.supplierName}...`)}
                       >
                         <Printer size={14} /> Cetak TTB
                       </button>
@@ -233,7 +240,7 @@ export default function GoodsReceiptPage() {
       {activeView === 'create' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#fbbf24' }}>
-            ✍️ Form Input Tanda Terima Barang (TTB) & Penambahan Stok Vault
+            ✍️ Form Input Tanda Terima Barang (TTB) Dengan Ref PO PT TAN & Surat Jalan Supplier
           </h3>
 
           <form onSubmit={handleSubmit}>
@@ -241,7 +248,7 @@ export default function GoodsReceiptPage() {
               {/* PULL FROM PURCHASE ORDER (PO) DROPDOWN */}
               <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(52,211,153,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid #34d399' }}>
                 <label className="form-label" style={{ color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ShoppingCart size={18} /> Tarik Otomatis Dari Purchase Order (PO Impor / Lokal):
+                  <ShoppingCart size={18} /> Tarik Otomatis Dari Purchase Order PT TAN (PO Impor / Lokal):
                 </label>
                 <select
                   className="form-select"
@@ -249,7 +256,7 @@ export default function GoodsReceiptPage() {
                   onChange={handlePOSelect}
                   style={{ background: '#0f172a', color: '#fff', fontWeight: 600 }}
                 >
-                  <option value="">-- (Pilih No. Purchase Order PO Pembelian) --</option>
+                  <option value="">-- (Pilih No. Purchase Order PO PT TAN Untuk Auto-Fill) --</option>
                   {purchaseOrders.map(po => (
                     <option key={po.id || po.poNumber} value={po.poNumber}>
                       [{po.poNumber}] {po.supplierName} - {po.itemDescription || 'Emas Batangan'} ({po.weightGrams}g)
@@ -259,11 +266,34 @@ export default function GoodsReceiptPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">No. Tanda Terima Barang (TTB / GRN)</label>
+                <label className="form-label">No. Tanda Terima Barang (TTB / GRN Number)</label>
                 <input
                   className="form-input"
                   value={form.grnNumber}
                   onChange={e => setForm({ ...form, grnNumber: e.target.value })}
+                />
+              </div>
+
+              {/* NOMOR PURCHASE ORDER (PO PT TAN) */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700 }}>Ref No. Purchase Order (PO PT TAN)</label>
+                <input
+                  className="form-input"
+                  style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+                  value={form.poNumber}
+                  onChange={e => setForm({ ...form, poNumber: e.target.value, selectedPOId: e.target.value })}
+                />
+              </div>
+
+              {/* INPUT NOMOR SURAT JALAN SUPPLIER */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>No. Surat Jalan Supplier (Supplier Delivery Note)</label>
+                <input
+                  className="form-input"
+                  style={{ border: '1px solid #38bdf8', color: '#38bdf8', fontWeight: 700 }}
+                  placeholder="Nomor Surat Jalan dari Supplier..."
+                  value={form.supplierDoNumber}
+                  onChange={e => setForm({ ...form, supplierDoNumber: e.target.value })}
                 />
               </div>
 
@@ -283,15 +313,6 @@ export default function GoodsReceiptPage() {
                   className="form-input"
                   value={form.supplierName}
                   onChange={e => setForm({ ...form, supplierName: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">No. Surat Jalan Supplier</label>
-                <input
-                  className="form-input"
-                  value={form.supplierDoNumber}
-                  onChange={e => setForm({ ...form, supplierDoNumber: e.target.value })}
                 />
               </div>
 
