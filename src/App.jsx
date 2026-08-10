@@ -15,6 +15,7 @@ import MasterCustomer from './pages/MasterCustomer';
 import MasterSupplier from './pages/MasterSupplier';
 import AccountingReports from './pages/AccountingReports';
 import SystemSettingsPage from './pages/SystemSettingsPage';
+import MasterFinishedGoods from './pages/MasterFinishedGoods';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -29,7 +30,8 @@ export default function App() {
       case 'export-invoicing': return 'Faktur Ekspor USD (PPN 0%)';
       case 'warehouse-mgmt': return 'Modul Gudang & Kartu Stok Brankas Vault';
       case 'voucher-mgmt': return 'Manajemen Voucher Kas & Bank (BKK / BKM / BBK / BBM)';
-      case 'master-items': return 'Master Data Barang & Produk Emas';
+      case 'master-finished-goods': return 'Master Finished Goods (Katalog Perhiasan Emas Ekspor)';
+      case 'master-items': return 'Master Emas & Bahan Baku';
       case 'master-customers': return 'Master Customer & Buyer Ekspor';
       case 'master-suppliers': return 'Master Supplier Emas (Impor & Lokal)';
       case 'accounting-reports': return 'Jurnal Mutasi & Laporan Keuangan SAK EMKM';
@@ -49,6 +51,7 @@ export default function App() {
       case 'export-invoicing': return <ExportInvoicing />;
       case 'warehouse-mgmt': return <WarehouseManagement />;
       case 'voucher-mgmt': return <VoucherManagement />;
+      case 'master-finished-goods': return <MasterFinishedGoods />;
       case 'master-items': return <MasterItemPage />;
       case 'master-customers': return <MasterCustomer />;
       case 'master-suppliers': return <MasterSupplier />;

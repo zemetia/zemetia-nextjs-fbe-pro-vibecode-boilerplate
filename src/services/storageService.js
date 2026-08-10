@@ -41,6 +41,26 @@ export const saveMasterItem = async (item) => {
   return false;
 };
 
+export const getFinishedGoods = () => {
+  if (typeof window !== 'undefined' && window.Storage) {
+    return window.Storage.get('pttan_master_finished_goods') || [
+      { id: 'JWL-RNG-750-001', sku: 'JWL-RNG-750-001', name: 'Dubai Arabian Casting Ring', type: 'Cincin (Ring)', karat: '750', purity: 75.0, goldColor: 'Yellow Gold', stdWeightGram: 4.50, laborFeeIDRPerGram: 15000, hsCode: '7113.19.90', inventoryAccount: '1160' },
+      { id: 'JWL-CHN-700-005', sku: 'JWL-CHN-700-005', name: 'Italian Hollow Rope Chain', type: 'Kalung (Necklace)', karat: '700', purity: 70.0, goldColor: 'Rose Gold', stdWeightGram: 12.00, laborFeeIDRPerGram: 18000, hsCode: '7113.19.90', inventoryAccount: '1160' },
+      { id: 'JWL-BNG-375-010', sku: 'JWL-BNG-375-010', name: 'Stamped Diamond Cut Bangle', type: 'Gelang (Bangle)', karat: '375', purity: 37.5, goldColor: 'White Gold', stdWeightGram: 8.50, laborFeeIDRPerGram: 12000, hsCode: '7113.19.90', inventoryAccount: '1160' }
+    ];
+  }
+  return [];
+};
+
+export const saveFinishedGood = async (fg) => {
+  if (typeof window !== 'undefined' && window.Storage) {
+    const list = getFinishedGoods();
+    list.unshift(fg);
+    return await window.Storage.set('pttan_master_finished_goods', list);
+  }
+  return false;
+};
+
 export const getCustomers = () => {
   if (typeof window !== 'undefined' && window.Storage) {
     return window.Storage.get(window.Storage.KEYS.CUSTOMERS) || [];

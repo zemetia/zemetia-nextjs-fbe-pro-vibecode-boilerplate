@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, ShoppingCart, PlaneTakeoff, Flame, 
   FileText, CreditCard, Warehouse, BookOpen, Package, 
-  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings
+  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings, Sparkles
 } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage }) {
@@ -44,7 +44,8 @@ export default function Sidebar({ activePage, setActivePage }) {
       items: [
         { id: 'warehouse-mgmt', label: 'Posisi Vault & Kartu Stok', icon: Warehouse },
         { id: 'jewelry-production', label: 'Produksi Perhiasan & Alloy', icon: Hammer },
-        { id: 'master-items', label: 'Master Barang & Karat Emas', icon: Package },
+        { id: 'master-finished-goods', label: 'Master Finished Goods (Perhiasan)', icon: Sparkles },
+        { id: 'master-items', label: 'Master Emas & Bahan Baku', icon: Package },
       ]
     },
     {
