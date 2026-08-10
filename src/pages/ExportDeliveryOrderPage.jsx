@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Plus, Search, Printer, CheckCircle2, ShieldCheck, FileText, Package } from 'lucide-react';
+import { Truck, Plus, Search, Printer, CheckCircle2, ShieldCheck, FileText, Package, Award, Tag } from 'lucide-react';
+import { getPurchaseOrders } from '../services/storageService';
 
 export default function ExportDeliveryOrderPage() {
   const [activeView, setActiveView] = useState('list'); // 'list' or 'create'
@@ -11,7 +12,9 @@ export default function ExportDeliveryOrderPage() {
     doNumber: 'DO-EXP-2026-001',
     date: new Date().toISOString().split('T')[0],
     selectedInvoiceNo: '',
-    soNumber: 'SO-EXP-2026-001',
+    soNumber: 'SO-EXP-2026-001', // Ref Sales Order Number
+    goldCertificateNo: 'CERT-FINEGOLD-998812', // No. Sertifikat Emas
+    purityCertificateNo: 'ASSAY-KARAT-750-0012', // No. Sertifikat Kadar
     buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
     country: 'United Arab Emirates (UAE)',
     courierName: 'Brinks Global Secured Transport / Malca-Amit',
@@ -41,6 +44,8 @@ export default function ExportDeliveryOrderPage() {
           doNumber: 'DO-EXP-2026-001',
           invoiceNo: 'INV-EXP-2026-001',
           soNumber: 'SO-EXP-2026-001',
+          goldCertificateNo: 'CERT-FINEGOLD-998812',
+          purityCertificateNo: 'ASSAY-KARAT-750-0012',
           date: '2026-08-10',
           buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
           country: 'United Arab Emirates (UAE)',
@@ -75,14 +80,14 @@ export default function ExportDeliveryOrderPage() {
         netWeightGram: foundInv.weightGrams,
         grossWeightGram: Math.round(foundInv.weightGrams * 1.25)
       });
-      alert(`✅ Surat Jalan Ditarik Otomatis Dari Invoice ${foundInv.invoiceNo}! Net Weight ${foundInv.weightGrams}g & Buyer ${foundInv.buyerName} Terisi.`);
+      alert(`✅ Surat Jalan Ditarik Otomatis Dari Invoice ${foundInv.invoiceNo}! Ref SO: ${foundInv.soNumber || 'SO-EXP-2026-001'} & Buyer: ${foundInv.buyerName} Terisi.`);
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.doNumber || !form.buyerName || !form.netWeightGram) {
-      alert('Mohon lengkapi No. Surat Jalan, Buyer, dan Berat Barang.');
+    if (!form.doNumber || !form.buyerName || !form.netWeightGram || !form.soNumber) {
+      alert('Mohon lengkapi No. Surat Jalan, Ref Sales Order (SO), Buyer, dan Berat Barang.');
       return;
     }
 
@@ -100,8 +105,8 @@ export default function ExportDeliveryOrderPage() {
       list.unshift(newDO);
       window.Storage.set('pttan_export_delivery_orders', list);
 
-      // 2. Deduct Physical Stock from Vault 1160 (Persediaan Perhiasan Ekspor)
-      alert(`✅ Surat Jalan Ekspor (${newDO.doNumber}) Berhasil Diterbitkan & ${newDO.netWeightGram}g Perhiasan Dipotong dari Vault Siap Ekspor (Akun 1160)!`);
+      // 2. Deduct Physical Stock from Vault 1160
+      alert(`✅ Surat Jalan Ekspor (${newDO.doNumber}) Berhasil Diterbitkan! Ref SO: ${newDO.soNumber}, Sertifikat Emas: ${newDO.goldCertificateNo}, Sertifikat Kadar: ${newDO.purityCertificateNo}!`);
       loadInitialData();
       setActiveView('list');
     }
@@ -110,7 +115,9 @@ export default function ExportDeliveryOrderPage() {
   const filteredDO = deliveryOrders.filter(d =>
     d.doNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.buyerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase())
+    d.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.soNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.goldCertificateNo?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -123,7 +130,7 @@ export default function ExportDeliveryOrderPage() {
               <Truck color="#38bdf8" size={24} /> Surat Jalan Ekspor (Export Delivery Order & Packing List)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Modul Penerbitan Surat Jalan Ekspor, Penyerahan Kargo Pengawal Emas (Brinks/Malca-Amit), & Security Seal Koli
+              Penerbitan Surat Jalan Ekspor Lengkap Dengan Ref Sales Order (SO), No. Sertifikat Emas, & No. Sertifikat Kadar Assay
             </p>
           </div>
 
@@ -159,7 +166,7 @@ export default function ExportDeliveryOrderPage() {
               <input
                 className="form-input"
                 style={{ paddingLeft: '38px', width: '100%' }}
-                placeholder="Cari Surat Jalan, Invoice, atau Buyer..."
+                placeholder="Cari Surat Jalan, SO, Invoice, atau Sertifikat..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -171,13 +178,13 @@ export default function ExportDeliveryOrderPage() {
               <thead>
                 <tr>
                   <th>No. Surat Jalan</th>
+                  <th>Ref Sales Order (SO)</th>
                   <th>Ref Invoice</th>
                   <th>Tanggal Kirim</th>
                   <th>Buyer Overseas</th>
-                  <th>Kurir Kargo Secured</th>
-                  <th>Security Seal No</th>
+                  <th>No. Sertifikat Emas</th>
+                  <th>No. Sertifikat Kadar</th>
                   <th>Net Weight (g)</th>
-                  <th>Gross Weight (g)</th>
                   <th>Status Shipping</th>
                   <th>Aksi</th>
                 </tr>
@@ -186,19 +193,19 @@ export default function ExportDeliveryOrderPage() {
                 {filteredDO.map(d => (
                   <tr key={d.id || d.doNumber}>
                     <td><strong>{d.doNumber}</strong></td>
+                    <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>{d.soNumber || 'SO-EXP-2026-001'}</span></td>
                     <td><small style={{ color: '#34d399' }}>{d.invoiceNo}</small></td>
                     <td>{d.date}</td>
                     <td><strong>{d.buyerName}</strong></td>
-                    <td>{d.courierName}</td>
-                    <td><small style={{ color: '#38bdf8' }}>{d.securitySealNo}</small></td>
+                    <td><small style={{ color: '#38bdf8', fontWeight: 600 }}>{d.goldCertificateNo || 'CERT-GOLD-998812'}</small></td>
+                    <td><small style={{ color: '#a78bfa', fontWeight: 600 }}>{d.purityCertificateNo || 'ASSAY-750-0012'}</small></td>
                     <td style={{ fontWeight: 700, color: '#fbbf24' }}>{d.netWeightGram} g</td>
-                    <td>{d.grossWeightGram} g</td>
                     <td><span className="badge badge-emerald">{d.status || 'SHIPPED'}</span></td>
                     <td>
                       <button
                         className="btn-primary"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => alert(`🖨️ Mencetak Surat Jalan Ekspor / Delivery Order PDF (${d.doNumber}) untuk ${d.buyerName}...`)}
+                        onClick={() => alert(`🖨️ Mencetak Surat Jalan Ekspor PDF (${d.doNumber}) [SO: ${d.soNumber} | Cert Emas: ${d.goldCertificateNo} | Cert Kadar: ${d.purityCertificateNo}]...`)}
                       >
                         <Printer size={14} /> Cetak Surat Jalan
                       </button>
@@ -215,7 +222,7 @@ export default function ExportDeliveryOrderPage() {
       {activeView === 'create' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#38bdf8' }}>
-            ✍️ Form Pembuatan Surat Jalan Ekspor Baru (Penarikan Otomatis Dari Invoice Ekspor)
+            ✍️ Form Pembuatan Surat Jalan Ekspor (Termasuk Ref Sales Order & Sertifikat Emas)
           </h3>
 
           <form onSubmit={handleSubmit}>
@@ -231,10 +238,10 @@ export default function ExportDeliveryOrderPage() {
                   onChange={handleInvoiceSelect}
                   style={{ background: '#0f172a', color: '#fff', fontWeight: 600 }}
                 >
-                  <option value="">-- (Pilih No. Commercial Invoice Untuk Tarik Data Barang) --</option>
+                  <option value="">-- (Pilih No. Commercial Invoice Untuk Tarik Data Barang & SO) --</option>
                   {invoices.map(inv => (
                     <option key={inv.id || inv.invoiceNo} value={inv.invoiceNo}>
-                      [{inv.invoiceNo}] {inv.buyerName} - {inv.itemDescription} ({inv.weightGrams}g)
+                      [{inv.invoiceNo}] (Ref SO: {inv.soNumber || 'SO-EXP-2026-001'}) - {inv.buyerName} ({inv.weightGrams}g)
                     </option>
                   ))}
                 </select>
@@ -246,6 +253,17 @@ export default function ExportDeliveryOrderPage() {
                   className="form-input"
                   value={form.doNumber}
                   onChange={e => setForm({ ...form, doNumber: e.target.value })}
+                />
+              </div>
+
+              {/* REFERENSI SALES ORDER */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700 }}>Ref No. Sales Order (SO Ekspor)</label>
+                <input
+                  className="form-input"
+                  style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+                  value={form.soNumber}
+                  onChange={e => setForm({ ...form, soNumber: e.target.value })}
                 />
               </div>
 
@@ -265,6 +283,28 @@ export default function ExportDeliveryOrderPage() {
                   className="form-input"
                   value={form.buyerName}
                   onChange={e => setForm({ ...form, buyerName: e.target.value })}
+                />
+              </div>
+
+              {/* INPUT NOMOR SERTIFIKAT EMAS */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>No. Sertifikat Emas (Fine Gold Certificate)</label>
+                <input
+                  className="form-input"
+                  style={{ border: '1px solid #38bdf8', color: '#38bdf8', fontWeight: 700 }}
+                  value={form.goldCertificateNo}
+                  onChange={e => setForm({ ...form, goldCertificateNo: e.target.value })}
+                />
+              </div>
+
+              {/* INPUT NOMOR SERTIFIKAT KADAR / ASSAY */}
+              <div className="form-group">
+                <label className="form-label" style={{ color: '#a78bfa', fontWeight: 700 }}>No. Sertifikat Kadar (Purity Assay Cert)</label>
+                <input
+                  className="form-input"
+                  style={{ border: '1px solid #8b5cf6', color: '#a78bfa', fontWeight: 700 }}
+                  value={form.purityCertificateNo}
+                  onChange={e => setForm({ ...form, purityCertificateNo: e.target.value })}
                 />
               </div>
 
