@@ -36,6 +36,7 @@ export default function Sidebar({ activePage, setActivePage }) {
       items: [
         { id: 'export-so', label: 'Export Sales Order (Price Fixing)', icon: ShoppingBag },
         { id: 'export-invoicing', label: 'Faktur Ekspor USD (PPN 0%)', icon: FileText },
+        { id: 'export-do', label: 'Surat Jalan Ekspor (Delivery Order)', icon: Truck },
         { id: 'master-customers', label: 'Master Buyer Ekspor', icon: Users },
       ]
     },

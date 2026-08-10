@@ -17,6 +17,7 @@ import AccountingReports from './pages/AccountingReports';
 import SystemSettingsPage from './pages/SystemSettingsPage';
 import MasterFinishedGoods from './pages/MasterFinishedGoods';
 import ExportSalesOrderPage from './pages/ExportSalesOrderPage';
+import ExportDeliveryOrderPage from './pages/ExportDeliveryOrderPage';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -30,6 +31,7 @@ export default function App() {
       case 'jewelry-production': return 'Produksi Perhiasan & Alloy Karat Calculator';
       case 'export-so': return 'Export Sales Order (SO Ekspor & Gold Price Fixing)';
       case 'export-invoicing': return 'Faktur Ekspor USD (PPN 0%)';
+      case 'export-do': return 'Surat Jalan Ekspor (Export Delivery Order & Packing List)';
       case 'warehouse-mgmt': return 'Modul Gudang & Kartu Stok Brankas Vault';
       case 'voucher-mgmt': return 'Manajemen Voucher Kas & Bank (BKK / BKM / BBK / BBM)';
       case 'master-finished-goods': return 'Master Finished Goods (Katalog Perhiasan Emas Ekspor)';
@@ -37,7 +39,7 @@ export default function App() {
       case 'master-customers': return 'Master Customer & Buyer Ekspor';
       case 'master-suppliers': return 'Master Supplier Emas (Impor & Lokal)';
       case 'accounting-reports': return 'Jurnal Mutasi & Laporan Keuangan SAK EMKM';
-      case 'coa-setting': return 'Setting Chart of Accounts (COA SAK EMKM)';
+      case 'coa-setting': return 'Setting COA SAK EMKM';
       case 'system-settings': return 'Setting Logo Perusahaan, Backup & Restore Database System';
       default: return 'PT TAN Enterprise ERP';
     }
@@ -52,6 +54,7 @@ export default function App() {
       case 'jewelry-production': return <JewelryProduction />;
       case 'export-so': return <ExportSalesOrderPage />;
       case 'export-invoicing': return <ExportInvoicing />;
+      case 'export-do': return <ExportDeliveryOrderPage />;
       case 'warehouse-mgmt': return <WarehouseManagement />;
       case 'voucher-mgmt': return <VoucherManagement />;
       case 'master-finished-goods': return <MasterFinishedGoods />;
