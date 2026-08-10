@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Search, Plus, Filter, CheckCircle2, ShieldCheck, Tag } from 'lucide-react';
-import { getCOA, addCOAAccount } from '../services/storageService';
+import { BookOpen, Search, Plus, Filter, CheckCircle2, ShieldCheck, Tag, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { getCOA, addCOAAccount, saveCOA } from '../services/storageService';
 
 export default function ChartOfAccounts() {
   const [accounts, setAccounts] = useState([]);
@@ -16,7 +16,7 @@ export default function ChartOfAccounts() {
     type: 'detail'
   });
 
-  const exportAccountCodes = ['1125', '1132', '1135', '1157', '1158', '1160', '4110', '4120', '5114', '5115', '5150', '6110'];
+  const exportAccountCodes = ['1125', '1132', '1135', '1157', '1158', '11502', '1160', '1152', '4110', '4120', '5114', '5115', '5118', '6110'];
 
   useEffect(() => {
     loadAccounts();
@@ -24,6 +24,17 @@ export default function ChartOfAccounts() {
 
   const loadAccounts = () => {
     setAccounts(getCOA());
+  };
+
+  const handleReplaceWithExcelCOA = async () => {
+    if (window.confirm('⚠️ Apakah Anda yakin ingin MENGGANTI seluruh Chart of Accounts (COA) aplikasi dengan struktur resmi dari file "chart of account PT TAN.xlsx"?')) {
+      if (typeof window !== 'undefined' && window.Storage) {
+        const officialCoa = window.Storage.getDefaultChartOfAccounts();
+        await window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, officialCoa, true);
+        alert(`✅ Chart of Accounts (COA) PT TAN Berhasil Di-replace dengan Structure Resmi Excel (${officialCoa.length} Akun)!`);
+        loadAccounts();
+      }
+    }
   };
 
   const handleAddAccount = async (e) => {
@@ -37,7 +48,7 @@ export default function ChartOfAccounts() {
       balance: 0
     });
     if (res.success) {
-      alert('✅ Akun baru berhasil ditambahkan ke COA SAK EMKM!');
+      alert('✅ Akun baru berhasil ditambahkan ke COA PT TAN!');
       loadAccounts();
       setShowAddForm(false);
       setNewAcc({ code: '', name: '', category: 'aset', type: 'detail' });
@@ -62,20 +73,26 @@ export default function ChartOfAccounts() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
           <div>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <BookOpen color="#f59e0b" size={24} /> Setting Chart of Accounts (COA SAK EMKM)
+              <BookOpen color="#f59e0b" size={24} /> Setting Chart of Accounts (COA Resmi PT TAN)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Manajemen Daftar Kode Akun Keuangan & Pemetaan Jurnal PT TAN
+              Struktur Kode Akun Resmi PT TAN (Sesuai File Excel "chart of account PT TAN.xlsx")
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <button
-              className={`btn-primary ${showExportOnly ? '' : ''}`}
+              className="btn-primary"
+              style={{ background: 'linear-gradient(135deg, #0284c7, #0369a1)', color: '#fff' }}
+              onClick={handleReplaceWithExcelCOA}
+            >
+              <FileSpreadsheet size={18} /> Replace COA Dari Excel PT TAN
+            </button>
+
+            <button
+              className="btn-primary"
               style={{
-                background: showExportOnly
-                  ? 'linear-gradient(135deg, #10b981, #059669)'
-                  : 'rgba(255,255,255,0.08)',
+                background: showExportOnly ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.08)',
                 color: '#fff'
               }}
               onClick={() => setShowExportOnly(!showExportOnly)}
@@ -96,7 +113,7 @@ export default function ChartOfAccounts() {
             <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Tambah Akun COA Baru</h4>
             <div className="form-grid">
               <div className="form-group">
-                <label className="form-label">Kode Akun (misal 1159)</label>
+                <label className="form-label">Kode Akun (misal 1113-3)</label>
                 <input
                   className="form-input"
                   placeholder="Kode akun..."
@@ -162,11 +179,10 @@ export default function ChartOfAccounts() {
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
             {[
               { id: 'all', label: 'Semua' },
-              { id: 'aset', label: '1 - Aset' },
-              { id: 'kewajiban', label: '2 - Kewajiban' },
-              { id: 'ekuitas', label: '3 - Ekuitas' },
-              { id: 'pendapatan', label: '4 - Pendapatan' },
-              { id: 'beban', label: '5 - HPP & Beban' },
+              { id: 'aset', label: '1 - Aktiva' },
+              { id: 'kewajiban', label: '2 - Passiva & Ekuitas' },
+              { id: 'pendapatan', label: '3 - Pendapatan' },
+              { id: 'beban', label: '4/5 - HPP & Beban' },
               { id: 'diluar_usaha', label: '6 - Di Luar Usaha' }
             ].map(tab => (
               <button
@@ -199,7 +215,7 @@ export default function ChartOfAccounts() {
           </h3>
           {showExportOnly && (
             <span className="badge badge-emerald">
-              <Tag size={12} /> Menampilkan 12 Akun Ekspor PT TAN
+              <Tag size={12} /> Menampilkan Akun Ekspor PT TAN
             </span>
           )}
         </div>
@@ -257,10 +273,10 @@ export default function ChartOfAccounts() {
                       <td>
                         {isExportAccount ? (
                           <span className="badge badge-emerald" style={{ fontSize: '0.75rem' }}>
-                            <ShieldCheck size={12} /> PT TAN Export
+                            <ShieldCheck size={12} /> PT TAN Dedicated
                           </span>
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Standar EMKM</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>PT TAN Excel</span>
                         )}
                       </td>
                     </tr>
