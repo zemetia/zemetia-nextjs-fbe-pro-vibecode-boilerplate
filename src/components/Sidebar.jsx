@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, ShoppingCart, PlaneTakeoff, Flame, 
   FileText, CreditCard, Warehouse, BookOpen, Package, 
-  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings, Sparkles, ShoppingBag
+  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings, Sparkles, ShoppingBag, PackageCheck
 } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage }) {
@@ -27,6 +27,7 @@ export default function Sidebar({ activePage, setActivePage }) {
         { id: 'import-trading', label: 'PO LM Import & Landed Cost', icon: PlaneTakeoff },
         { id: 'local-trading', label: 'PO LM Lokal IDR', icon: ShoppingCart },
         { id: 'scrap-melting', label: 'Beli Scrap & Lebur', icon: Flame },
+        { id: 'goods-receipt', label: 'Penerimaan Barang (TTB / GRN)', icon: PackageCheck },
         { id: 'master-suppliers', label: 'Master Supplier Emas', icon: Truck },
       ]
     },
@@ -45,6 +46,7 @@ export default function Sidebar({ activePage, setActivePage }) {
       title: '🏛️ GUDANG VAULT & OPERASIONAL',
       items: [
         { id: 'warehouse-mgmt', label: 'Posisi Vault & Kartu Stok', icon: Warehouse },
+        { id: 'goods-receipt', label: 'Penerimaan Barang (TTB)', icon: PackageCheck },
         { id: 'jewelry-production', label: 'Produksi Perhiasan & Alloy', icon: Hammer },
         { id: 'master-finished-goods', label: 'Master Finished Goods (Perhiasan)', icon: Sparkles },
         { id: 'master-items', label: 'Master Emas & Bahan Baku', icon: Package },

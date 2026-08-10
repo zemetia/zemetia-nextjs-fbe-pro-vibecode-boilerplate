@@ -18,6 +18,7 @@ import SystemSettingsPage from './pages/SystemSettingsPage';
 import MasterFinishedGoods from './pages/MasterFinishedGoods';
 import ExportSalesOrderPage from './pages/ExportSalesOrderPage';
 import ExportDeliveryOrderPage from './pages/ExportDeliveryOrderPage';
+import GoodsReceiptPage from './pages/GoodsReceiptPage';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -28,6 +29,7 @@ export default function App() {
       case 'import-trading': return 'Pembelian LM Import & Landed Costing';
       case 'local-trading': return 'Pembelian & Trading LM Lokal IDR';
       case 'scrap-melting': return 'Pembelian Pecahan Scrap & SPK Lebur';
+      case 'goods-receipt': return 'Penerimaan Barang Vault (Goods Receipt Note - TTB)';
       case 'jewelry-production': return 'Produksi Perhiasan & Alloy Karat Calculator';
       case 'export-so': return 'Export Sales Order (SO Ekspor & Gold Price Fixing)';
       case 'export-invoicing': return 'Faktur Ekspor USD (PPN 0%)';
@@ -51,6 +53,7 @@ export default function App() {
       case 'import-trading': return <LmImportTrading />;
       case 'local-trading': return <LmLocalTrading />;
       case 'scrap-melting': return <BuyingScrapMelting />;
+      case 'goods-receipt': return <GoodsReceiptPage />;
       case 'jewelry-production': return <JewelryProduction />;
       case 'export-so': return <ExportSalesOrderPage />;
       case 'export-invoicing': return <ExportInvoicing />;
