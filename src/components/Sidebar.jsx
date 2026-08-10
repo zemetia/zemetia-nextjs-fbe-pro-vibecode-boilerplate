@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, ShoppingCart, PlaneTakeoff, Flame, 
   FileText, CreditCard, Warehouse, BookOpen, Package, 
-  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings, Sparkles
+  Users, Truck, Hammer, ShieldCheck, ChevronDown, ChevronRight, BarChart3, Settings, Sparkles, ShoppingBag
 } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage }) {
@@ -34,6 +34,7 @@ export default function Sidebar({ activePage, setActivePage }) {
       id: 'sales',
       title: '🏷️ MODUL PENJUALAN',
       items: [
+        { id: 'export-so', label: 'Export Sales Order (Price Fixing)', icon: ShoppingBag },
         { id: 'export-invoicing', label: 'Faktur Ekspor USD (PPN 0%)', icon: FileText },
         { id: 'master-customers', label: 'Master Buyer Ekspor', icon: Users },
       ]

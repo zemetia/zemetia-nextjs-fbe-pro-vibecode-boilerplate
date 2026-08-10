@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Globe, DollarSign, Download, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { FileText, Globe, DollarSign, Download, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck, ShoppingBag } from 'lucide-react';
 import { getCustomers, getFinishedGoods } from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
 
 export default function ExportInvoicing() {
   const [activeView, setActiveView] = useState('list'); // 'list' (Table Register) or 'create' (Form)
   const [invoices, setInvoices] = useState([]);
+  const [salesOrders, setSalesOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [finishedGoods, setFinishedGoods] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [liveRate, setLiveRate] = useState(16250);
 
   // Form State with Auto-Selection Dropdowns
   const [form, setForm] = useState({
     invoiceNo: 'INV-EXP-2026-001',
     date: new Date().toISOString().split('T')[0],
+    selectedSOId: '',
     selectedCustomerId: '',
     buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
     country: 'United Arab Emirates (UAE)',
@@ -36,80 +37,56 @@ export default function ExportInvoicing() {
   }, []);
 
   const loadInitialData = () => {
-    // 1. Customers
-    const custs = getCustomers();
-    setCustomers(custs);
-    if (custs.length > 0 && !form.selectedCustomerId) {
-      setForm(prev => ({
-        ...prev,
-        selectedCustomerId: custs[0].id || custs[0].code,
-        buyerName: custs[0].name,
-        country: custs[0].country || 'United Arab Emirates'
-      }));
-    }
+    // 1. Customers & Finished Goods
+    setCustomers(getCustomers());
+    setFinishedGoods(getFinishedGoods());
 
-    // 2. Finished Goods Catalog
-    const fgs = getFinishedGoods();
-    setFinishedGoods(fgs);
-
-    // 3. Live Exchange Rate
-    const rate = getStoredUsdRate();
-    if (rate) {
-      setLiveRate(rate);
-      setForm(prev => ({ ...prev, exchangeRate: rate }));
-    }
-
-    // 4. Stored Export Invoices
+    // 2. Sales Orders
     if (typeof window !== 'undefined' && window.Storage) {
-      const stored = window.Storage.get('pttan_export_invoices') || [
+      const storedSO = window.Storage.get('pttan_export_sales_orders') || [];
+      setSalesOrders(storedSO);
+    }
+
+    // 3. Stored Export Invoices
+    if (typeof window !== 'undefined' && window.Storage) {
+      const storedInv = window.Storage.get('pttan_export_invoices') || [
         {
           id: 'INV-EXP-2026-001',
           invoiceNo: 'INV-EXP-2026-001',
+          soNumber: 'SO-EXP-2026-001',
           date: '2026-08-10',
           buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
           country: 'United Arab Emirates (UAE)',
           pebNumber: 'PEB-2026-088912',
           itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
-          weightGrams: 1300,
+          weightGrams: 1000,
           pricePerGramUSD: 85.00,
-          totalUSD: 110500,
+          totalUSD: 85000,
           exchangeRate: 16250,
-          totalIDR: 1795625000,
+          totalIDR: 1381250000,
           status: 'PEB APPROVED (PPN 0%)'
         }
       ];
-      setInvoices(stored);
+      setInvoices(storedInv);
     }
   };
 
-  // Handler Customer Dropdown Select
-  const handleCustomerSelect = (e) => {
-    const custId = e.target.value;
-    const found = customers.find(c => (c.id === custId || c.code === custId));
-    if (found) {
+  // Handler Pull From Sales Order (SO)
+  const handleSOSelect = (e) => {
+    const soId = e.target.value;
+    const foundSO = salesOrders.find(so => (so.id === soId || so.soNumber === soId));
+    if (foundSO) {
       setForm({
         ...form,
-        selectedCustomerId: custId,
-        buyerName: found.name,
-        country: found.country || 'Overseas Buyer'
+        selectedSOId: soId,
+        buyerName: foundSO.buyerName,
+        country: foundSO.country,
+        itemDescription: foundSO.itemDescription,
+        weightGrams: foundSO.weightGrams,
+        pricePerGramUSD: foundSO.pricePerGramUSD,
+        exchangeRate: foundSO.exchangeRate || 16250
       });
-    } else {
-      setForm({ ...form, selectedCustomerId: custId, buyerName: custId });
-    }
-  };
-
-  // Handler SKU Finished Goods Dropdown Select
-  const handleSKUSelect = (e) => {
-    const skuCode = e.target.value;
-    const found = finishedGoods.find(fg => (fg.sku === skuCode || fg.id === skuCode));
-    if (found) {
-      setForm({
-        ...form,
-        selectedSKU: skuCode,
-        itemDescription: `${found.name} (${found.type} Karat ${found.karat} ${found.goldColor})`,
-        karat: found.karat,
-        hsCode: found.hsCode || '7113.19.90'
-      });
+      alert(`✅ Data Faktur Ekspor Ditarik Otomatis Dari ${foundSO.soNumber}! Harga Fixing $${foundSO.pricePerGramUSD}/g & Total $${foundSO.totalUSD.toLocaleString()} USD Terunci.`);
     }
   };
 
@@ -139,13 +116,13 @@ export default function ExportInvoicing() {
       list.unshift(newInvoice);
       window.Storage.set('pttan_export_invoices', list);
 
-      // 2. Auto Posting EMKM Journal (Debet 1125 Bank Valas USD / Kredit 4120 Pendapatan Ekspor PPN 0%)
+      // 2. Auto Posting EMKM Journal
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
         id: Date.now(),
         entryNumber: `JRN-EXP-${Date.now().toString().slice(-6)}`,
         date: form.date,
-        description: `Penjualan Ekspor Perhiasan (${newInvoice.invoiceNo}) - ${newInvoice.buyerName} [PEB: ${newInvoice.pebNumber}]`,
+        description: `Penjualan Ekspor Perhiasan (${newInvoice.invoiceNo}) Ref SO: ${form.selectedSOId || 'Direct'} - ${newInvoice.buyerName} [PEB: ${newInvoice.pebNumber}]`,
         lines: [
           { accountCode: '1125', accountName: 'Bank Valas USD (Mandiri/BCA)', debit: totalIDR, credit: 0 },
           { accountCode: '4120', accountName: 'Pendapatan Ekspor Perhiasan Emas (PPN 0%)', debit: 0, credit: totalIDR }
@@ -154,7 +131,7 @@ export default function ExportInvoicing() {
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
-      alert(`✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Berhasil Diterbitkan & Jurnal Mutasi Otomatis Diposting ke Akun 4120 (PPN 0%)!`);
+      alert(`✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Berhasil Diterbitkan & Auto-Jurnal PPN 0% Diposting ke Akun 4120!`);
       loadInitialData();
       setActiveView('list');
     }
@@ -176,7 +153,7 @@ export default function ExportInvoicing() {
               <FileText color="#34d399" size={24} /> Modul Penjualan Ekspor USD (Faktur Ekspor PPN 0% & PEB)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Manajemen Faktur Ekspor Perhiasan, Integrasi Master Buyer & Vault Ekspor, Sertifikat PPN 0% Pabean
+              Penerbitan Faktur Ekspor Ditarik Otomatis Dari Export Sales Order (SO) & Fixing Harga USD
             </p>
           </div>
 
@@ -193,13 +170,13 @@ export default function ExportInvoicing() {
               style={{ background: activeView === 'create' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)' }}
               onClick={() => setActiveView('create')}
             >
-              <Plus size={18} /> Buat Faktur Ekspor Baru
+              <Plus size={18} /> Buat Faktur Ekspor Dari SO
             </button>
           </div>
         </div>
       </div>
 
-      {/* VIEW 1: TABLE REGISTER FAJTUR EKSPOR */}
+      {/* VIEW 1: TABLE REGISTER FAKTUR EKSPOR */}
       {activeView === 'list' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
@@ -224,11 +201,11 @@ export default function ExportInvoicing() {
               <thead>
                 <tr>
                   <th>No. Invoice</th>
+                  <th>Ref No. SO</th>
                   <th>Tanggal</th>
                   <th>Buyer Ekspor</th>
-                  <th>Negara Tujuan</th>
                   <th>Dokumen PEB</th>
-                  <th>Berat (g)</th>
+                  <th>Berat Gram</th>
                   <th style={{ textAlign: 'right' }}>Total Nilai USD</th>
                   <th style={{ textAlign: 'right' }}>Equivalent IDR</th>
                   <th>Status PPN 0%</th>
@@ -236,62 +213,60 @@ export default function ExportInvoicing() {
                 </tr>
               </thead>
               <tbody>
-                {filteredInvoices.length === 0 ? (
-                  <tr><td colSpan="10" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Belum ada Faktur Ekspor diterbitkan</td></tr>
-                ) : (
-                  filteredInvoices.map(inv => (
-                    <tr key={inv.id || inv.invoiceNo}>
-                      <td><strong>{inv.invoiceNo}</strong></td>
-                      <td>{inv.date}</td>
-                      <td><strong>{inv.buyerName}</strong></td>
-                      <td>{inv.country}</td>
-                      <td><small style={{ color: '#38bdf8' }}>{inv.pebNumber}</small></td>
-                      <td style={{ fontWeight: 700 }}>{inv.weightGrams} g</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#38bdf8' }}>$ {(inv.totalUSD || 0).toLocaleString()} USD</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>Rp {(inv.totalIDR || 0).toLocaleString()}</td>
-                      <td><span className="badge badge-emerald"><ShieldCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />{inv.status || 'PPN 0% APPROVED'}</span></td>
-                      <td>
-                        <button
-                          className="btn-primary"
-                          style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                          onClick={() => alert(`🖨️ Mencetak Commercial Export Invoice PDF (${inv.invoiceNo}) untuk ${inv.buyerName}...`)}
-                        >
-                          <Printer size={14} /> Cetak Invoice
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                {filteredInvoices.map(inv => (
+                  <tr key={inv.id || inv.invoiceNo}>
+                    <td><strong>{inv.invoiceNo}</strong></td>
+                    <td><small style={{ color: '#fbbf24' }}>{inv.soNumber || 'SO-EXP-2026-001'}</small></td>
+                    <td>{inv.date}</td>
+                    <td><strong>{inv.buyerName}</strong></td>
+                    <td><small style={{ color: '#38bdf8' }}>{inv.pebNumber}</small></td>
+                    <td style={{ fontWeight: 700 }}>{inv.weightGrams} g</td>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#38bdf8' }}>$ {(inv.totalUSD || 0).toLocaleString()} USD</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>Rp {(inv.totalIDR || 0).toLocaleString()}</td>
+                    <td><span className="badge badge-emerald"><ShieldCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />{inv.status || 'PPN 0% APPROVED'}</span></td>
+                    <td>
+                      <button
+                        className="btn-primary"
+                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        onClick={() => alert(`🖨️ Mencetak Commercial Export Invoice PDF (${inv.invoiceNo}) untuk ${inv.buyerName}...`)}
+                      >
+                        <Printer size={14} /> Cetak Invoice
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* VIEW 2: FORM CREATE FAKTUR EKSPOR (WITH AUTO-SELECTION) */}
+      {/* VIEW 2: FORM CREATE FAKTUR EKSPOR (PULL FROM SO) */}
       {activeView === 'create' && (
         <div className="glass-panel" style={{ padding: '24px' }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#fbbf24' }}>
-            ✍️ Form Pembuatan Faktur Ekspor Baru (Penarikan Otomatis Master Data)
+            ✍️ Form Pembuatan Faktur Ekspor (Penarikan Otomatis Dari Export Sales Order)
           </h3>
 
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
-              {/* Auto Select Customer / Buyer */}
-              <div className="form-group">
-                <label className="form-label">Pilih Buyer Overseas (Dari Master Customer)</label>
+              {/* PULL FROM SALES ORDER (SO) DROPDOWN */}
+              <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(245,158,11,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+                <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShoppingBag size={18} /> Tarik Otomatis Dari Export Sales Order (SO) & Price Fixing:
+                </label>
                 <select
                   className="form-select"
-                  value={form.selectedCustomerId}
-                  onChange={handleCustomerSelect}
+                  value={form.selectedSOId}
+                  onChange={handleSOSelect}
+                  style={{ background: '#0f172a', color: '#fff', fontWeight: 600 }}
                 >
-                  {customers.length === 0 ? (
-                    <option value="">(Belum ada data Master Customer - Pilih Default)</option>
-                  ) : (
-                    customers.map(c => (
-                      <option key={c.id || c.code} value={c.id || c.code}>{c.name} ({c.country || 'Overseas'})</option>
-                    ))
-                  )}
+                  <option value="">-- (Pilih No. Sales Order SO Ekspor Untuk Tarik Harga & Spesifikasi) --</option>
+                  {salesOrders.map(so => (
+                    <option key={so.id || so.soNumber} value={so.soNumber}>
+                      [{so.soNumber}] {so.buyerName} - {so.itemDescription} ({so.weightGrams}g @ ${so.pricePerGramUSD}/g = ${so.totalUSD.toLocaleString()} USD)
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -311,6 +286,15 @@ export default function ExportInvoicing() {
                   className="form-input"
                   value={form.date}
                   onChange={e => setForm({ ...form, date: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Buyer Overseas (Dari SO)</label>
+                <input
+                  className="form-input"
+                  value={form.buyerName}
+                  onChange={e => setForm({ ...form, buyerName: e.target.value })}
                 />
               </div>
 
@@ -341,25 +325,8 @@ export default function ExportInvoicing() {
                 />
               </div>
 
-              {/* Auto Select Item / Finished Goods */}
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Pilih Perhiasan Dari Stok Vault Ekspor (Master Finished Goods)</label>
-                <select
-                  className="form-select"
-                  value={form.selectedSKU}
-                  onChange={handleSKUSelect}
-                >
-                  <option value="">-- (Pilih Item Perhiasan Dari Vault Ekspor) --</option>
-                  {finishedGoods.map(fg => (
-                    <option key={fg.id || fg.sku} value={fg.sku}>
-                      [{fg.sku}] {fg.name} - Karat {fg.karat} ({fg.goldColor})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Rincian Deskripsi Barang Ekspor</label>
+                <label className="form-label">Rincian Deskripsi Barang Ekspor (Dari SO)</label>
                 <input
                   className="form-input"
                   value={form.itemDescription}
@@ -387,11 +354,12 @@ export default function ExportInvoicing() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Harga Satuan USD / Gram</label>
+                <label className="form-label">Harga USD / Gram (Terunci Dari SO)</label>
                 <input
                   type="number"
                   step="0.01"
                   className="form-input"
+                  style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
                   value={form.pricePerGramUSD}
                   onChange={e => setForm({ ...form, pricePerGramUSD: Number(e.target.value) })}
                 />
