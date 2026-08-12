@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
 
 export default function LmLocalTrading() {
@@ -14,10 +14,10 @@ export default function LmLocalTrading() {
     itemName: 'Emas Batangan 999.9 (Antam/Pegadaian)',
     paymentSourceAccount: '1111', // '1110' Kas Utama, '1110-1' Kas Kecil, '1111' Bank BCA/Mandiri
     paymentSourceAccountName: 'Bank BCA IDR (Akun 1111)',
-    quantityGrams: 1000,
+    quantityGrams: 3000,
     unitPriceIDR: 1350000, // Rp 1.350.000 / g
-    barCertificateNo: 'CERT-PEG-998812',
-    notes: 'Pembelian Emas Tunai Direct di Pegadaian (Tanpa PO / Lunas Seketika)'
+    barCertificateNo: 'CERT-PEG-998812, CERT-PEG-998813, CERT-PEG-998814',
+    notes: 'Pembelian 3 Batang Emas 1kg Tunai Direct di Pegadaian (3 Nomor Sertifikat Seri Bar)'
   });
 
   useEffect(() => {
@@ -37,13 +37,13 @@ export default function LmLocalTrading() {
           orderDate: new Date().toISOString().split('T')[0],
           itemCode: 'LM-ANTAM-1000G',
           itemName: 'Emas Batangan Antam 1kg (999.9)',
-          quantityGrams: 1000,
+          quantityGrams: 3000,
           unitPriceIDR: 1350000,
-          totalAmount: 1350000000,
+          totalAmount: 4050000000,
           journalAccountDebit: '1157',
           journalAccountCredit: '1111',
           paymentSourceAccountName: 'Bank BCA IDR (Akun 1111)',
-          barCertificateNo: 'CERT-PEG-998812',
+          barCertificateNo: 'CERT-PEG-998812, CERT-PEG-998813, CERT-PEG-998814',
           warehouseName: 'Vault Utama PT TAN (Akun 1157)',
           status: 'PAID & STOCKED IN VAULT',
           createdAt: new Date().toISOString()
@@ -54,6 +54,15 @@ export default function LmLocalTrading() {
   };
 
   const totalAmount = formData.quantityGrams * formData.unitPriceIDR;
+
+  // Helper untuk menghitung jumlah seri bar dari input teks (pisahkan berdasarkan koma atau baris baru)
+  const getDetectedBarCount = (text) => {
+    if (!text) return 0;
+    const items = text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    return items.length;
+  };
+
+  const detectedBarCount = getDetectedBarCount(formData.barCertificateNo);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -85,6 +94,7 @@ export default function LmLocalTrading() {
       journalAccountCredit: creditAccount,
       paymentSourceAccountName: creditAccountName,
       barCertificateNo: formData.barCertificateNo,
+      barCountDetected: detectedBarCount,
       warehouseName: 'Vault Utama PT TAN (Akun 1157)',
       status: isCash ? 'PAID & STOCKED IN VAULT' : 'RECEIVED (CREDIT TEMPO)',
       createdAt: new Date().toISOString()
@@ -103,7 +113,7 @@ export default function LmLocalTrading() {
         entryNumber: `JRN-BUY-${Date.now().toString().slice(-6)}`,
         date: formData.orderDate,
         description: isCash
-          ? `Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) - ${formData.supplierName} [Lunas via ${creditAccountName}]`
+          ? `Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) - ${formData.supplierName} [Total ${newPurchase.quantityGrams}g / ${detectedBarCount} Batang Bar Lunas via ${creditAccountName}]`
           : `Pembelian LM Kredit PO (${newPurchase.poNumber}) - ${formData.supplierName}`,
         lines: [
           { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (Vault Utama)', debit: totalAmount, credit: 0 },
@@ -115,7 +125,7 @@ export default function LmLocalTrading() {
 
       alert(
         isCash
-          ? `✅ Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) Berhasil! Dibayar Lunas via ${creditAccountName}. Emas ${newPurchase.quantityGrams}g Langsung Masuk Ke Stok Vault Utama (Akun 1157)!`
+          ? `✅ Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) Berhasil! ${detectedBarCount > 0 ? detectedBarCount + ' Batang Bar Sertifikat Terdaftar.' : ''} Dibayar Lunas via ${creditAccountName}. Emas ${newPurchase.quantityGrams}g Masuk Vault Utama (Akun 1157)!`
           : `✅ Pembelian Kredit Tempo (${newPurchase.poNumber}) Berhasil Disimpan!`
       );
       loadPurchases();
@@ -131,7 +141,7 @@ export default function LmLocalTrading() {
               <ShoppingCart color="#f59e0b" size={24} /> Pembelian Emas Lokal (Direct Cash Pegadaian / Antam)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Transaksi Pembelian Tunai Seketika Tanpa PO (Kas/Bank) Atau Pembelian Tempo PO Supplier
+              Pembelian Tunai Seketika Tanpa PO Dengan Input Multi-Nomor Sertifikat Batangan Emas (Multi-Bar Serial Nos)
             </p>
           </div>
 
@@ -183,7 +193,7 @@ export default function LmLocalTrading() {
                   <div>
                     <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Mode Pembelian Tunai Seketika (Over-The-Counter Cash Buy)</strong>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-                      Sangat cocok untuk pembelian langsung di <strong>PT Pegadaian / PT Antam / Toko Emas</strong>. Bayar tunai dari Kas/Bank & stok emas langsung masuk Vault (Akun 1157) tanpa perlu bikin PO/Hutang.
+                      Sangat cocok untuk pembelian banyak batang emas di <strong>PT Pegadaian / PT Antam</strong>. Anda dapat menginput <strong>banyak nomor sertifikat sekaligus</strong> (dipisahkan koma atau baris baru).
                     </p>
                   </div>
                 </>
@@ -278,18 +288,30 @@ export default function LmLocalTrading() {
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">No. Sertifikat Emas / Seri Bar</label>
-              <input
+            {/* INPUT BANYAK NOMOR SERTIFIKAT / MULTI BAR SERIALS */}
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Layers size={16} /> Multi No. Sertifikat / Nomor Seri Batangan (Pisahkan Dengan Koma / Enter):
+                </label>
+                {detectedBarCount > 0 && (
+                  <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                    📦 {detectedBarCount} Batang Bar Terdeteksi
+                  </span>
+                )}
+              </div>
+              <textarea
                 className="form-input"
-                placeholder="Nomor sertifikat Pegadaian/Antam..."
+                rows={3}
+                style={{ border: '1px solid #38bdf8', color: '#fff', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                placeholder="Contoh: CERT-PEG-001, CERT-PEG-002, CERT-PEG-003, CERT-PEG-004..."
                 value={formData.barCertificateNo}
                 onChange={e => setFormData({ ...formData, barCertificateNo: e.target.value })}
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Berat Fisik Emas (Gram)</label>
+              <label className="form-label">Total Berat Fisik Emas (Gram)</label>
               <input
                 type="number"
                 className="form-input"
@@ -324,8 +346,8 @@ export default function LmLocalTrading() {
                 </div>
               </div>
               <div>
-                <span className="stat-lbl">Penerimaan Stok Vault</span>
-                <div style={{ fontWeight: 600, color: '#38bdf8', fontSize: '0.85rem' }}>Vault Utama PT TAN (Akun 1157)</div>
+                <span className="stat-lbl">Jumlah Batangan / Bar</span>
+                <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '1.1rem' }}>{detectedBarCount} Batang Terdaftar</div>
               </div>
             </div>
           </div>
@@ -342,7 +364,7 @@ export default function LmLocalTrading() {
           >
             {paymentMode === 'cash' ? (
               <>
-                <CheckCircle size={18} /> Simpan Pembelian Emas Tunai Direct & Tambah Stok Vault Instan
+                <CheckCircle size={18} /> Simpan Pembelian Emas Tunai Direct ({detectedBarCount} Bar) & Tambah Stok Vault
               </>
             ) : (
               <>
@@ -366,7 +388,7 @@ export default function LmLocalTrading() {
                 <th>Mode Bayar</th>
                 <th>Supplier / Beli Di</th>
                 <th>Tanggal</th>
-                <th>Item Barang & Sertifikat</th>
+                <th>Item Barang & Multi-Nomor Seri Bar</th>
                 <th>Berat Gram</th>
                 <th style={{ textAlign: 'right' }}>Total Valuasi (IDR)</th>
                 <th>Posting Auto-Jurnal</th>
@@ -381,35 +403,44 @@ export default function LmLocalTrading() {
                   </td>
                 </tr>
               ) : (
-                purchases.map(p => (
-                  <tr key={p.id}>
-                    <td>
-                      <strong>{p.receiptNo || p.poNumber}</strong>
-                    </td>
-                    <td>
-                      <span className={`badge ${p.paymentMode === 'cash' ? 'badge-emerald' : 'badge-gold'}`} style={{ fontSize: '0.75rem' }}>
-                        {p.paymentMode === 'cash' ? '💵 TUNAI DIRECT' : '📝 KREDIT PO'}
-                      </span>
-                    </td>
-                    <td><strong>{p.supplierName}</strong></td>
-                    <td>{p.orderDate}</td>
-                    <td>
-                      {p.itemName}<br/>
-                      <small style={{ color: '#38bdf8' }}>Cert: {p.barCertificateNo || 'CERT-PEG-998812'}</small>
-                    </td>
-                    <td style={{ fontWeight: 800, color: '#fbbf24' }}>{p.quantityGrams} g</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>Rp {(p.totalAmount || 0).toLocaleString()}</td>
-                    <td>
-                      <small style={{ color: '#34d399' }}>Dr 1157</small><br/>
-                      <small style={{ color: '#38bdf8' }}>Cr {p.journalAccountCredit || '1111'}</small>
-                    </td>
-                    <td>
-                      <button className="btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct / TTB (${p.receiptNo || p.poNumber}) untuk ${p.supplierName}...`)}>
-                        <Printer size={14} /> Cetak Bukti
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                purchases.map(p => {
+                  const certList = (p.barCertificateNo || '').split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <strong>{p.receiptNo || p.poNumber}</strong>
+                      </td>
+                      <td>
+                        <span className={`badge ${p.paymentMode === 'cash' ? 'badge-emerald' : 'badge-gold'}`} style={{ fontSize: '0.75rem' }}>
+                          {p.paymentMode === 'cash' ? '💵 TUNAI DIRECT' : '📝 KREDIT PO'}
+                        </span>
+                      </td>
+                      <td><strong>{p.supplierName}</strong></td>
+                      <td>{p.orderDate}</td>
+                      <td>
+                        <strong>{p.itemName}</strong><br/>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                          {certList.map((cert, idx) => (
+                            <span key={idx} className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>
+                              #{idx + 1}: {cert}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ fontWeight: 800, color: '#fbbf24' }}>{p.quantityGrams} g</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>Rp {(p.totalAmount || 0).toLocaleString()}</td>
+                      <td>
+                        <small style={{ color: '#34d399' }}>Dr 1157</small><br/>
+                        <small style={{ color: '#38bdf8' }}>Cr {p.journalAccountCredit || '1111'}</small>
+                      </td>
+                      <td>
+                        <button className="btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct / TTB (${p.receiptNo || p.poNumber}) [${certList.length} Batang Bar]...`)}>
+                          <Printer size={14} /> Cetak Bukti
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
