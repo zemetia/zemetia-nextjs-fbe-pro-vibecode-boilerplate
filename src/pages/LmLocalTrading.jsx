@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2 } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
 
 export default function LmLocalTrading() {
@@ -161,7 +161,7 @@ export default function LmLocalTrading() {
               <ShoppingCart color="#f59e0b" size={24} /> Pembelian Emas Lokal (Direct Cash Pegadaian Jakarta)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Proses Pengambilan Emas Di Pegadaian Jakarta Via Kurir Internal (Surat Tugas, Serah Terima Vault, & 4 TTD Dokumen)
+              Proses Pengambilan Emas Di Pegadaian Jakarta Via Kurir Internal (Surat Tugas, Dispatch WA PDF, & 4 TTD Dokumen)
             </p>
           </div>
 
@@ -213,7 +213,7 @@ export default function LmLocalTrading() {
                   <div>
                     <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Alur Pengambilan Emas Di Pegadaian Jakarta Via Kurir Internal</strong>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-                      1. Kurir dibekali Surat Kuasa Pengambilan & Bukti Bayar ➔ 2. Emas diambil di Pegadaian Jakarta ➔ 3. Emas diserahkan ke Petugas Vault ➔ 4. Dokumen TTB dicetak dengan <strong>4 Tanda Tangan (Kurir, Pegadaian, Vault, & Pemilik)</strong>.
+                      1. Kurir dibekali Surat Kuasa Pengambilan & Bukti Bayar (Bisa Di-Kirim WA PDF jika Kurir Lupa Bawa) ➔ 2. Emas diambil di Pegadaian Jakarta ➔ 3. Emas diserahkan ke Petugas Vault ➔ 4. Dokumen TTB dicetak dengan <strong>4 Tanda Tangan (Kurir, Pegadaian, Vault, & Pemilik)</strong>.
                     </p>
                   </div>
                 </>
@@ -472,7 +472,7 @@ export default function LmLocalTrading() {
                 <th>Berat Gram</th>
                 <th style={{ textAlign: 'right' }}>Total Valuasi (IDR)</th>
                 <th>Otorisasi Pemilik</th>
-                <th>Cetak Bukti (4 TTD)</th>
+                <th>Aksi Dokumen</th>
               </tr>
             </thead>
             <tbody>
@@ -524,13 +524,22 @@ export default function LmLocalTrading() {
                         </span>
                       </td>
                       <td>
-                        <button
-                          className="btn-primary"
-                          style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                          onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct & Serah Terima Vault (${p.receiptNo || p.poNumber})\n--------------------------------------------------\nLengkap Dengan 4 Kolom Tanda Tangan Fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`)}
-                        >
-                          <Printer size={14} /> Cetak Bukti (4 TTD)
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            className="btn-primary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                            onClick={() => alert(`📱 Membuka Dispatch WhatsApp PDF Surat Kuasa & Kuitansi Lunas (${p.receiptNo})\n--------------------------------------------------\nMengirimkan PDF Surat Kuasa Ambil Emas Resmi Ke WhatsApp Kurir (${p.courierName}) & Kasir ${p.supplierName} Jakarta!\nDokumen dapat langsung di-print di Pegadaian Jakarta.`)}
+                          >
+                            <Share2 size={13} /> WA PDF Kurir
+                          </button>
+                          <button
+                            className="btn-primary"
+                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                            onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct & Serah Terima Vault (${p.receiptNo || p.poNumber})\n--------------------------------------------------\nLengkap Dengan 4 Kolom Tanda Tangan Fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`)}
+                          >
+                            <Printer size={13} /> Cetak (4 TTD)
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
