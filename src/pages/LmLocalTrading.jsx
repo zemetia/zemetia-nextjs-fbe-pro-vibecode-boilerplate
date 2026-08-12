@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2, Box } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2, Box, ArrowRightLeft } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
 
 export default function LmLocalTrading() {
@@ -23,7 +23,7 @@ export default function LmLocalTrading() {
     pickupLocation: 'Pegadaian Jakarta Pusat (Kwitansi Lunas)',
     ownerApprovedBy: 'Direktur Utama / Pemilik PT TAN', // Nama Pemilik
     ownerApproved: true,
-    notes: 'Pembelian 3 Batang Emas 1kg Tunai Direct di Pegadaian Jakarta via Kurir Bpk Budi (4 TTD)'
+    notes: 'Pembelian 3 Batang Emas 1kg Tunai Direct di Pegadaian Jakarta via Kurir Bpk Budi (Transit 1159 ➔ Vault 1157)'
   });
 
   useEffect(() => {
@@ -66,8 +66,8 @@ export default function LmLocalTrading() {
           quantityGrams: 3000,
           unitPriceIDR: 1350000,
           totalAmount: 4050000000,
-          journalAccountDebit: '1157',
-          journalAccountCredit: '1111',
+          journalAccountDebitStage1: '1159', // Debet Transit Kurir
+          journalAccountCreditStage1: '1111', // Kredit Bank BCA
           paymentSourceAccountName: 'Bank BCA IDR (Akun 1111)',
           barCertificateNo: 'CERT-PEG-998812, CERT-PEG-998813, CERT-PEG-998814',
           courierName: 'Bpk. Budi (Kurir Internal PT TAN)',
@@ -76,7 +76,8 @@ export default function LmLocalTrading() {
           ownerApprovedBy: 'Direktur Utama / Pemilik PT TAN',
           ownerApproved: true,
           warehouseName: 'Vault Utama PT TAN (Akun 1157)',
-          status: 'PICKED UP BY COURIER & VAULT VERIFIED (4 TTD)',
+          status: 'IN TRANSIT (DIAMBIL KURIR DI PEGADAIAN JAKARTA)',
+          isVaultReceived: false,
           createdAt: new Date().toISOString()
         }
       ];
@@ -108,6 +109,7 @@ export default function LmLocalTrading() {
     }
   };
 
+  // TAHAP 1: SIMPAN PEMBELIAN TUNAI DIRECT (JURNAL KAS KELUAR ➔ TRANSIT KURIR AKUN 1159)
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.quantityGrams || !formData.unitPriceIDR || !formData.receiptNo || !formData.courierName) {
@@ -126,6 +128,12 @@ export default function LmLocalTrading() {
       ? formData.paymentSourceAccountName
       : 'Hutang Usaha Supplier Lokal (Akun 2110)';
 
+    // Tahap 1: Pembayaran Tunai Direct mencatat ke Akun Transit 1159 (Emas Dalam Perjalanan Kurir)
+    const debitAccountStage1 = isCash ? '1159' : '1157';
+    const debitAccountNameStage1 = isCash
+      ? 'Persediaan Emas Dalam Perjalanan Kurir (Transit Akun 1159)'
+      : 'Persediaan Emas Murni 999.9 (Vault Utama Akun 1157)';
+
     const newPurchase = {
       id: Date.now(),
       paymentMode,
@@ -139,8 +147,8 @@ export default function LmLocalTrading() {
       quantityGrams: Number(formData.quantityGrams),
       unitPriceIDR: Number(formData.unitPriceIDR),
       totalAmount: totalAmount,
-      journalAccountDebit: '1157', // Persediaan Emas Vault Utama
-      journalAccountCredit: creditAccount,
+      journalAccountDebitStage1: debitAccountStage1,
+      journalAccountCreditStage1: creditAccount,
       paymentSourceAccountName: creditAccountName,
       barCertificateNo: formData.barCertificateNo,
       barCountDetected: detectedBarCount,
@@ -150,7 +158,8 @@ export default function LmLocalTrading() {
       ownerApprovedBy: formData.ownerApprovedBy,
       ownerApproved: true,
       warehouseName: 'Vault Utama PT TAN (Akun 1157)',
-      status: isCash ? 'PICKED UP BY COURIER & VAULT VERIFIED (4 TTD)' : 'RECEIVED (CREDIT TEMPO)',
+      status: isCash ? 'IN TRANSIT (DIAMBIL KURIR DI PEGADAIAN JAKARTA)' : 'RECEIVED (CREDIT TEMPO)',
+      isVaultReceived: false,
       createdAt: new Date().toISOString()
     };
 
@@ -160,17 +169,17 @@ export default function LmLocalTrading() {
       list.unshift(newPurchase);
       window.Storage.set('pttan_local_purchases', list);
 
-      // 2. Auto-Post Journal Entry (Debet 1157 Persediaan vs Kredit Kas/Bank atau Hutang)
+      // 2. Auto-Post Journal Entry TAHAP 1 (Debet 1159 Transit Emas Kurir vs Kredit Kas/Bank 1111/1110)
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
         id: Date.now(),
-        entryNumber: `JRN-BUY-${Date.now().toString().slice(-6)}`,
+        entryNumber: `JRN-PAY-${Date.now().toString().slice(-6)}`,
         date: formData.orderDate,
         description: isCash
-          ? `Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) - Barang: ${newPurchase.itemName} (${newPurchase.quantityGrams}g) | Kurir: ${newPurchase.courierName} | Otorisasi Pemilik: ${newPurchase.ownerApprovedBy}`
+          ? `[TAHAP 1] Pembayaran Tunai Direct & Ambil Emas Pegadaian (${newPurchase.receiptNo}) - Barang: ${newPurchase.itemName} (${newPurchase.quantityGrams}g) | Debet: Akun 1159 (Transit Kurir ${newPurchase.courierName}) | Kredit: ${creditAccountName}`
           : `Pembelian LM Kredit PO (${newPurchase.poNumber}) - ${formData.supplierName}`,
         lines: [
-          { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (Vault Utama)', debit: totalAmount, credit: 0 },
+          { accountCode: debitAccountStage1, accountName: debitAccountNameStage1, debit: totalAmount, credit: 0 },
           { accountCode: creditAccount, accountName: creditAccountName, debit: 0, credit: totalAmount }
         ],
         createdAt: new Date().toISOString()
@@ -179,9 +188,56 @@ export default function LmLocalTrading() {
 
       alert(
         isCash
-          ? `✅ Pembelian Tunai Direct [Barang: ${newPurchase.itemName}] (${newPurchase.receiptNo}) Berhasil!\n• Disetujui Pemilik: ${newPurchase.ownerApprovedBy}\n• Kurir Pengambil: ${newPurchase.courierName}\n• Total Rp ${totalAmount.toLocaleString()} Ditransfer/Dipotong Dari ${creditAccountName}\n• Emas ${newPurchase.quantityGrams}g Langsung Masuk Vault Utama (1157)!`
+          ? `✅ [TAHAP 1 DISIMPANKAN] Pembayaran Tunai Rp ${totalAmount.toLocaleString()} Berhasil Diposting!\n--------------------------------------------------\n• Jurnal Tahap 1: Debet Akun 1159 (Emas Dalam Perjalanan Kurir) vs Kredit ${creditAccountName}\n• Kurir (${newPurchase.courierName}) Ditugaskan Ambil Emas Di Pegadaian Jakarta.\n• Catatan: Persediaan Vault Utama (1157) BELUM DIDEBET sampai Kurir tiba membawa fisik emas ke kantor PT TAN!`
           : `✅ Pembelian Kredit Tempo (${newPurchase.poNumber}) Berhasil Disimpan!`
       );
+      loadInitialData();
+    }
+  };
+
+  // TAHAP 2: KONFIRMASI EMAS TIBA DI BRANKAS VAULT (POSTING JURNAL DEBET 1157 VAULT VS KREDIT 1159 TRANSIT)
+  const handleConfirmVaultArrival = (purchase) => {
+    if (purchase.isVaultReceived) {
+      alert('Emas ini sudah dikonfirmasi masuk ke Vault Utama.');
+      return;
+    }
+
+    const confirmMsg = `📦 KONFIRMASI TIBA DI BRANKAS VAULT PT TAN\n--------------------------------------------------\n• No. Nota: ${purchase.receiptNo}\n• Barang: ${purchase.itemName} (${purchase.quantityGrams}g)\n• Kurir: ${purchase.courierName}\n\nPosting Jurnal Tahap 2:\nDebet: Akun 1157 (Vault Utama PT TAN) Rp ${purchase.totalAmount.toLocaleString()}\nKredit: Akun 1159 (Transit Emas Kurir) Rp ${purchase.totalAmount.toLocaleString()}\n\nApakah Anda yakin fisik emas sudah ditimbang & diterima lengkap?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    if (typeof window !== 'undefined' && window.Storage) {
+      // 1. Update Purchase Record Status
+      const list = window.Storage.get('pttan_local_purchases') || [];
+      const updatedList = list.map(item => {
+        if (item.id === purchase.id || item.receiptNo === purchase.receiptNo) {
+          return {
+            ...item,
+            status: 'RECEIVED & STOCKED IN VAULT (VERIFIED 4 TTD)',
+            isVaultReceived: true,
+            vaultReceivedAt: new Date().toISOString()
+          };
+        }
+        return item;
+      });
+      window.Storage.set('pttan_local_purchases', updatedList);
+
+      // 2. Auto-Post Journal Entry TAHAP 2 (Debet 1157 Vault Utama vs Kredit 1159 Transit Emas Kurir)
+      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
+      journals.unshift({
+        id: Date.now(),
+        entryNumber: `JRN-VAULT-${Date.now().toString().slice(-6)}`,
+        date: new Date().toISOString().split('T')[0],
+        description: `[TAHAP 2] Serah Terima Fisik Emas Ke Vault Utama (${purchase.receiptNo}) - Barang: ${purchase.itemName} (${purchase.quantityGrams}g) | Debet: Akun 1157 (Vault Utama) | Kredit: Akun 1159 (Transit Kurir ${purchase.courierName})`,
+        lines: [
+          { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (LM Lokal - Vault Utama)', debit: purchase.totalAmount, credit: 0 },
+          { accountCode: '1159', accountName: 'Persediaan Emas Dalam Perjalanan Kurir (Transit)', debit: 0, credit: purchase.totalAmount }
+        ],
+        createdAt: new Date().toISOString()
+      });
+      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+
+      alert(`🎉 [TAHAP 2 SUKSES] Physical Stock In Vault!\n--------------------------------------------------\n• Debet Akun 1157 (Vault Utama) +${purchase.quantityGrams}g Berhasil!\n• Kredit Akun 1159 (Transit Kurir) Ditutup Rp ${purchase.totalAmount.toLocaleString()}!\n• Dokumen TTB Resmi Diverifikasi 4 TTD.`);
       loadInitialData();
     }
   };
@@ -195,7 +251,7 @@ export default function LmLocalTrading() {
               <ShoppingCart color="#f59e0b" size={24} /> Pembelian Emas Lokal (Direct Cash Pegadaian Jakarta)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Pembelian Tunai Instan Menggunakan Master Katalog Barang Emas, Pengambilan Kurir, & Otorisasi Pemilik
+              Alur 2 Tahap Akuntansi SAK EMKM: Transit Kurir (Akun 1159) ➔ Penerimaan Fisik Vault Utama (Akun 1157)
             </p>
           </div>
 
@@ -210,7 +266,7 @@ export default function LmLocalTrading() {
               }}
               onClick={() => setPaymentMode('cash')}
             >
-              <Wallet size={16} /> 💵 Tunai Direct (Tinggal Pilih Barang Master)
+              <Wallet size={16} /> 💵 Tunai Direct (Alur 2-Tahap Transit 1159 ➔ Vault 1157)
             </button>
             <button
               className="btn-primary"
@@ -243,11 +299,12 @@ export default function LmLocalTrading() {
             >
               {paymentMode === 'cash' ? (
                 <>
-                  <Box color="#10b981" size={24} />
+                  <ArrowRightLeft color="#10b981" size={26} />
                   <div>
-                    <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Mode Pembelian Tunai Direct (Tinggal Pilih Dari Master Katalog Barang Emas)</strong>
+                    <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Alur 2-Tahap Akuntansi & Kontrol Fisik Brankas PT TAN</strong>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-                      Pilih produk emas dari <strong>Master Katalog Barang</strong> (Pegadaian 1kg, Antam 1kg, 100g, Granul 999.9). Stok emas otomatis langsung bertambah ke Vault Utama (`1157`).
+                      <strong>• Tahap 1 (Saat Transfer Bayar)</strong>: Debet `1159` (Emas Dalam Perjalanan Kurir) vs Kredit Kas/Bank (`1111`).<br/>
+                      <strong>• Tahap 2 (Saat Emas Tiba di Brankas)</strong>: Klik Konfirmasi Vault ➔ Debet `1157` (Vault Utama) vs Kredit `1159` (Transit Kurir).
                     </p>
                   </div>
                 </>
@@ -452,17 +509,17 @@ export default function LmLocalTrading() {
                 <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.3rem' }}>Rp {totalAmount.toLocaleString()}</div>
               </div>
               <div>
-                <span className="stat-lbl">Barang Master Terpilih</span>
-                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.9rem' }}>
-                  <Box size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                  {formData.itemName} ({formData.itemCode})
+                <span className="stat-lbl">Jurnal Tahap 1 (Transfer Bayar)</span>
+                <div style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>
+                  Debet: Akun 1159 (Transit Kurir {formData.courierName})<br/>
+                  Kredit: {paymentMode === 'cash' ? formData.paymentSourceAccountName : 'Akun 2110 (Utang)'}
                 </div>
               </div>
               <div>
-                <span className="stat-lbl">Status Otorisasi TTD</span>
-                <div style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.9rem' }}>
-                  <ShieldCheck size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                  Disetujui Pemilik ({formData.ownerApprovedBy})
+                <span className="stat-lbl">Jurnal Tahap 2 (Tiba Di Brankas)</span>
+                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.85rem' }}>
+                  Debet: Akun 1157 (Vault Utama PT TAN)<br/>
+                  Kredit: Akun 1159 (Transit Kurir Closed)
                 </div>
               </div>
             </div>
@@ -480,7 +537,7 @@ export default function LmLocalTrading() {
           >
             {paymentMode === 'cash' ? (
               <>
-                <CheckCircle size={18} /> Simpan Pembelian Emas Tunai [{formData.itemName}] & Tambah Stok Vault
+                <CheckCircle size={18} /> Simpan Pembelian Tunai & Penugasan Kurir (Post Jurnal Tahap 1: Debet 1159 Transit)
               </>
             ) : (
               <>
@@ -501,14 +558,14 @@ export default function LmLocalTrading() {
             <thead>
               <tr>
                 <th>No. Nota / PO</th>
-                <th>Mode Bayar</th>
+                <th>Status Tahap Transit / Vault</th>
                 <th>Supplier & Lokasi Ambil</th>
                 <th>Kurir Pengambil</th>
                 <th>Barang Master & Multi-No Seri Bar</th>
                 <th>Berat Gram</th>
                 <th style={{ textAlign: 'right' }}>Total Valuasi (IDR)</th>
                 <th>Otorisasi Pemilik</th>
-                <th>Aksi Dokumen</th>
+                <th>Aksi Verifikasi & Dokumen</th>
               </tr>
             </thead>
             <tbody>
@@ -521,15 +578,22 @@ export default function LmLocalTrading() {
               ) : (
                 purchases.map(p => {
                   const certList = (p.barCertificateNo || '').split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+                  const isReceived = p.isVaultReceived || p.status?.includes('RECEIVED & STOCKED');
                   return (
                     <tr key={p.id}>
                       <td>
                         <strong>{p.receiptNo || p.poNumber}</strong>
                       </td>
                       <td>
-                        <span className={`badge ${p.paymentMode === 'cash' ? 'badge-emerald' : 'badge-gold'}`} style={{ fontSize: '0.75rem' }}>
-                          {p.paymentMode === 'cash' ? '💵 TUNAI DIRECT' : '📝 KREDIT PO'}
-                        </span>
+                        {isReceived ? (
+                          <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                            ✅ VAULT STOCKED (1157)
+                          </span>
+                        ) : (
+                          <span className="badge badge-gold" style={{ fontSize: '0.75rem', fontWeight: 700, background: 'rgba(245,158,11,0.2)', border: '1px solid #f59e0b' }}>
+                            🚚 IN TRANSIT KURIR (1159)
+                          </span>
+                        )}
                       </td>
                       <td>
                         <strong>{p.supplierName}</strong><br/>
@@ -561,21 +625,32 @@ export default function LmLocalTrading() {
                         </span>
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          <button
-                            className="btn-primary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
-                            onClick={() => alert(`📱 Membuka Dispatch WhatsApp PDF Surat Kuasa & Kuitansi Lunas (${p.receiptNo})\n--------------------------------------------------\nMengirimkan PDF Surat Kuasa Ambil Emas Resmi Ke WhatsApp Kurir (${p.courierName}) & Kasir ${p.supplierName} Jakarta!\nDokumen dapat langsung di-print di Pegadaian Jakarta.`)}
-                          >
-                            <Share2 size={13} /> WA PDF Kurir
-                          </button>
-                          <button
-                            className="btn-primary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                            onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct & Serah Terima Vault (${p.receiptNo || p.poNumber})\n--------------------------------------------------\nBarang: ${p.itemName} (${p.itemCode})\nLengkap Dengan 4 Kolom Tanda Tangan Fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`)}
-                          >
-                            <Printer size={13} /> Cetak (4 TTD)
-                          </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {!isReceived && (
+                            <button
+                              className="btn-primary"
+                              style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981, #059669)', border: '1px solid #34d399' }}
+                              onClick={() => handleConfirmVaultArrival(p)}
+                            >
+                              <Box size={13} /> 📦 Konfirmasi Tiba Di Vault (Debet 1157)
+                            </button>
+                          )}
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              className="btn-primary"
+                              style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #0284c7, #0369a1)' }}
+                              onClick={() => alert(`📱 Membuka Dispatch WhatsApp PDF Surat Kuasa & Kuitansi Lunas (${p.receiptNo})\n--------------------------------------------------\nMengirimkan PDF Surat Kuasa Ambil Emas Resmi Ke WhatsApp Kurir (${p.courierName}) & Kasir ${p.supplierName} Jakarta!\nDokumen dapat langsung di-print di Pegadaian Jakarta.`)}
+                            >
+                              <Share2 size={13} /> WA PDF
+                            </button>
+                            <button
+                              className="btn-primary"
+                              style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                              onClick={() => alert(`🖨️ Cetak Bukti Serah Terima Vault & Pembelian Tunai (${p.receiptNo || p.poNumber})\n--------------------------------------------------\nBarang: ${p.itemName} (${p.itemCode})\nJurnal Status: ${isReceived ? 'Tahap 2 Selesai (Debet 1157 Vault)' : 'Tahap 1 (Debet 1159 Transit Kurir)'}\n\nLengkap Dengan 4 Kolom Tanda Tangan Fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`)}
+                            >
+                              <Printer size={13} /> Cetak (4 TTD)
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>

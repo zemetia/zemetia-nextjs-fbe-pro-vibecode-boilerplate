@@ -3063,6 +3063,13 @@ const Storage = {
         "balance": 0
     },
     {
+        "code": "1159",
+        "name": "Persediaan Emas Dalam Perjalanan Kurir (Transit)",
+        "type": "detail",
+        "category": "aset",
+        "balance": 0
+    },
+    {
         "code": "11502",
         "name": "Persediaan Emas WIP (Vault Production WIP)",
         "type": "detail",
