@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2 } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2, Box } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
 
 export default function LmLocalTrading() {
   const [purchases, setPurchases] = useState([]);
+  const [masterItemsList, setMasterItemsList] = useState([]);
   const [paymentMode, setPaymentMode] = useState('cash'); // 'cash' (Direct Tunai Pegadaian) or 'credit' (Tempo PO)
 
   const [formData, setFormData] = useState({
     receiptNo: 'KW-PEG-2026-001',
     supplierName: 'PT Pegadaian (Persero)',
     orderDate: new Date().toISOString().split('T')[0],
-    itemCode: 'LM-ANTAM-1000G',
-    itemName: 'Emas Batangan 999.9 (Antam/Pegadaian)',
+    itemCode: 'LM-PEGADAIAN-1KG',
+    itemName: 'Emas Batangan Pegadaian 1kg (999.9)',
     paymentSourceAccount: '1111', // '1110' Kas Utama, '1110-1' Kas Kecil, '1111' Bank BCA/Mandiri
     paymentSourceAccountName: 'Bank BCA IDR (Akun 1111)',
     quantityGrams: 3000,
@@ -26,10 +27,30 @@ export default function LmLocalTrading() {
   });
 
   useEffect(() => {
-    loadPurchases();
+    loadInitialData();
   }, []);
 
-  const loadPurchases = () => {
+  const loadInitialData = () => {
+    // 1. Load Master Barang Katalog
+    const items = getMasterItems() || [];
+    const defaultMasterItems = [
+      { id: 'LM-PEGADAIAN-1KG', code: 'LM-PEGADAIAN-1KG', name: 'Emas Batangan Pegadaian 1kg (999.9)', category: 'Emas Murni', unit: 'gram', purity: 99.99, inventoryAccount: '1157' },
+      { id: 'LM-ANTAM-1000G', code: 'LM-ANTAM-1000G', name: 'Emas Batangan Antam 1kg (999.9)', category: 'Emas Murni', unit: 'gram', purity: 99.99, inventoryAccount: '1157' },
+      { id: 'LM-ANTAM-100G', code: 'LM-ANTAM-100G', name: 'Emas Batangan Antam 100g (999.9)', category: 'Emas Murni', unit: 'gram', purity: 99.99, inventoryAccount: '1157' },
+      { id: 'GOLD-GRANULE-9999', code: 'GOLD-GRANULE-9999', name: 'Granul Emas Murni 999.9', category: 'Emas Murni', unit: 'gram', purity: 99.99, inventoryAccount: '1157' },
+      { id: 'GOLD-SCRAP-LEBUR', code: 'GOLD-SCRAP-LEBUR', name: 'Emas Rongsok / Scrap Leburan (Hasil Uji)', category: 'Scrap', unit: 'gram', purity: 95.00, inventoryAccount: '1152' }
+    ];
+
+    // Merge custom master items with defaults without duplicates
+    const combined = [...defaultMasterItems];
+    items.forEach(it => {
+      if (!combined.some(c => c.code === it.code || c.id === it.id)) {
+        combined.push(it);
+      }
+    });
+    setMasterItemsList(combined);
+
+    // 2. Load History Transaksi Pembelian
     if (typeof window !== 'undefined' && window.Storage) {
       const stored = window.Storage.get('pttan_local_purchases') || [
         {
@@ -40,8 +61,8 @@ export default function LmLocalTrading() {
           ttbNumber: 'TTB-PEG-2026-001',
           supplierName: 'PT Pegadaian (Persero)',
           orderDate: new Date().toISOString().split('T')[0],
-          itemCode: 'LM-ANTAM-1000G',
-          itemName: 'Emas Batangan Antam 1kg (999.9)',
+          itemCode: 'LM-PEGADAIAN-1KG',
+          itemName: 'Emas Batangan Pegadaian 1kg (999.9)',
           quantityGrams: 3000,
           unitPriceIDR: 1350000,
           totalAmount: 4050000000,
@@ -73,6 +94,19 @@ export default function LmLocalTrading() {
   };
 
   const detectedBarCount = getDetectedBarCount(formData.barCertificateNo);
+
+  // Handler Pilihan Barang Master
+  const handleItemSelect = (e) => {
+    const selectedCode = e.target.value;
+    const foundItem = masterItemsList.find(i => i.code === selectedCode || i.id === selectedCode);
+    if (foundItem) {
+      setFormData({
+        ...formData,
+        itemCode: foundItem.code || selectedCode,
+        itemName: foundItem.name || selectedCode
+      });
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -133,7 +167,7 @@ export default function LmLocalTrading() {
         entryNumber: `JRN-BUY-${Date.now().toString().slice(-6)}`,
         date: formData.orderDate,
         description: isCash
-          ? `Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) - ${formData.supplierName} [Kurir: ${newPurchase.courierName} | Otorisasi Pemilik: ${newPurchase.ownerApprovedBy} | Total Rp ${totalAmount.toLocaleString()}]`
+          ? `Pembelian Emas Tunai Direct (${newPurchase.receiptNo}) - Barang: ${newPurchase.itemName} (${newPurchase.quantityGrams}g) | Kurir: ${newPurchase.courierName} | Otorisasi Pemilik: ${newPurchase.ownerApprovedBy}`
           : `Pembelian LM Kredit PO (${newPurchase.poNumber}) - ${formData.supplierName}`,
         lines: [
           { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (Vault Utama)', debit: totalAmount, credit: 0 },
@@ -145,10 +179,10 @@ export default function LmLocalTrading() {
 
       alert(
         isCash
-          ? `✅ Pembelian Tunai Direct (${newPurchase.receiptNo}) Berhasil Ditugaskan Ke Kurir (${newPurchase.courierName}) & Di-TTD Pemilik (${newPurchase.ownerApprovedBy})!\n• Lokasi Ambil: ${newPurchase.pickupLocation}\n• Dana Rp ${totalAmount.toLocaleString()} Keluar Dari ${creditAccountName}\n• Emas ${newPurchase.quantityGrams}g Masuk Vault Utama (1157) Lengkap Dengan 4 TTD Dokumen!`
+          ? `✅ Pembelian Tunai Direct [Barang: ${newPurchase.itemName}] (${newPurchase.receiptNo}) Berhasil!\n• Disetujui Pemilik: ${newPurchase.ownerApprovedBy}\n• Kurir Pengambil: ${newPurchase.courierName}\n• Total Rp ${totalAmount.toLocaleString()} Ditransfer/Dipotong Dari ${creditAccountName}\n• Emas ${newPurchase.quantityGrams}g Langsung Masuk Vault Utama (1157)!`
           : `✅ Pembelian Kredit Tempo (${newPurchase.poNumber}) Berhasil Disimpan!`
       );
-      loadPurchases();
+      loadInitialData();
     }
   };
 
@@ -161,7 +195,7 @@ export default function LmLocalTrading() {
               <ShoppingCart color="#f59e0b" size={24} /> Pembelian Emas Lokal (Direct Cash Pegadaian Jakarta)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Proses Pengambilan Emas Di Pegadaian Jakarta Via Kurir Internal (Surat Tugas, Dispatch WA PDF, & 4 TTD Dokumen)
+              Pembelian Tunai Instan Menggunakan Master Katalog Barang Emas, Pengambilan Kurir, & Otorisasi Pemilik
             </p>
           </div>
 
@@ -176,7 +210,7 @@ export default function LmLocalTrading() {
               }}
               onClick={() => setPaymentMode('cash')}
             >
-              <Wallet size={16} /> 💵 Tunai Direct (Kurir Pick-Up & 4 TTD)
+              <Wallet size={16} /> 💵 Tunai Direct (Tinggal Pilih Barang Master)
             </button>
             <button
               className="btn-primary"
@@ -209,11 +243,11 @@ export default function LmLocalTrading() {
             >
               {paymentMode === 'cash' ? (
                 <>
-                  <Truck color="#10b981" size={24} />
+                  <Box color="#10b981" size={24} />
                   <div>
-                    <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Alur Pengambilan Emas Di Pegadaian Jakarta Via Kurir Internal</strong>
+                    <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Mode Pembelian Tunai Direct (Tinggal Pilih Dari Master Katalog Barang Emas)</strong>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-                      1. Kurir dibekali Surat Kuasa Pengambilan & Bukti Bayar (Bisa Di-Kirim WA PDF jika Kurir Lupa Bawa) ➔ 2. Emas diambil di Pegadaian Jakarta ➔ 3. Emas diserahkan ke Petugas Vault ➔ 4. Dokumen TTB dicetak dengan <strong>4 Tanda Tangan (Kurir, Pegadaian, Vault, & Pemilik)</strong>.
+                      Pilih produk emas dari <strong>Master Katalog Barang</strong> (Pegadaian 1kg, Antam 1kg, 100g, Granul 999.9). Stok emas otomatis langsung bertambah ke Vault Utama (`1157`).
                     </p>
                   </div>
                 </>
@@ -261,6 +295,26 @@ export default function LmLocalTrading() {
                 <option value="PT Antam Tbk (UBPP LM Jakarta)">PT Antam Tbk (UBPP LM Jakarta)</option>
                 <option value="PT UBS Fine Gold (Surabaya)">PT UBS Fine Gold</option>
                 <option value="Toko Emas & Bullion Dealer Jakarta">Toko Emas & Bullion Dealer Jakarta</option>
+              </select>
+            </div>
+
+            {/* SELEKSI BARANG DARI MASTER DATA BARANG */}
+            <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(245,158,11,0.1)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+              <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Box size={18} /> Pilih Produk Dari Master Kode Barang Emas:
+              </label>
+              <select
+                className="form-select"
+                style={{ background: '#0f172a', color: '#fbbf24', fontWeight: 700, fontSize: '0.95rem' }}
+                value={formData.itemCode}
+                onChange={handleItemSelect}
+              >
+                <option value="">-- (Pilih Barang Emas Dari Master Katalog PT TAN) --</option>
+                {masterItemsList.map(item => (
+                  <option key={item.code || item.id} value={item.code || item.id}>
+                    [{item.code}] {item.name} ({item.category || 'Emas Murni'} - {item.purity || 99.99}%)
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -321,24 +375,6 @@ export default function LmLocalTrading() {
                 <input className="form-input" disabled value="Kredit Tempo / Utang Supplier (Akun 2110)" />
               </div>
             )}
-
-            <div className="form-group">
-              <label className="form-label">Pilihan Barang Emas Batangan / Granul</label>
-              <select
-                className="form-select"
-                value={formData.itemCode}
-                onChange={e => {
-                  const code = e.target.value;
-                  const name = code === 'LM-ANTAM-1000G' ? 'Emas Batangan Antam 1kg (999.9)' : code === 'LM-ANTAM-100G' ? 'Emas Batangan Antam 100g (999.9)' : code === 'LM-PEGADAIAN-1KG' ? 'Emas Batangan Pegadaian 1kg (999.9)' : 'Granul Emas Murni 999.9';
-                  setFormData({ ...formData, itemCode: code, itemName: name });
-                }}
-              >
-                <option value="LM-ANTAM-1000G">Emas Batangan Antam 1kg (999.9)</option>
-                <option value="LM-PEGADAIAN-1KG">Emas Batangan Pegadaian 1kg (999.9)</option>
-                <option value="LM-ANTAM-100G">Emas Batangan Antam 100g (999.9)</option>
-                <option value="GOLD-GRANULE-9999">Granul Emas Murni 999.9</option>
-              </select>
-            </div>
 
             {/* OTORISASI & NAMA PEMILIK / DIREKTUR */}
             <div className="form-group">
@@ -416,15 +452,15 @@ export default function LmLocalTrading() {
                 <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.3rem' }}>Rp {totalAmount.toLocaleString()}</div>
               </div>
               <div>
-                <span className="stat-lbl">Kurir Pengambil Emas</span>
-                <div style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.9rem' }}>
-                  <Truck size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                  {formData.courierName} ({formData.courierDocNo})
+                <span className="stat-lbl">Barang Master Terpilih</span>
+                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.9rem' }}>
+                  <Box size={14} style={{ display: 'inline', marginRight: '4px' }} />
+                  {formData.itemName} ({formData.itemCode})
                 </div>
               </div>
               <div>
                 <span className="stat-lbl">Status Otorisasi TTD</span>
-                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.9rem' }}>
+                <div style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.9rem' }}>
                   <ShieldCheck size={14} style={{ display: 'inline', marginRight: '4px' }} />
                   Disetujui Pemilik ({formData.ownerApprovedBy})
                 </div>
@@ -444,7 +480,7 @@ export default function LmLocalTrading() {
           >
             {paymentMode === 'cash' ? (
               <>
-                <CheckCircle size={18} /> Simpan Pembelian Emas Tunai (Penugasan Kurir {formData.courierName} & 4 TTD)
+                <CheckCircle size={18} /> Simpan Pembelian Emas Tunai [{formData.itemName}] & Tambah Stok Vault
               </>
             ) : (
               <>
@@ -468,7 +504,7 @@ export default function LmLocalTrading() {
                 <th>Mode Bayar</th>
                 <th>Supplier & Lokasi Ambil</th>
                 <th>Kurir Pengambil</th>
-                <th>Item Barang & Multi-Nomor Seri Bar</th>
+                <th>Barang Master & Multi-No Seri Bar</th>
                 <th>Berat Gram</th>
                 <th style={{ textAlign: 'right' }}>Total Valuasi (IDR)</th>
                 <th>Otorisasi Pemilik</th>
@@ -507,6 +543,7 @@ export default function LmLocalTrading() {
                       </td>
                       <td>
                         <strong>{p.itemName}</strong><br/>
+                        <small style={{ color: '#fbbf24' }}>Kode: {p.itemCode}</small>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
                           {certList.map((cert, idx) => (
                             <span key={idx} className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>
@@ -535,7 +572,7 @@ export default function LmLocalTrading() {
                           <button
                             className="btn-primary"
                             style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                            onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct & Serah Terima Vault (${p.receiptNo || p.poNumber})\n--------------------------------------------------\nLengkap Dengan 4 Kolom Tanda Tangan Fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`)}
+                            onClick={() => alert(`🖨️ Mencetak Bukti Pembelian Emas Tunai Direct & Serah Terima Vault (${p.receiptNo || p.poNumber})\n--------------------------------------------------\nBarang: ${p.itemName} (${p.itemCode})\nLengkap Dengan 4 Kolom Tanda Tangan Fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`)}
                           >
                             <Printer size={13} /> Cetak (4 TTD)
                           </button>
