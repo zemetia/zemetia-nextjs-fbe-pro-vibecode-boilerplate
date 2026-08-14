@@ -549,7 +549,9 @@ const Storage = {
 
         if (!localStorage.getItem(this.KEYS.BANK_ACCOUNTS) || JSON.parse(localStorage.getItem(this.KEYS.BANK_ACCOUNTS)).length === 0) {
             const sampleBanks = [
-                { id: 'BANK-BCA-001', code: 'BCA-001', accountHolder: 'PT. Golden Alura Refinery', bankName: 'BCA', accountNumber: '1234567890', currency: 'IDR', branch: 'Jakarta Pusat', glAccount: '1121', notes: 'Rekening utama operasional', active: true, createdAt: new Date().toISOString() }
+                { id: 'BANK-BCA-IDR', code: 'BCA-IDR', accountHolder: 'PT. Trifactor Alura Nusantara (TAN)', bankName: 'Bank BCA', accountNumber: '889-012-3456', currency: 'IDR', branch: 'KCU Thamrin Jakarta', glAccount: '1111-IDR', notes: 'Rekening Utama Operasional & Pembelian Lokal', active: true, createdAt: new Date().toISOString() },
+                { id: 'BANK-BCA-USD', code: 'BCA-USD', accountHolder: 'PT. Trifactor Alura Nusantara (TAN)', bankName: 'Bank BCA Devisa', accountNumber: '889-012-USD1', currency: 'USD', branch: 'KCU Thamrin Jakarta (Swift: CENAIDJA)', glAccount: '1111-USD', notes: 'Khusus Pembayaran Impor LBMA Valcambi & Penerimaan Ekspor Dubai', active: true, createdAt: new Date().toISOString() },
+                { id: 'BANK-BCA-SGD', code: 'BCA-SGD', accountHolder: 'PT. Trifactor Alura Nusantara (TAN)', bankName: 'Bank BCA Devisa', accountNumber: '889-012-SGD1', currency: 'SGD', branch: 'KCU Thamrin Jakarta (Swift: CENAIDJA)', glAccount: '1111-SGD', notes: 'Khusus Pembayaran Impor Bullion Singapura', active: true, createdAt: new Date().toISOString() }
             ];
             localStorage.setItem(this.KEYS.BANK_ACCOUNTS, JSON.stringify(sampleBanks));
         }
@@ -1686,6 +1688,27 @@ const Storage = {
     {
         "code": "1111",
         "name": "Bank",
+        "type": "header",
+        "category": "aset",
+        "balance": 0
+    },
+    {
+        "code": "1111-IDR",
+        "name": "Bank BCA IDR (Operasional & Beli Lokal)",
+        "type": "detail",
+        "category": "aset",
+        "balance": 0
+    },
+    {
+        "code": "1111-USD",
+        "name": "Bank BCA Devisa USD (Impor LBMA & Ekspor Valas)",
+        "type": "detail",
+        "category": "aset",
+        "balance": 0
+    },
+    {
+        "code": "1111-SGD",
+        "name": "Bank BCA Devisa SGD (Impor Valas Singapura)",
         "type": "detail",
         "category": "aset",
         "balance": 0
