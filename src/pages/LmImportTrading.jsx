@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlaneTakeoff, Plus, CheckCircle, Calculator, RefreshCw, Building2, CreditCard, DollarSign, ShieldCheck, Truck, Scale, Tag, FileEdit, CheckSquare, Printer } from 'lucide-react';
+import { PlaneTakeoff, Plus, CheckCircle, Calculator, RefreshCw, Building2, CreditCard, DollarSign, ShieldCheck, Truck, Scale, Tag, Printer, Sparkles } from 'lucide-react';
 import { createPurchaseOrder, getPurchaseOrders } from '../services/storageService';
 import { fetchBcaERateUSD, getStoredUsdRate } from '../services/currencyService';
 
@@ -12,20 +12,20 @@ export default function LmImportTrading() {
     supplierName: 'YLG Bullion Singapore Pte Ltd',
     orderDate: new Date().toISOString().split('T')[0],
     currency: 'USD',
-    paymentBankAccount: '1111-USD', // 1111-USD (BCA Devisa USD), 1111-SGD (BCA Devisa SGD), 1111-IDR (BCA IDR)
+    paymentBankAccount: '1111-USD',
     paymentBankAccountName: 'Bank BCA Devisa USD (No. 889-012-USD1 - Swift: CENAIDJA)',
     exchangeRate: getStoredUsdRate(),
     
-    // Field Model Realita Lapangan Pak Sandy (YLG Singapore Style)
+    // Field Model Realita Lapangan YLG Singapore
     quantityUnits: 16000, // 16,000 oz
     baseAmountUSD: 1300000, // $1,300,000 (Harga Kesepakatan Base Metal)
-    premiumPerUnitUSD: 2.00, // $2.00 / oz (Biaya Ongkos Kirim Brinks & Selisih yang di-bundle sebagai Premium)
+    premiumPerUnitUSD: 2.00, // $2.00 / oz (Biaya Ongkos Kirim Brinks All-In)
     
     importDutyIDR: 0,
     pph22ImportIDR: 0,
     freightAndHandlingLocalIDR: 0,
     barSerials: 'YLG-SG-998811 s/d YLG-SG-998850 (Brinks Vault Sealed)',
-    logisticsPartner: 'BRINKS Global Services (Dibayar YLG, Ditanggung TAN via Premium $2/oz)'
+    logisticsPartner: 'BRINKS Global Services (All-in via Premium $2/oz)'
   });
 
   useEffect(() => {
@@ -52,20 +52,22 @@ export default function LmImportTrading() {
   const totalWeightGrams = unitMode === 'oz' ? formData.quantityUnits * OZ_TO_GRAM : formData.quantityUnits;
   const totalWeightOz = unitMode === 'oz' ? formData.quantityUnits : (formData.quantityUnits / OZ_TO_GRAM);
 
-  // Kalkulasi Realita Lapangan: Base Price + (Premium x Qty) = Total All-In ($1,300,000 + $32,000 = $1,332,000)
+  // Kalkulasi All-In Premium
   const totalPremiumUSD = formData.quantityUnits * Number(formData.premiumPerUnitUSD || 0);
   const totalAllInGoldUSD = Number(formData.baseAmountUSD || 0) + totalPremiumUSD;
   const effectivePricePerGramUSD = totalWeightGrams > 0 ? (totalAllInGoldUSD / totalWeightGrams) : 0;
   const effectivePricePerOzUSD = totalWeightOz > 0 ? (totalAllInGoldUSD / totalWeightOz) : 0;
 
-  // Konversi ke IDR & Landed Cost Buku PT TAN
+  // Konversi ke IDR & Landed Cost
   const totalGoldAmountIDR = totalAllInGoldUSD * formData.exchangeRate;
   const totalLandedCostIDR = totalGoldAmountIDR + Number(formData.importDutyIDR || 0) + Number(formData.freightAndHandlingLocalIDR || 0);
   const unitLandedCostIDRPerGram = totalWeightGrams > 0 ? (totalLandedCostIDR / totalWeightGrams) : 0;
 
-  const handleSaveOrder = async (statusMode = 'draft') => {
+  // Langsung Submit & Terbitkan PO Resmi (Tanpa Draft Berbelit-belit)
+  const handleDirectSubmit = async (e) => {
+    e.preventDefault();
     if (!formData.quantityUnits || !formData.baseAmountUSD) {
-      alert('Mohon isi Jumlah Unit dan Nilai Kesepakatan Base FOB USD.');
+      alert('Mohon lengkapi Jumlah Pesanan dan Nilai Kesepakatan Base FOB USD.');
       return;
     }
 
@@ -77,9 +79,8 @@ export default function LmImportTrading() {
       paymentBankAccount: formData.paymentBankAccount,
       paymentBankAccountName: formData.paymentBankAccountName,
       exchangeRate: Number(formData.exchangeRate),
-      status: statusMode, // 'draft' or 'approved'
+      status: 'approved', // Langsung Resmi & Siap TTB
       
-      // Rincian Premium & All-in Price
       unitMode,
       quantityUnits: Number(formData.quantityUnits),
       weightGrams: Math.round(totalWeightGrams * 100) / 100,
@@ -97,7 +98,7 @@ export default function LmImportTrading() {
       
       barSerialNumbers: formData.barSerials.split(/[\n,]+/).map(s => s.trim()).filter(Boolean),
       logisticsCarrier: 'BRINKS Global Services',
-      notes: `Impor Emas YLG Singapore: Base $${formData.baseAmountUSD.toLocaleString()} + Premium $${totalPremiumUSD.toLocaleString()} ($${formData.premiumPerUnitUSD}/${unitMode}) ➔ Total All-in $${totalAllInGoldUSD.toLocaleString()}`,
+      notes: `Impor Emas YLG Singapore: Base $${Number(formData.baseAmountUSD).toLocaleString()} + Premium $${totalPremiumUSD.toLocaleString()} ($${formData.premiumPerUnitUSD}/${unitMode}) ➔ Total All-in $${totalAllInGoldUSD.toLocaleString()}`,
       
       items: [
         {
@@ -114,24 +115,10 @@ export default function LmImportTrading() {
 
     const res = await createPurchaseOrder(poPayload);
     if (res.success) {
-      if (statusMode === 'draft') {
-        alert(`📝 DRAFT Purchase Order (${formData.supplierName}) Berhasil Disimpan!\nStatus: DRAFT (Belum mengikat, dapat diedit / di-approve kapan saja).`);
-      } else {
-        alert(`✅ Purchase Order Resmi (${formData.supplierName}) Berhasil Diterbitkan!\nStatus: APPROVED (Siap ditarik di menu Penerimaan Barang TTB).`);
-      }
+      alert(`🎉 PURCHASE ORDER RESMI BERHASIL DITERBITKAN!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• No. PO: ${res.order?.poNumber || 'PO-IMP'}\n• Supplier: ${formData.supplierName}\n• Total All-In (USD): $ ${totalAllInGoldUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n• Total Landed Cost: Rp ${totalLandedCostIDR.toLocaleString()}\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Rekening Bayar: ${formData.paymentBankAccountName}\n• Status: APPROVED & SIAP PENERIMAAN TTB VAULT`);
       loadOrders();
     } else {
       alert('❌ Gagal menyimpan PO: ' + JSON.stringify(res.errors));
-    }
-  };
-
-  // Handler Approve Draft 1-Klik
-  const handleApproveDraft = (orderId) => {
-    if (!confirm('Setujui dan terbitkan draft PO ini menjadi PO RESMI (Approved)?')) return;
-    if (typeof window !== 'undefined' && window.PurchaseOrder) {
-      window.PurchaseOrder.approveOrder(orderId);
-      alert('🎉 Draft PO Berhasil Disetujui & Diterbitkan Resmi (Approved)!');
-      loadOrders();
     }
   };
 
@@ -142,10 +129,10 @@ export default function LmImportTrading() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
           <div>
             <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <PlaneTakeoff color="#f59e0b" size={24} /> Pembelian LM Import & Landed Costing (Draft & PO Resmi)
+              <PlaneTakeoff color="#f59e0b" size={24} /> Penerbitan Purchase Order LM Import (YLG All-In Model)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Mendukung Simpan Draft Estimasi Kontrak, Persetujuan PO Resmi, & Perhitungan All-In Premium YLG Singapore
+              Input Langsung Jadi & Terbit Otomatis (Base Metal + Premium BRINKS All-In)
             </p>
           </div>
 
@@ -176,7 +163,7 @@ export default function LmImportTrading() {
           </div>
         </div>
 
-        <form onSubmit={e => e.preventDefault()}>
+        <form onSubmit={handleDirectSubmit}>
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label">Supplier Impor Emas</label>
@@ -196,7 +183,7 @@ export default function LmImportTrading() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Tgl Kontrak PO Impor</label>
+              <label className="form-label">Tgl PO Impor</label>
               <input
                 type="date"
                 className="form-input"
@@ -304,7 +291,7 @@ export default function LmImportTrading() {
               <input
                 className="form-input"
                 disabled
-                value="BRINKS Global Services (Dibayar YLG, Dibebankan ke TAN via Premium)"
+                value="BRINKS Global Services (All-in di Harga Emas via Premium)"
                 style={{ background: 'rgba(15,23,42,0.8)', color: 'var(--text-secondary)' }}
               />
             </div>
@@ -319,15 +306,15 @@ export default function LmImportTrading() {
             </div>
           </div>
 
-          {/* Rincian Kalkulasi */}
+          {/* Rincian Kalkulasi All-In */}
           <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid var(--accent-gold)' }}>
             <h4 style={{ color: '#fbbf24', fontSize: '0.95rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calculator size={18} /> Rincian Struktur Harga Beli Emas All-In (Sesuai Catatan Buku PT TAN)
+              <Calculator size={18} /> Rincian Struktur Harga Beli Emas All-In (Buku PT TAN)
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               <div>
                 <span className="stat-lbl">1. Nilai Base Kesepakatan</span>
-                <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: '1.1rem' }}>$ {formData.baseAmountUSD.toLocaleString()}</div>
+                <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: '1.1rem' }}>$ {Number(formData.baseAmountUSD || 0).toLocaleString()}</div>
               </div>
               <div>
                 <span className="stat-lbl">2. Tambahan Premium (${formData.premiumPerUnitUSD}/{unitMode})</span>
@@ -349,32 +336,21 @@ export default function LmImportTrading() {
             </div>
           </div>
 
-          {/* DUAL ACTION BUTTONS: DRAFT VS TERBITKAN RESMI */}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn-primary"
-              style={{ flex: 1, minWidth: '240px', justifyContent: 'center', padding: '12px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fbbf24' }}
-              onClick={() => handleSaveOrder('draft')}
-            >
-              <FileEdit size={18} /> 📝 Simpan Sebagai DRAFT PO (Untuk Review)
-            </button>
-            <button
-              type="button"
-              className="btn-primary"
-              style={{ flex: 1, minWidth: '240px', justifyContent: 'center', padding: '12px', background: 'linear-gradient(135deg, #10b981, #059669)' }}
-              onClick={() => handleSaveOrder('approved')}
-            >
-              <Plus size={18} /> 🚀 Terbitkan PO Resmi (Approved & Siap TTB)
-            </button>
-          </div>
+          {/* SINGLE DIRECT SUBMIT BUTTON - LANGSUNG JADI */}
+          <button
+            type="submit"
+            className="btn-primary"
+            style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1rem', fontWeight: 800, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', boxShadow: '0 4px 15px rgba(16,185,129,0.3)' }}
+          >
+            <Plus size={20} /> 🚀 Terbitkan Purchase Order Resmi (Langsung Jadi & Siap TTB)
+          </button>
         </form>
       </div>
 
-      {/* Existing Orders Table with Draft Status and Approval Actions */}
+      {/* Existing Orders Table */}
       <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
-          📋 Riwayat Purchase Order LM Import ({orders.length})
+        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Sparkles color="#fbbf24" size={18} /> Riwayat Purchase Order LM Import ({orders.length})
         </h3>
         <div className="table-container">
           <table className="custom-table">
@@ -387,21 +363,22 @@ export default function LmImportTrading() {
                 <th>Total All-In (USD)</th>
                 <th>Kurs Transaksi</th>
                 <th>Landed Cost IDR</th>
+                <th>HPP / Gram</th>
                 <th>Status PO</th>
-                <th>Aksi Dokumen</th>
+                <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                  <td colSpan="10" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
                     Belum ada data PO LM Import.
                   </td>
                 </tr>
               ) : (
                 orders.map(po => (
                   <tr key={po.id || po.poNumber}>
-                    <td><strong>{po.poNumber}</strong></td>
+                    <td><strong style={{ color: '#38bdf8' }}>{po.poNumber}</strong></td>
                     <td><strong>{po.supplierName || po.supplier}</strong></td>
                     <td>{po.orderDate}</td>
                     <td>
@@ -416,38 +393,24 @@ export default function LmImportTrading() {
                     <td style={{ fontWeight: 700, color: '#34d399' }}>
                       Rp {(po.totalLandedCostIDR || ((po.totalAmountUSD || 0) * (po.exchangeRate || 16250))).toLocaleString()}
                     </td>
+                    <td style={{ fontWeight: 800, color: '#38bdf8' }}>
+                      Rp {Math.round(po.unitLandedCostIDRPerGram || 0).toLocaleString()}/g
+                    </td>
                     <td>
-                      {po.status === 'draft' && (
-                        <span className="badge badge-gold" style={{ background: 'rgba(245,158,11,0.2)', border: '1px solid #f59e0b' }}>
-                          🟡 DRAFT (DALAM REVIEW)
-                        </span>
-                      )}
-                      {(po.status === 'approved' || po.status === 'open') && (
-                        <span className="badge badge-emerald">🟢 APPROVED (RESMI)</span>
-                      )}
-                      {po.status === 'received' && (
+                      {po.status === 'received' ? (
                         <span className="badge badge-blue">📦 RECEIVED IN VAULT</span>
+                      ) : (
+                        <span className="badge badge-emerald">🟢 APPROVED (RESMI)</span>
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {po.status === 'draft' && (
-                          <button
-                            className="btn-primary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
-                            onClick={() => handleApproveDraft(po.id)}
-                          >
-                            <CheckSquare size={13} /> Approve PO
-                          </button>
-                        )}
-                        <button
-                          className="btn-primary"
-                          style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                          onClick={() => alert(`🖨️ Mencetak PDF Dokumen PO Impor ${po.poNumber} untuk ${po.supplierName}...`)}
-                        >
-                          <Printer size={13} /> Cetak
-                        </button>
-                      </div>
+                      <button
+                        className="btn-primary"
+                        style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                        onClick={() => alert(`🖨️ Mencetak PDF Dokumen PO Impor Resmi ${po.poNumber} untuk ${po.supplierName}...`)}
+                      >
+                        <Printer size={13} /> Cetak PO
+                      </button>
                     </td>
                   </tr>
                 ))
