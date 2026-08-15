@@ -225,6 +225,9 @@ const PurchaseOrder = {
             taxAmount: 0,
             total: 0,
             reference: orderData.reference || '',
+            pibNo: orderData.pibNo || '',
+            sppbNo: orderData.sppbNo || '',
+            mawbNo: orderData.mawbNo || '',
             notes: orderData.notes || '',
             status: orderData.status || 'draft', // draft, submitted, approved, received, cancelled
             createdBy: Auth?.getCurrentUser?.()?.id || 'system',
@@ -759,6 +762,25 @@ const PurchaseOrder = {
                                 </div>
                             </div>
 
+                            <!-- Dokumen Impor & Kepabeanan (Jika Transaksi Impor) -->
+                            <div class="card p-3 mb-3 bg-light" style="border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.05); margin-bottom: 16px;">
+                                <h4 style="margin-top: 0; margin-bottom: 8px; color: #2563eb; font-size: 0.95rem;">✈️ Dokumen Impor & Kepabeanan (Opsional)</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>No. PIB <small class="text-gray">(Pemberitahuan Impor Barang)</small></label>
+                                        <input type="text" name="pibNo" id="po-pib-no" placeholder="Contoh: 001234/PIB/KPU-TP/2026" maxlength="100">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>No. SPPB <small class="text-gray">(Persetujuan Pengeluaran)</small></label>
+                                        <input type="text" name="sppbNo" id="po-sppb-no" placeholder="Contoh: SPPB-009876/KPU.01/2026" maxlength="100">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>No. MAWB <small class="text-gray">(Master Air Waybill)</small></label>
+                                        <input type="text" name="mawbNo" id="po-mawb-no" placeholder="Contoh: SQ-618-99881122" maxlength="100">
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Items -->
                             <div class="form-group">
                                 <label>Items *</label>
@@ -951,6 +973,9 @@ const PurchaseOrder = {
         form.querySelector('[name="orderDate"]').value = order.orderDate || '';
         form.querySelector('[name="expectedDate"]').value = order.expectedDate || '';
         form.querySelector('[name="reference"]').value = order.reference || '';
+        if (form.querySelector('[name="pibNo"]')) form.querySelector('[name="pibNo"]').value = order.pibNo || '';
+        if (form.querySelector('[name="sppbNo"]')) form.querySelector('[name="sppbNo"]').value = order.sppbNo || '';
+        if (form.querySelector('[name="mawbNo"]')) form.querySelector('[name="mawbNo"]').value = order.mawbNo || '';
         form.querySelector('[name="taxRate"]').value = order.taxRate || 0;
         form.querySelector('[name="notes"]').value = order.notes || '';
 
@@ -1025,6 +1050,9 @@ const PurchaseOrder = {
                 orderDate: formData.get('orderDate'),
                 expectedDate: formData.get('expectedDate'),
                 reference: formData.get('reference') || '',
+                pibNo: formData.get('pibNo') || '',
+                sppbNo: formData.get('sppbNo') || '',
+                mawbNo: formData.get('mawbNo') || '',
                 items: items,
                 taxRate: formData.get('taxRate'),
                 notes: formData.get('notes')
@@ -1092,6 +1120,17 @@ const PurchaseOrder = {
                             ${order.reference ? `<p><strong>📎 Referensi:</strong> <span style="color: #60a5fa; font-weight: 600;">${order.reference}</span></p>` : ''}
                         </div>
                     </div>
+
+                    ${(order.pibNo || order.sppbNo || order.mawbNo) ? `
+                    <div style="margin-bottom: 20px; padding: 14px; background: rgba(59, 130, 246, 0.08); border-left: 4px solid #3b82f6; border-radius: 6px;">
+                        <h4 style="margin: 0 0 10px; color: #2563eb; font-size: 0.95rem;">✈️ Dokumen Impor & Kepabeanan</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 0.95rem;">
+                            <div><span class="text-gray" style="font-size: 0.8rem;">No. PIB:</span><br><strong style="color: #2563eb;">${order.pibNo || '-'}</strong></div>
+                            <div><span class="text-gray" style="font-size: 0.8rem;">No. SPPB:</span><br><strong style="color: #16a34a;">${order.sppbNo || '-'}</strong></div>
+                            <div><span class="text-gray" style="font-size: 0.8rem;">No. MAWB:</span><br><strong style="color: #d97706;">${order.mawbNo || '-'}</strong></div>
+                        </div>
+                    </div>
+                    ` : ''}
 
                     <h4>Items</h4>
                     <table class="table">

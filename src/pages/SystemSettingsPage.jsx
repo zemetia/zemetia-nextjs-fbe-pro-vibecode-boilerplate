@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Download, Upload, Image, Building2, ShieldCheck, Database, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function SystemSettingsPage() {
+  const { modalProps, showModal } = useModal();
   const [profile, setProfile] = useState({
     companyName: 'PT TAN (Trifactor Export & Trading)',
     logoUrl: '',
@@ -30,7 +32,7 @@ export default function SystemSettingsPage() {
     e.preventDefault();
     if (typeof window !== 'undefined' && window.Storage) {
       window.Storage.set('pttan_company_profile', profile);
-      alert('✅ Profil Perusahaan & Setting Logo PT TAN Berhasil Disimpan!');
+      showModal({ variant: 'success', title: '✅ Profil Perusahaan Tersimpan', message: 'Profil perusahaan & setting logo PT TAN berhasil disimpan.' });
     }
   };
 
@@ -71,14 +73,14 @@ export default function SystemSettingsPage() {
       downloadAnchor.click();
       downloadAnchor.remove();
 
-      alert('✅ File Backup Database Sistem PT TAN (.json) Berhasil Diunduh!');
+      showModal({ variant: 'success', title: '✅ Backup Terunduh', message: 'File backup database sistem PT TAN (.json) berhasil diunduh.' });
     }
   };
 
   // Restore System JSON Import
   const handleRestoreImport = () => {
     if (!restoreFile) {
-      alert('Pilih file backup (.json) terlebih dahulu.');
+      showModal({ variant: 'warning', title: 'File Backup Belum Dipilih', message: 'Pilih file backup (.json) terlebih dahulu.' });
       return;
     }
 
@@ -87,33 +89,48 @@ export default function SystemSettingsPage() {
       try {
         const data = JSON.parse(e.target.result);
         if (!data.app || !data.app.includes('TAN')) {
-          if (!confirm('Peringatan: Format file backup tidak dikenal sebagai PT TAN. Tetap lanjutkan restore?')) {
-            return;
-          }
+          showModal({
+            variant: 'confirm',
+            title: '⚠️ Format Backup Tidak Dikenal',
+            message: 'File ini tidak dikenali sebagai backup PT TAN. Tetap lanjutkan restore?\n\nSeluruh data sistem saat ini akan ditimpa.',
+            confirmLabel: 'Tetap Restore',
+            onConfirm: () => applyRestore(data)
+          });
+          return;
         }
 
-        if (typeof window !== 'undefined' && window.Storage) {
-          if (data.chartOfAccounts) window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, data.chartOfAccounts);
-          if (data.items) window.Storage.set(window.Storage.KEYS.ITEMS, data.items);
-          if (data.customers) window.Storage.set(window.Storage.KEYS.CUSTOMERS, data.customers);
-          if (data.suppliers) window.Storage.set(window.Storage.KEYS.SUPPLIERS, data.suppliers);
-          if (data.purchaseOrders) window.Storage.set('erp_purchase_orders', data.purchaseOrders);
-          if (data.paymentVouchers) window.Storage.set(window.Storage.KEYS.PAYMENT_VOUCHERS, data.paymentVouchers);
-          if (data.receiptVouchers) window.Storage.set(window.Storage.KEYS.RECEIPT_VOUCHERS, data.receiptVouchers);
-          if (data.journals) window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, data.journals);
-          if (data.companyProfile) {
-            setProfile(data.companyProfile);
-            window.Storage.set('pttan_company_profile', data.companyProfile);
-          }
-
-          alert('🎉 Restore Data System PT TAN Berhasil Dilakukan! Halaman akan diperbarui.');
-          window.location.reload();
-        }
+        applyRestore(data);
       } catch (err) {
-        alert('❌ Gagal merestore data: File JSON rusak atau tidak valid.');
+        showModal({ variant: 'error', title: '❌ Gagal Merestore Data', message: 'File JSON rusak atau tidak valid.' });
       }
     };
     reader.readAsText(restoreFile);
+  };
+
+  const applyRestore = (data) => {
+    if (typeof window !== 'undefined' && window.Storage) {
+      if (data.chartOfAccounts) window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, data.chartOfAccounts);
+      if (data.items) window.Storage.set(window.Storage.KEYS.ITEMS, data.items);
+      if (data.customers) window.Storage.set(window.Storage.KEYS.CUSTOMERS, data.customers);
+      if (data.suppliers) window.Storage.set(window.Storage.KEYS.SUPPLIERS, data.suppliers);
+      if (data.purchaseOrders) window.Storage.set('erp_purchase_orders', data.purchaseOrders);
+      if (data.paymentVouchers) window.Storage.set(window.Storage.KEYS.PAYMENT_VOUCHERS, data.paymentVouchers);
+      if (data.receiptVouchers) window.Storage.set(window.Storage.KEYS.RECEIPT_VOUCHERS, data.receiptVouchers);
+      if (data.journals) window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, data.journals);
+      if (data.companyProfile) {
+        setProfile(data.companyProfile);
+        window.Storage.set('pttan_company_profile', data.companyProfile);
+      }
+
+      // Reload dijalankan saat modal ditutup — kalau langsung, pesannya tak sempat terbaca.
+      showModal({
+        variant: 'success',
+        title: '🎉 Restore Data System PT TAN Berhasil',
+        message: 'Halaman akan dimuat ulang setelah dialog ini ditutup.',
+        confirmLabel: 'Muat Ulang Halaman',
+        onDismiss: () => window.location.reload()
+      });
+    }
   };
 
   return (
@@ -218,6 +235,8 @@ export default function SystemSettingsPage() {
           </div>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

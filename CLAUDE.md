@@ -54,6 +54,7 @@ Tanpa TypeScript, tanpa ESLint, tanpa Prettier, tanpa Tailwind, tanpa React Rout
 - Berat emas selalu disimpan **gram** (1 troy oz = 31,1034768 g, konversi sekali di batas simpan); uang selalu `Number` mentah, diformat hanya saat tampil; tanggal kalender `YYYY-MM-DD`
 - Nomor dokumen dari `Storage.getNextReferenceNumber()`, bukan `Date.now()`
 - Setiap tombol punya `onClick`, dan labelnya menjanjikan persis yang dilakukan kode — tidak ada "Auto-Jurnal" yang tidak menjurnal
+- Tanpa `alert()`, `window.confirm()`, `window.prompt()`. Pemberitahuan dan konfirmasi lewat `useModal()` + `<Modal />` (`src/components/ui/Modal.jsx`) — lihat [DESIGN_SYSTEM.md](docs/blueprint/DESIGN_SYSTEM.md)
 - Tidak ada angka laporan yang di-hardcode di JSX. Bila data belum ada, tampilkan keadaan kosong yang jujur
 - Jangan menyentuh 102 modul dorman di `modules/` kecuali diminta; jangan membuat file backup longgar (`.bak`, `_new.js`, `.final`)
 - `README.md`, `README.zh.md`, `EXAMPLES.md`, `CURSOR.md`, dan `skills/` di root berasal dari repo *karpathy-skills* yang ikut ter-merge — **bukan** dokumentasi ERP ini

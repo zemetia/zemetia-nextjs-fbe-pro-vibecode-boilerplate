@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert } from 'lucide-react';
 import { getCOA } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function VoucherManagement() {
+  const { modalProps, showModal } = useModal();
   const [activeTab, setActiveTab] = useState('BBK'); // BBK, BKK, BCK (Bukti Cek Keluar), BKM, BBM
   const [vouchers, setVouchers] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -82,7 +84,7 @@ export default function VoucherManagement() {
   const handleCreateVoucher = (e) => {
     e.preventDefault();
     if (!form.payeePayer || !form.amount) {
-      alert('Penerima/Penyetor dan Jumlah Nominal wajib diisi');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Penerima / Penyetor dan Jumlah Nominal wajib diisi.' });
       return;
     }
 
@@ -92,11 +94,15 @@ export default function VoucherManagement() {
     // VALIDASI LIMIT MAKSIMAL PER LEMBAR CEK (GUARD RAIL)
     if (isCheque) {
       if (!form.checkNumber) {
-        alert('Pilih nomor lembar Cek / Bilyet Giro yang tersedia.');
+        showModal({ variant: 'warning', title: 'Nomor Cek Belum Dipilih', message: 'Pilih nomor lembar Cek / Bilyet Giro yang tersedia.' });
         return;
       }
       if (Number(form.amount) > maxChequeLimit) {
-        alert(`❌ TRANSAKSI DITOLAK! Nominal Rp ${Number(form.amount).toLocaleString()} melebihi batas limit per lembar buku cek ${form.checkBankName} (Maksimal Rp ${maxChequeLimit.toLocaleString()}).`);
+        showModal({
+          variant: 'error',
+          title: '❌ Transaksi Ditolak — Melebihi Limit Per Lembar',
+          message: `Nominal Rp ${Number(form.amount).toLocaleString()} melebihi batas limit per lembar buku cek ${form.checkBankName}.\nMaksimal: Rp ${maxChequeLimit.toLocaleString()}`
+        });
         return;
       }
     }
@@ -171,7 +177,13 @@ export default function VoucherManagement() {
         setChequeBooks(updatedBooks);
       }
 
-      alert(`✅ Voucher ${currentType} (${newVoucher.voucherNumber}) Berhasil Diterbitkan!\n${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Limit Plafon: Rp ${maxChequeLimit.toLocaleString()} (Aman)\n• Jatuh Tempo Kliring: ${newVoucher.checkDueDate}\n• Status: BEREDAR (Akun 2115)` : ''}`);
+      showModal({
+        variant: 'success',
+        title: `✅ Voucher ${currentType} (${newVoucher.voucherNumber}) Diterbitkan`,
+        message: isCheque
+          ? `• No. Cek/BG terkunci: ${newVoucher.checkNumber}\n• Limit plafon: Rp ${maxChequeLimit.toLocaleString()} (aman)\n• Jatuh tempo kliring: ${newVoucher.checkDueDate}\n• Status: BEREDAR (Akun 2115)`
+          : `Penerima / Penyetor: ${newVoucher.payee}\nNominal: Rp ${Number(newVoucher.amount).toLocaleString()}`
+      });
       loadVouchers();
       setShowForm(false);
     }
@@ -180,14 +192,20 @@ export default function VoucherManagement() {
   // Handler Pencairan / Kliring Cek di Bank
   const handleClearCheque = (voucher) => {
     if (voucher.isCleared) {
-      alert('Cek/Bilyet Giro ini sudah dicairkan sebelumnya.');
+      showModal({ variant: 'info', title: 'Sudah Dicairkan', message: 'Cek / Bilyet Giro ini sudah dicairkan sebelumnya.' });
       return;
     }
 
-    if (!confirm(`Konfirmasi Kliring & Pencairan Cek/BG (${voucher.checkNumber}) senilai Rp ${voucher.amount.toLocaleString()}?\nSaldo Bank BCA IDR (Akun 1111) akan resmi terpotong.`)) {
-      return;
-    }
+    showModal({
+      variant: 'confirm',
+      title: `Kliring & Pencairan Cek/BG (${voucher.checkNumber})`,
+      message: `Nominal: Rp ${voucher.amount.toLocaleString()}\nSaldo Bank BCA IDR (Akun 1111) akan resmi terpotong.`,
+      confirmLabel: 'Ya, Cairkan',
+      onConfirm: () => postChequeClearing(voucher)
+    });
+  };
 
+  const postChequeClearing = (voucher) => {
     if (typeof window !== 'undefined' && window.Storage) {
       // 1. Update Voucher Status
       const pmt = window.Storage.get(window.Storage.KEYS.PAYMENT_VOUCHERS) || [];
@@ -228,7 +246,11 @@ export default function VoucherManagement() {
       window.Storage.set('pttan_cheque_books', updatedBooks);
       setChequeBooks(updatedBooks);
 
-      alert(`🎉 Cek/BG (${voucher.checkNumber}) Sukses Dikliringkan & Cair di Bank!\n• Saldo Bank BCA (1111-IDR) Terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun BG Gantung (2115) Ditutup.`);
+      showModal({
+        variant: 'success',
+        title: `🎉 Cek/BG (${voucher.checkNumber}) Sukses Dikliringkan`,
+        message: `• Saldo Bank BCA (1111-IDR) terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun BG gantung (2115) ditutup.`
+      });
       loadVouchers();
     }
   };
@@ -501,7 +523,11 @@ export default function VoucherManagement() {
                         <button
                           className="btn-primary"
                           style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                          onClick={() => alert(`🖨️ Mencetak PDF Voucher ${v.voucherNumber} [No. Cek/BG: ${v.checkNumber || '-'}] untuk ${v.payee}...`)}
+                          onClick={() => showModal({
+                            variant: 'info',
+                            title: `🖨️ Cetak PDF Voucher ${v.voucherNumber}`,
+                            message: `No. Cek/BG: ${v.checkNumber || '-'}\nUntuk: ${v.payee}`
+                          })}
                         >
                           <Printer size={13} /> Cetak
                         </button>
@@ -514,6 +540,8 @@ export default function VoucherManagement() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

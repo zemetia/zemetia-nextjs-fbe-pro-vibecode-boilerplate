@@ -180,6 +180,18 @@ const MasterCustomer = {
                     <label class="form-label small">Refinery Cert (LBMA)</label>
                     <input type="text" name="importRefineryCert" class="form-input" value="${customer.import?.refineryCert || ''}" placeholder="...">
                 </div>
+                <div class="form-group">
+                    <label class="form-label small">No. PIB Default</label>
+                    <input type="text" name="importPibNo" class="form-input" value="${customer.import?.pibNo || ''}" placeholder="Contoh: 001234/PIB/KPU-TP/2026">
+                </div>
+                <div class="form-group">
+                    <label class="form-label small">No. SPPB Default</label>
+                    <input type="text" name="importSppbNo" class="form-input" value="${customer.import?.sppbNo || ''}" placeholder="Contoh: SPPB-009876/KPU.01/2026">
+                </div>
+                <div class="form-group" style="grid-column: span 2;">
+                    <label class="form-label small">No. MAWB Default</label>
+                    <input type="text" name="importMawbNo" class="form-input" value="${customer.import?.mawbNo || ''}" placeholder="Contoh: SQ-618-99881122">
+                </div>
             </div>
         </div>
 
@@ -335,7 +347,10 @@ const MasterCustomer = {
         country: formData.get('importCountry'),
         exporter: formData.get('importExporter'),
         cooNo: formData.get('importCooNo'),
-        refineryCert: formData.get('importRefineryCert')
+        refineryCert: formData.get('importRefineryCert'),
+        pibNo: formData.get('importPibNo') || '',
+        sppbNo: formData.get('importSppbNo') || '',
+        mawbNo: formData.get('importMawbNo') || ''
       }
     };
 

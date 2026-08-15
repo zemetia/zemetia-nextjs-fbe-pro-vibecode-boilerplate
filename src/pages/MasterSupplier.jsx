@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, Plus, Search, Globe, CheckCircle } from 'lucide-react';
 import { getSuppliers, saveSupplier } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function MasterSupplier() {
+  const { modalProps, showModal } = useModal();
   const [suppliers, setSuppliers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -29,7 +31,7 @@ export default function MasterSupplier() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.code || !form.name) {
-      alert('Kode supplier dan nama supplier wajib diisi');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Kode supplier dan nama supplier wajib diisi.' });
       return;
     }
 
@@ -40,7 +42,7 @@ export default function MasterSupplier() {
     };
 
     await saveSupplier(newSupp);
-    alert(`✅ Master Supplier (${newSupp.name}) Berhasil Disimpan!`);
+    showModal({ variant: 'success', title: '✅ Master Supplier Tersimpan', message: `Supplier "${newSupp.name}" (${newSupp.code}) berhasil disimpan.` });
     loadSuppliers();
     setShowForm(false);
   };
@@ -181,6 +183,8 @@ export default function MasterSupplier() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

@@ -178,15 +178,27 @@ const MasterSupplier = {
             <div id="ms-source-import-fields" class="${supplier.sourceCategory === 'import' ? '' : 'hidden'} grid grid-2 gap-2 mt-2">
                 <div class="form-group">
                     <label class="form-label small">Negara Asal</label>
-                    <input type="text" name="importCountry" class="form-input" value="${supplier.import?.country || ''}" placeholder="...">
+                    <input type="text" name="importCountry" class="form-input" value="${supplier.import?.country || ''}" placeholder="Swiss / Singapore / Australia">
                 </div>
                 <div class="form-group">
                     <label class="form-label small">Nama Exporter</label>
-                    <input type="text" name="importExporter" class="form-input" value="${supplier.import?.exporter || ''}" placeholder="...">
+                    <input type="text" name="importExporter" class="form-input" value="${supplier.import?.exporter || ''}" placeholder="YLG / Metalor / Valcambi">
                 </div>
                 <div class="form-group">
                     <label class="form-label small">Refinery Cert (LBMA)</label>
-                    <input type="text" name="importRefineryCert" class="form-input" value="${supplier.import?.refineryCert || ''}" placeholder="...">
+                    <input type="text" name="importRefineryCert" class="form-input" value="${supplier.import?.refineryCert || ''}" placeholder="LBMA Certified">
+                </div>
+                <div class="form-group">
+                    <label class="form-label small">No. PIB Default</label>
+                    <input type="text" name="importPibNo" class="form-input" value="${supplier.import?.pibNo || ''}" placeholder="Contoh: 001234/PIB/KPU-TP/2026">
+                </div>
+                <div class="form-group">
+                    <label class="form-label small">No. SPPB Default</label>
+                    <input type="text" name="importSppbNo" class="form-input" value="${supplier.import?.sppbNo || ''}" placeholder="Contoh: SPPB-009876/KPU.01/2026">
+                </div>
+                <div class="form-group">
+                    <label class="form-label small">No. MAWB Default</label>
+                    <input type="text" name="importMawbNo" class="form-input" value="${supplier.import?.mawbNo || ''}" placeholder="Contoh: SQ-618-99881122">
                 </div>
             </div>
         </div>
@@ -323,7 +335,10 @@ const MasterSupplier = {
       import: {
         country: formData.get('importCountry'),
         exporter: formData.get('importExporter'),
-        refineryCert: formData.get('importRefineryCert')
+        refineryCert: formData.get('importRefineryCert'),
+        pibNo: formData.get('importPibNo') || '',
+        sppbNo: formData.get('importSppbNo') || '',
+        mawbNo: formData.get('importMawbNo') || ''
       }
     };
 

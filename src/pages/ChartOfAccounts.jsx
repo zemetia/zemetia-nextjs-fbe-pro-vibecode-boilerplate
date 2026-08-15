@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Search, Plus, Filter, CheckCircle2, ShieldCheck, Tag, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { getCOA, addCOAAccount, saveCOA } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function ChartOfAccounts() {
+  const { modalProps, showModal } = useModal();
   const [accounts, setAccounts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -26,21 +28,33 @@ export default function ChartOfAccounts() {
     setAccounts(getCOA());
   };
 
-  const handleReplaceWithExcelCOA = async () => {
-    if (window.confirm('⚠️ Apakah Anda yakin ingin MENGGANTI seluruh Chart of Accounts (COA) aplikasi dengan struktur resmi dari file "chart of account PT TAN.xlsx"?')) {
-      if (typeof window !== 'undefined' && window.Storage) {
-        const officialCoa = window.Storage.getDefaultChartOfAccounts();
-        await window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, officialCoa, true);
-        alert(`✅ Chart of Accounts (COA) PT TAN Berhasil Di-replace dengan Structure Resmi Excel (${officialCoa.length} Akun)!`);
-        loadAccounts();
-      }
+  const handleReplaceWithExcelCOA = () => {
+    showModal({
+      variant: 'confirm',
+      title: '⚠️ Ganti Seluruh Chart of Accounts',
+      message: 'Seluruh COA aplikasi akan diganti dengan struktur resmi dari file "chart of account PT TAN.xlsx".\n\nAkun yang Anda tambahkan sendiri akan hilang. Lanjutkan?',
+      confirmLabel: 'Ya, Ganti COA',
+      onConfirm: replaceWithExcelCOA
+    });
+  };
+
+  const replaceWithExcelCOA = async () => {
+    if (typeof window !== 'undefined' && window.Storage) {
+      const officialCoa = window.Storage.getDefaultChartOfAccounts();
+      await window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, officialCoa, true);
+      showModal({
+        variant: 'success',
+        title: '✅ Chart of Accounts Diperbarui',
+        message: `COA PT TAN berhasil di-replace dengan struktur resmi Excel (${officialCoa.length} akun).`
+      });
+      loadAccounts();
     }
   };
 
   const handleAddAccount = async (e) => {
     e.preventDefault();
     if (!newAcc.code || !newAcc.name) {
-      alert('Kode akun dan nama akun wajib diisi');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Kode akun dan nama akun wajib diisi.' });
       return;
     }
     const res = await addCOAAccount({
@@ -48,12 +62,12 @@ export default function ChartOfAccounts() {
       balance: 0
     });
     if (res.success) {
-      alert('✅ Akun baru berhasil ditambahkan ke COA PT TAN!');
+      showModal({ variant: 'success', title: '✅ Akun Baru Ditambahkan', message: `Akun ${newAcc.code} — ${newAcc.name} berhasil ditambahkan ke COA PT TAN.` });
       loadAccounts();
       setShowAddForm(false);
       setNewAcc({ code: '', name: '', category: 'aset', type: 'detail' });
     } else {
-      alert('❌ Gagal menambahkan akun: ' + res.error);
+      showModal({ variant: 'error', title: '❌ Gagal Menambahkan Akun', message: String(res.error) });
     }
   };
 
@@ -287,6 +301,8 @@ export default function ChartOfAccounts() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, Globe, CheckCircle } from 'lucide-react';
 import { getCustomers, saveCustomer } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function MasterCustomer() {
+  const { modalProps, showModal } = useModal();
   const [customers, setCustomers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -29,7 +31,7 @@ export default function MasterCustomer() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.code || !form.name) {
-      alert('Kode customer dan nama customer wajib diisi');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Kode customer dan nama customer wajib diisi.' });
       return;
     }
 
@@ -40,7 +42,7 @@ export default function MasterCustomer() {
     };
 
     await saveCustomer(newCust);
-    alert(`✅ Master Customer/Buyer Ekspor (${newCust.name}) Berhasil Disimpan!`);
+    showModal({ variant: 'success', title: '✅ Master Customer Tersimpan', message: `Customer / Buyer Ekspor "${newCust.name}" (${newCust.code}) berhasil disimpan.` });
     loadCustomers();
     setShowForm(false);
   };
@@ -171,6 +173,8 @@ export default function MasterCustomer() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

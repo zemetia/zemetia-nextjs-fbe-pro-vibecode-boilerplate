@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Plus, Search, CheckCircle, Tag, Layers } from 'lucide-react';
 import { getMasterItems, saveMasterItem, getCOA } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function MasterItemPage() {
+  const { modalProps, showModal } = useModal();
   const [items, setItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -32,7 +34,7 @@ export default function MasterItemPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.code || !form.name) {
-      alert('Kode barang dan nama barang wajib diisi');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Kode barang dan nama barang wajib diisi.' });
       return;
     }
 
@@ -43,7 +45,7 @@ export default function MasterItemPage() {
     };
 
     await saveMasterItem(newItem);
-    alert(`✅ Barang Master (${newItem.name}) Berhasil Disimpan!`);
+    showModal({ variant: 'success', title: '✅ Barang Master Tersimpan', message: `Barang "${newItem.name}" (${newItem.code}) berhasil disimpan.` });
     loadItems();
     setShowForm(false);
     setForm({
@@ -189,6 +191,8 @@ export default function MasterItemPage() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

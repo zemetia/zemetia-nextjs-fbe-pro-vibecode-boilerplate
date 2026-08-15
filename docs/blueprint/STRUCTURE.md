@@ -40,6 +40,7 @@
 | [src/config/pages.js](../../src/config/pages.js) | `PAGES`, `PAGE_GROUPS`, `PINNED_PAGE_IDS`, `getPage`, `getPageTitle`, `getMenuItems`, `DEFAULT_PAGE_ID` | **Registry halaman** — satu-satunya tempat pendaftaran: id, judul navbar, label sidebar, ikon, komponen, dan susunan grup menu |
 | [src/components/layout/Sidebar.jsx](../../src/components/layout/Sidebar.jsx) | `Sidebar` | 5 grup menu collapsible, state `openCategories`. Isi menu dibaca dari `config/pages.js`. Struktur tetap: header logo + nav yang bisa di-scroll + footer, semua styling di `index.css` |
 | [src/components/layout/Navbar.jsx](../../src/components/layout/Navbar.jsx) | `Navbar` | Judul halaman + badge kurs (klik = refresh BCA e-Rate) |
+| [src/components/ui/Modal.jsx](../../src/components/ui/Modal.jsx) | `Modal` (default), `useModal` | **Pengganti `alert()` / `window.confirm()`.** 5 varian (`success`/`warning`/`error`/`info`/`confirm`), pesan multi-baris `pre-wrap`, tutup lewat overlay/✕/Esc. Styling di `index.css` (`.modal-*`, `.btn-ghost`) |
 | [src/pages/](../../src/pages/) | 18 halaman | Satu file = satu layar. Lihat tabel di bawah |
 | [src/services/storageService.js](../../src/services/storageService.js) | 13 fungsi | Pembungkus `window.Storage` & `window.PurchaseOrder` |
 | [src/services/currencyService.js](../../src/services/currencyService.js) | `fetchBcaERateUSD`, `getStoredUsdRate`, `setCustomUsdRate` | Kurs USD/IDR live + fallback benchmark 16.250 |

@@ -56,6 +56,9 @@ import { fetchBcaERateUSD, getStoredUsdRate, setCustomUsdRate } from '../service
 // Ikon — selalu lucide-react, jangan emoji-only untuk ikon fungsional
 import { ShoppingCart, Printer, CheckCircle }    from 'lucide-react';
 
+// Pemberitahuan & konfirmasi — pengganti alert() / window.confirm()
+import Modal, { useModal }                       from '../components/ui/Modal';
+
 // Registry halaman & formatter (dipakai App.jsx + src/components/layout/*)
 import { PAGES, PAGE_GROUPS, getPage, getPageTitle, getMenuItems } from './config/pages';
 import { formatIDR }                             from '../utils/format';
@@ -90,6 +93,7 @@ window.db / window.auth / window.firestore   // firebase-config.js
 | 15 | Firestore menolak `undefined`. Objek yang disimpan harus bersih atau lewat `CloudStorage.deepStripUndefined()` | Sync gagal diam-diam, masuk antrean SyncGuard, banner merah muncul ke user |
 | 16 | Jangan buat file backup longgar (`.bak`, `.final`, `_new.js`). `modules/journalEntry_new.js` adalah contoh yang **tidak** boleh ditiru | Repo sudah punya duplikat yang tak seorang pun tahu mana yang aktif |
 | 17 | Jangan sentuh 102 modul dorman di `modules/` kecuali diminta | ~2 MB kode dari proyek Gold Refinery — mengubahnya memecahkan `tests/unit` tanpa memperbaiki apa pun yang hidup |
+| 18 | Dilarang memakai `alert()`, `window.confirm()`, `window.prompt()`. Pemberitahuan & konfirmasi lewat `useModal()` + `<Modal />` ([src/components/ui/Modal.jsx](../../src/components/ui/Modal.jsx)) | Dialog bawaan browser tidak bisa ditema, memblokir thread, dan muncul sebagai popup Chrome yang asing di aplikasi bertema gelap ini |
 
 ---
 
@@ -103,6 +107,7 @@ window.db / window.auth / window.firestore   // firebase-config.js
 - [ ] Data lewat `src/services/storageService.js` — tambah fungsi di sana bila belum ada
 - [ ] Struktur: `.glass-panel` form di atas, `.glass-panel` tabel riwayat di bawah — lihat [PAGES.md](./PAGES.md)
 - [ ] Setiap tombol punya `onClick`. Tombol tanpa handler dilarang — sudah ada 3 di repo ini
+- [ ] Pemberitahuan & konfirmasi lewat `useModal()`, dengan satu `<Modal {...modalProps} />` di akhir `return`. Tanpa `alert()` / `confirm()`
 - [ ] Bila halaman menyimpan transaksi: jurnal ditulis di handler yang sama, lihat [ACCOUNTING.md](./ACCOUNTING.md)
 
 ### Fungsi Data Baru (`storageService.js`)

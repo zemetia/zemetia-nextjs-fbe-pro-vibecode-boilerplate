@@ -29,7 +29,7 @@ Ini bukan asumsi desain — ini hasil survei lapangan yang sudah masuk ke kode. 
 
 - **Bahasa Indonesia** untuk semua yang dilihat user: label, pesan, deskripsi jurnal, judul halaman. Nama variabel dan fungsi tetap Inggris.
 - **Nilai awal form diisi contoh nyata** — nama supplier, nomor nota, berat, harga. User memakainya sebagai template.
-- **Umpan balik lewat `alert()` multi-baris** berisi ringkasan transaksi dan jurnalnya. User membacanya sebagai bukti; jangan diringkas jadi toast satu baris.
+- **Umpan balik berisi ringkasan transaksi dan jurnalnya secara multi-baris.** User membacanya sebagai bukti; jangan diringkas jadi toast satu baris. Wadahnya `<Modal />` (~~`alert()`~~ sejak 2026-08-15).
 - **Emoji sebagai penanda** di label, badge, dan pesan (📦 🏛️ 💵 ✅ ⚠️). Ini konvensi yang berlaku, bukan kelalaian.
 - **Satu halaman = satu file**, sepanjang apa pun. Tidak ada sub-komponen, tidak ada folder per halaman.
 - **Iterasi kecil dan sering** di satu halaman. Riwayat git menunjukkan `LmLocalTrading.jsx` disempurnakan lewat 6 commit berturut-turut, masing-masing satu kemampuan lapangan.
@@ -76,4 +76,10 @@ Ini bukan asumsi desain — ini hasil survei lapangan yang sudah masuk ke kode. 
 
 **[2026-08-15]** Brand mark PT TAN diambil dari repo `tan-erp` (`public/logo/logo-tan.png`, emas di atas transparan, 512px) dan disalin ke `public/logo/` proyek ini — folder `public/` baru lahir di sini. Dipakai Sidebar sebagai `<img className="logo-icon" src="/logo/logo-tan.png">` menggantikan kotak gradien bertulisan "TAN".
 
+**[2026-08-15]** Aturan proyek berlaku lintas agen, bukan hanya untuk Claude. `GEMINI.md` di root adalah cermin `CLAUDE.md` (Gemini CLI membaca `GEMINI.md`, bukan `CLAUDE.md`). Keduanya harus diperbarui bersamaan — bila salah satu berubah sendiri, dua agen akan bekerja dengan aturan berbeda di repo yang sama.
+
 **[2026-08-15]** Satu `id` halaman boleh muncul di dua grup sidebar (`goods-receipt` di 📦 Pembelian dan 🏛️ Vault, dengan label berbeda). Ini perilaku lama yang disengaja — `PAGE_GROUPS` mendukungnya lewat bentuk `{ id, label }`. Jangan "membetulkannya" jadi satu entri.
+
+**[2026-08-15]** Atas permintaan user, `alert()` dan `window.confirm()` **dihentikan**. Penggantinya `src/components/ui/Modal.jsx` — primitif UI pertama di `src/components/ui/`, jadi keputusan "folder itu sengaja belum dibuat" (insight di atas) resmi terlampaui. Yang **tidak** berubah: isi pesannya. Ringkasan transaksi multi-baris tetap panjang dan tetap menyebut nomor akun — hanya wadahnya yang pindah dari popup Chrome ke modal bertema gelap. Garis pemisah `------` yang dulu dipakai di `alert()` dibuang karena modal sudah punya kepala, ikon, dan pemisah sendiri. Konsistensi dengan prinsip anti-kode-mati dijaga dengan memigrasikan `LmLocalTrading.jsx` (8 pemanggilan) berbarengan dengan pembuatan komponennya; 16 halaman lain masih memakai `alert()` dan menunggu keputusan user soal migrasi.
+
+**[2026-08-15]** `window.confirm()` sinkron, `showModal({ onConfirm })` tidak — menggantinya berarti memecah handler jadi dua: gerbang yang memunculkan modal, dan fungsi yang mengerjakan efeknya (`handleConfirmVaultArrival` → `postVaultArrival`). Pola ini yang dipakai di seluruh migrasi berikutnya. `onConfirm` dipanggil setelah modal ditutup, jadi handler boleh langsung memanggil `showModal` lagi untuk pesan sukses — rantai konfirmasi → sukses sudah diverifikasi jalan di browser.

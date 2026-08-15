@@ -54,7 +54,64 @@ Ikuti pemetaan ini. Badge hijau untuk barang yang masih transit akan salah dibac
 | `.dashboard-grid` `.stat-card` `.stat-val` `.stat-lbl` | Kartu angka |
 | `.table-container` `.custom-table` | Tabel data (scroll horizontal otomatis) |
 | `.form-grid` `.form-group` `.form-label` `.form-input` `.form-select` | Form (grid auto-fit min 220px) |
-| `.btn-primary` | Tombol |
+| `.btn-primary` | Tombol utama |
+| `.btn-ghost` | Tombol sekunder (transparan + border) — dipakai tombol "Batal" di modal |
+| `.modal-overlay` `.modal-card` `.modal-close` `.modal-head` `.modal-icon` `.modal-title` `.modal-message` `.modal-actions` | Modal pemberitahuan — dipakai lewat komponen, jangan disusun manual |
+
+---
+
+## Modal pemberitahuan
+
+**`alert()` dan `window.confirm()` tidak dipakai lagi.** Seluruh pemberitahuan dan konfirmasi lewat [src/components/ui/Modal.jsx](../../src/components/ui/Modal.jsx).
+
+```jsx
+import Modal, { useModal } from '../components/ui/Modal';
+
+export default function NamaHalaman() {
+  const { modalProps, showModal } = useModal();
+
+  // pengganti alert()
+  showModal({
+    variant: 'success',
+    title: '✅ Tahap 1 Tersimpan — Rp 4.050.000.000',
+    message: '• Jurnal: Debet 1159 vs Kredit Bank BCA IDR\n• Kurir ditugaskan ambil emas di Pegadaian Jakarta.'
+  });
+
+  // pengganti window.confirm() — onConfirm memunculkan tombol Batal
+  showModal({
+    variant: 'confirm',
+    title: '📦 Konfirmasi Tiba Di Brankas Vault',
+    message: 'Debet 1157 vs Kredit 1159 …',
+    confirmLabel: 'Ya, Posting Jurnal Tahap 2',
+    onConfirm: () => postVaultArrival(purchase)
+  });
+
+  return (
+    <div>
+      {/* … isi halaman … */}
+      <Modal {...modalProps} />       {/* satu instance per halaman, di akhir return */}
+    </div>
+  );
+}
+```
+
+| Prop | Isi |
+|---|---|
+| `variant` | `success` (emerald) · `warning` (emas) · `error` (merah) · `info` (biru) · `confirm` (emas). Default `info` |
+| `title` | Satu baris. Boleh diawali emoji penanda, sesuai konvensi proyek |
+| `message` | Multi-baris dengan `\n` — dirender `white-space: pre-wrap`, jadi baris `•` tetap utuh |
+| `onConfirm` | Ada → modal jadi konfirmasi (tombol `Batal` + tombol aksi). Tidak ada → hanya tombol `Mengerti` |
+| `confirmLabel` / `cancelLabel` | Label tombol. Default `Lanjutkan` / `Mengerti` dan `Batal` |
+| `children` | Isi kustom di bawah `message` — untuk kasus yang butuh tabel atau input |
+
+Aturan pemakaian:
+
+- **Ringkasan transaksi tetap panjang.** Yang dulu jadi isi `alert()` multi-baris pindah utuh ke `message` — user membacanya sebagai bukti transaksi. Jangan diringkas jadi satu kalimat.
+- Garis pemisah `------` yang dulu dipakai di `alert()` **dibuang** — modal sudah punya kepala, ikon, dan garis pemisah sendiri.
+- Judul memuat inti kejadian (nomor dokumen, nominal); `message` memuat rinciannya (baris jurnal, akun, catatan).
+- `onConfirm` dipanggil setelah modal ditutup, jadi handler-nya bebas memanggil `showModal` lagi untuk pesan sukses — pola dua tahap konfirmasi → sukses berjalan tanpa penanganan khusus.
+- Konfirmasi ireversibel wajib memakai `variant: 'confirm'`, bukan modal biasa yang tombolnya cuma menutup.
+- Overlay, tombol ✕, dan tombol `Esc` semuanya menutup modal tanpa menjalankan `onConfirm`.
 
 ---
 

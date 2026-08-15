@@ -92,6 +92,9 @@ describe('PT TAN ERP - Phase 1: LM Import & Trading Tests', () => {
             orderDate: '2026-08-10',
             currency: 'USD',
             exchangeRate: 16200,
+            pibNo: '001234/PIB/KPU-TP/2026',
+            sppbNo: 'SPPB-009876/KPU.01/2026',
+            mawbNo: 'SQ-618-99881122',
             importDuty: 10000000,          // Rp 10.000.000 Bea Masuk
             pph22Import: 30375000,         // Rp 30.375.000 PPh 22 Impor
             freightAndInsurance: 5000000,  // Rp 5.000.000 Asuransi & Freight
@@ -115,6 +118,11 @@ describe('PT TAN ERP - Phase 1: LM Import & Trading Tests', () => {
         expect(order.currency).toBe('USD');
         expect(order.subtotal).toBe(150000); // 2000g * $75 = $150,000 USD
         expect(order.subtotalIDR).toBe(2430000000); // $150,000 * 16,200 = Rp 2.430.000.000
+
+        // Dokumen Impor tersimpan dengan benar
+        expect(order.pibNo).toBe('001234/PIB/KPU-TP/2026');
+        expect(order.sppbNo).toBe('SPPB-009876/KPU.01/2026');
+        expect(order.mawbNo).toBe('SQ-618-99881122');
 
         // Total Landed Cost IDR = Subtotal IDR + Bea Masuk + Freight
         // = 2.430.000.000 + 10.000.000 + 5.000.000 = Rp 2.445.000.000

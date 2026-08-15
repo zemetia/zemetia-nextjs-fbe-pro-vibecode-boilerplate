@@ -4,7 +4,7 @@
 
 Setiap layar adalah satu file `.jsx` di [src/pages/](../../src/pages/) dengan default export komponen fungsi. Tidak ada folder per halaman, tidak ada sub-komponen, tidak ada file test. Halaman terpanjang saat ini ±35 KB dalam satu file — itu gaya yang berlaku di sini, dan konsistensi lebih penting daripada memecahnya diam-diam.
 
-Komponen bersama yang sudah ada hanya kerangka aplikasi: `Sidebar` dan `Navbar` di [src/components/layout/](../../src/components/layout/). Belum ada primitif UI bersama (`PageHeader`, `DataTable`, `FormField`) — pola form dan tabel di bawah masih disalin per halaman. Bila primitif itu dibuat nanti, tempatnya `src/components/ui/`, dan adopsinya diputuskan dulu bersama user, bukan disisipkan diam-diam ke halaman yang kebetulan sedang disentuh.
+Komponen bersama yang sudah ada: kerangka aplikasi (`Sidebar`, `Navbar` di [src/components/layout/](../../src/components/layout/)) dan satu primitif UI, `Modal` di [src/components/ui/Modal.jsx](../../src/components/ui/Modal.jsx). Primitif lain (`PageHeader`, `DataTable`, `FormField`) belum ada — pola form dan tabel di bawah masih disalin per halaman. Bila primitif itu dibuat nanti, tempatnya `src/components/ui/`, dan adopsinya diputuskan dulu bersama user, bukan disisipkan diam-diam ke halaman yang kebetulan sedang disentuh.
 
 ---
 
@@ -14,8 +14,10 @@ Komponen bersama yang sudah ada hanya kerangka aplikasi: `Sidebar` dan `Navbar` 
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Plus, Printer } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function NamaHalaman() {
+  const { modalProps, showModal } = useModal();
   const [records, setRecords] = useState([]);
   const [formData, setFormData] = useState({ /* nilai contoh yang realistis */ });
 
@@ -27,9 +29,12 @@ export default function NamaHalaman() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.wajib) { alert('Mohon lengkapi …'); return; }
+    if (!formData.wajib) {
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi …' });
+      return;
+    }
     // simpan record + tulis jurnal
-    // alert ringkasan
+    showModal({ variant: 'success', title: '…', message: 'ringkasan multi-baris' });
     loadInitialData();                                 // muat ulang, bukan setState manual
   };
 
@@ -41,6 +46,8 @@ export default function NamaHalaman() {
       <div className="glass-panel" style={{ padding: '24px' }}>
         {/* tabel riwayat */}
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }
@@ -54,13 +61,17 @@ export default function NamaHalaman() {
 | Nilai awal form diisi contoh nyata (nama supplier, nomor nota, berat) | Disengaja — user PT TAN memakainya sebagai template, bukan sebagai form kosong |
 | Nilai turunan dihitung saat render, tidak disimpan di state | Tidak ada state ganda yang bisa menyimpang |
 | Setelah menulis, panggil `loadInitialData()` | Satu jalur baca; tidak ada dua sumber kebenaran di layar |
-| Validasi = `if (!field) { alert(...); return; }` di awal handler | Tidak ada library form di repo ini |
-| Umpan balik = `alert()` dengan ringkasan multi-baris | Konvensi yang berlaku; user membacanya sebagai bukti transaksi |
-| Konfirmasi destruktif/ireversibel = `window.confirm()` | Contoh: `handleConfirmVaultArrival` |
+| Validasi = `if (!field) { showModal({ variant: 'warning', … }); return; }` di awal handler | Tidak ada library form di repo ini |
+| Umpan balik = `showModal({ variant: 'success', … })` dengan ringkasan multi-baris di `message` | User membacanya sebagai bukti transaksi — isinya tetap panjang, hanya wadahnya yang berubah |
+| Konfirmasi destruktif/ireversibel = `showModal({ variant: 'confirm', onConfirm })` | Contoh: `handleConfirmVaultArrival` → `postVaultArrival` di `LmLocalTrading` |
+| Satu `<Modal {...modalProps} />` per halaman, di akhir `return` | Satu hook `useModal()` melayani seluruh pesan di halaman itu |
 | **Setiap tombol punya `onClick`** | Tiga tombol tanpa handler sudah pernah lolos ke produksi |
+
+Rincian prop dan aturan isi pesan: [DESIGN_SYSTEM.md § Modal pemberitahuan](./DESIGN_SYSTEM.md#modal-pemberitahuan).
 
 ### Yang dilarang
 
+- `alert()`, `window.confirm()`, dan `window.prompt()`. Semuanya diganti `Modal` — dialog bawaan browser tidak bisa ditema, memblokir thread, dan tampil sebagai popup Chrome yang asing di layar bertema gelap ini.
 - `<button>` tanpa `onClick`, atau label yang menjanjikan lebih dari yang dilakukan kode ("Auto-Jurnal" yang tidak menjurnal).
 - Angka laporan yang di-hardcode di JSX. Bila datanya belum ada, tampilkan keadaan kosong yang jujur.
 - `useState` berisi data contoh yang tampak seperti data asli tanpa pernah dibaca dari storage (`WarehouseManagement` melakukan ini — jangan ditiru).
@@ -163,7 +174,7 @@ Keadaan kosong wajib ada. Status ditampilkan sebagai `.badge` (`badge-emerald` s
 
 Tombol aksi per baris, dari kiri ke kanan: aksi yang memajukan alur dulu (mis. "Konfirmasi Tiba Di Vault"), baru dokumen (WA PDF, Cetak). Tombol yang memajukan alur disembunyikan setelah tahapnya selesai — bukan dinonaktifkan.
 
-Semua tombol cetak/kirim saat ini `alert()` berisi ringkasan dokumen yang akan dihasilkan, termasuk daftar kolom tanda tangan. Itu placeholder yang disepakati sampai `pdfExporter.js` disambungkan; pertahankan isi ringkasannya bila menggantinya dengan PDF sungguhan.
+Semua tombol cetak/kirim saat ini memunculkan `showModal({ variant: 'info' })` berisi ringkasan dokumen yang akan dihasilkan, termasuk daftar kolom tanda tangan. Itu placeholder yang disepakati sampai `pdfExporter.js` disambungkan; pertahankan isi ringkasannya bila menggantinya dengan PDF sungguhan.
 
 ---
 

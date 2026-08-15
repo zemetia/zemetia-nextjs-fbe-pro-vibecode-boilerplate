@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlaneTakeoff, Plus, CheckCircle, Calculator, RefreshCw, Building2, CreditCard, DollarSign, ShieldCheck, Truck, Scale, Tag, Printer, Sparkles } from 'lucide-react';
+import { PlaneTakeoff, Plus, CheckCircle, Calculator, RefreshCw, Building2, CreditCard, DollarSign, ShieldCheck, Truck, Scale, Tag, Printer, Sparkles, FileText } from 'lucide-react';
 import { createPurchaseOrder, getPurchaseOrders } from '../services/storageService';
 import { fetchBcaERateUSD, getStoredUsdRate } from '../services/currencyService';
 
@@ -21,9 +21,14 @@ export default function LmImportTrading() {
     baseAmountUSD: 1300000, // $1,300,000 (Harga Kesepakatan Base Metal)
     premiumPerUnitUSD: 2.00, // $2.00 / oz (Biaya Ongkos Kirim Brinks All-In)
     
-    importDutyIDR: 0,
-    pph22ImportIDR: 0,
-    freightAndHandlingLocalIDR: 0,
+    // Dokumen Kepabeanan & Impor
+    pibNo: '001234/PIB/KPU-TP/2026',
+    sppbNo: 'SPPB-009876/KPU.01/2026',
+    mawbNo: 'SQ-618-99881122',
+    
+    importDutyIDR: 0, // Bea Masuk (sering 0% untuk raw bullion LBMA)
+    pph22ImportIDR: 0, // PPh 22 Impor
+    freightAndHandlingLocalIDR: 0, // Biaya handling lokal tambahan jika ada
     barSerials: 'YLG-SG-998811 s/d YLG-SG-998850 (Brinks Vault Sealed)',
     logisticsPartner: 'BRINKS Global Services (All-in via Premium $2/oz)'
   });
@@ -98,7 +103,10 @@ export default function LmImportTrading() {
       
       barSerialNumbers: formData.barSerials.split(/[\n,]+/).map(s => s.trim()).filter(Boolean),
       logisticsCarrier: 'BRINKS Global Services',
-      notes: `Impor Emas YLG Singapore: Base $${Number(formData.baseAmountUSD).toLocaleString()} + Premium $${totalPremiumUSD.toLocaleString()} ($${formData.premiumPerUnitUSD}/${unitMode}) ➔ Total All-in $${totalAllInGoldUSD.toLocaleString()}`,
+      pibNo: formData.pibNo,
+      sppbNo: formData.sppbNo,
+      mawbNo: formData.mawbNo,
+      notes: `Impor Emas YLG Singapore: Base $${Number(formData.baseAmountUSD).toLocaleString()} + Premium $${totalPremiumUSD.toLocaleString()} ($${formData.premiumPerUnitUSD}/${unitMode}) ➔ Total All-in $${totalAllInGoldUSD.toLocaleString()} | PIB: ${formData.pibNo || '-'} | SPPB: ${formData.sppbNo || '-'} | MAWB: ${formData.mawbNo || '-'}`,
       
       items: [
         {
@@ -115,7 +123,7 @@ export default function LmImportTrading() {
 
     const res = await createPurchaseOrder(poPayload);
     if (res.success) {
-      alert(`🎉 PURCHASE ORDER RESMI BERHASIL DITERBITKAN!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• No. PO: ${res.order?.poNumber || 'PO-IMP'}\n• Supplier: ${formData.supplierName}\n• Total All-In (USD): $ ${totalAllInGoldUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n• Total Landed Cost: Rp ${totalLandedCostIDR.toLocaleString()}\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Rekening Bayar: ${formData.paymentBankAccountName}\n• Status: APPROVED & SIAP PENERIMAAN TTB VAULT`);
+      alert(`🎉 PURCHASE ORDER RESMI BERHASIL DITERBITKAN!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• No. PO: ${res.order?.poNumber || 'PO-IMP'}\n• Supplier: ${formData.supplierName}\n• Dokumen Kepabeanan:\n   1. No. PIB: ${formData.pibNo || '-'}\n   2. No. SPPB: ${formData.sppbNo || '-'}\n   3. No. MAWB: ${formData.mawbNo || '-'}\n• Total All-In (USD): $ ${totalAllInGoldUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n• Total Landed Cost: Rp ${totalLandedCostIDR.toLocaleString()}\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Rekening Bayar: ${formData.paymentBankAccountName}\n• Status: APPROVED & SIAP PENERIMAAN TTB VAULT`);
       loadOrders();
     } else {
       alert('❌ Gagal menyimpan PO: ' + JSON.stringify(res.errors));
@@ -296,6 +304,48 @@ export default function LmImportTrading() {
               />
             </div>
 
+            {/* DOKUMEN IMPOR & KEPABEANAN */}
+            <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(59, 130, 246, 0.08)', padding: '16px', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+              <label className="form-label" style={{ color: '#60a5fa', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', fontSize: '0.95rem' }}>
+                <FileText size={18} /> Dokumen Impor & Kepabeanan (Customs Clearance)
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.8rem', color: '#93c5fd' }}>1. No. PIB (Pemberitahuan Impor)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Contoh: 001234/PIB/KPU-TP/2026"
+                    value={formData.pibNo}
+                    onChange={e => setFormData({ ...formData, pibNo: e.target.value })}
+                    style={{ border: '1px solid #3b82f6', color: '#60a5fa', fontWeight: 600 }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.8rem', color: '#86efac' }}>2. No. SPPB (Persetujuan Pengeluaran)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Contoh: SPPB-009876/KPU.01/2026"
+                    value={formData.sppbNo}
+                    onChange={e => setFormData({ ...formData, sppbNo: e.target.value })}
+                    style={{ border: '1px solid #22c55e', color: '#4ade80', fontWeight: 600 }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.8rem', color: '#fcd34d' }}>3. No. MAWB (Master Air Waybill)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Contoh: SQ-618-99881122"
+                    value={formData.mawbNo}
+                    onChange={e => setFormData({ ...formData, mawbNo: e.target.value })}
+                    style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 600 }}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">No. Seri Batangan / Segel Koper Brinks (Bar Serial IDs)</label>
               <input
@@ -359,6 +409,7 @@ export default function LmImportTrading() {
                 <th>No. PO</th>
                 <th>Supplier Impor</th>
                 <th>Tgl PO</th>
+                <th>Dokumen Impor</th>
                 <th>Volume Pesanan</th>
                 <th>Total All-In (USD)</th>
                 <th>Kurs Transaksi</th>
@@ -371,7 +422,7 @@ export default function LmImportTrading() {
             <tbody>
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                  <td colSpan="11" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
                     Belum ada data PO LM Import.
                   </td>
                 </tr>
@@ -381,6 +432,17 @@ export default function LmImportTrading() {
                     <td><strong style={{ color: '#38bdf8' }}>{po.poNumber}</strong></td>
                     <td><strong>{po.supplierName || po.supplier}</strong></td>
                     <td>{po.orderDate}</td>
+                    <td>
+                      {(po.pibNo || po.sppbNo || po.mawbNo) ? (
+                        <div style={{ fontSize: '0.75rem', lineHeight: '1.4' }}>
+                          {po.pibNo && <div><span style={{ color: '#93c5fd' }}>PIB:</span> <strong style={{ color: '#bfdbfe' }}>{po.pibNo}</strong></div>}
+                          {po.sppbNo && <div><span style={{ color: '#86efac' }}>SPPB:</span> <strong style={{ color: '#bbf7d0' }}>{po.sppbNo}</strong></div>}
+                          {po.mawbNo && <div><span style={{ color: '#fcd34d' }}>MAWB:</span> <strong style={{ color: '#fde68a' }}>{po.mawbNo}</strong></div>}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>-</span>
+                      )}
+                    </td>
                     <td>
                       <span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>
                         {po.quantityUnits ? `${po.quantityUnits.toLocaleString()} ${po.unitMode || 'oz'}` : `${po.weightGrams || 1000} g`}

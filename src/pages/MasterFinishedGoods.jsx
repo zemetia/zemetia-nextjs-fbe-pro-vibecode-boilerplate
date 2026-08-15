@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Plus, Search, CheckCircle2, Tag, Sparkles, Sliders } from 'lucide-react';
 import { getFinishedGoods, saveFinishedGood } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function MasterFinishedGoods() {
+  const { modalProps, showModal } = useModal();
   const [finishedGoods, setFinishedGoods] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedKarat, setSelectedKarat] = useState('all');
@@ -31,7 +33,7 @@ export default function MasterFinishedGoods() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.sku || !form.name) {
-      alert('Kode SKU dan Nama Model Perhiasan wajib diisi.');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Kode SKU dan Nama Model Perhiasan wajib diisi.' });
       return;
     }
 
@@ -46,7 +48,7 @@ export default function MasterFinishedGoods() {
     };
 
     await saveFinishedGood(newFG);
-    alert(`✅ Master Finished Goods Perhiasan (${newFG.sku} - ${newFG.name}) Berhasil Disimpan!`);
+    showModal({ variant: 'success', title: '✅ Master Finished Goods Tersimpan', message: `Perhiasan "${newFG.name}" (SKU ${newFG.sku}) berhasil disimpan.` });
     loadFinishedGoods();
     setShowForm(false);
   };
@@ -254,6 +256,8 @@ export default function MasterFinishedGoods() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

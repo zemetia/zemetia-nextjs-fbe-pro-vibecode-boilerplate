@@ -649,11 +649,23 @@ const GoodsReceipt = {
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label small">No. COO Resmi / Manifest</label>
-                                        <input type="text" id="gr-import-coo-no" class="form-input" placeholder="...">
+                                        <input type="text" id="gr-import-coo-no" class="form-input" placeholder="Contoh: COO-2026/08/SG-01">
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label small">Sertifikat Refinery (LBMA)</label>
                                         <input type="text" id="gr-import-refinery-cert" class="form-input" placeholder="LBMA Certified">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label small">No. PIB (Pemberitahuan Impor Barang)</label>
+                                        <input type="text" id="gr-import-pib-no" class="form-input" placeholder="Contoh: 001234/PIB/KPU-TP/2026">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label small">No. SPPB (Surat Persetujuan Pengeluaran)</label>
+                                        <input type="text" id="gr-import-sppb-no" class="form-input" placeholder="Contoh: SPPB-009876/KPU.01/2026">
+                                    </div>
+                                    <div class="form-group" style="grid-column: span 2;">
+                                        <label class="form-label small">No. MAWB (Master Air Waybill)</label>
+                                        <input type="text" id="gr-import-mawb-no" class="form-input" placeholder="Contoh: SQ-618-99881122 / AWB-...">
                                     </div>
                                 </div>
 
@@ -1080,7 +1092,10 @@ const GoodsReceipt = {
                     country: document.getElementById('gr-import-country').value,
                     exporter: document.getElementById('gr-import-exporter').value,
                     cooNo: document.getElementById('gr-import-coo-no').value,
-                    refineryCert: document.getElementById('gr-import-refinery-cert').value
+                    refineryCert: document.getElementById('gr-import-refinery-cert').value,
+                    pibNo: document.getElementById('gr-import-pib-no') ? document.getElementById('gr-import-pib-no').value : '',
+                    sppbNo: document.getElementById('gr-import-sppb-no') ? document.getElementById('gr-import-sppb-no').value : '',
+                    mawbNo: document.getElementById('gr-import-mawb-no') ? document.getElementById('gr-import-mawb-no').value : ''
                 },
                 local: {
                     store: document.getElementById('gr-local-store').value,
@@ -1303,6 +1318,21 @@ const GoodsReceipt = {
                         </div>
                     </div>
 
+                    ${gr.originData && gr.originData.category === 'import' ? `
+                    <div class="card p-2 mb-3" style="border-left: 4px solid #3b82f6; background: #f8fafc;">
+                        <h4 style="margin-top: 0; color: #2563eb; font-size: 0.95rem;">✈️ Dokumen Impor & Kepabeanan</h4>
+                        <div class="grid grid-3 gap-2 small">
+                            <div><span class="text-gray">Negara Asal:</span><br><strong>${gr.originData.import?.country || '-'}</strong></div>
+                            <div><span class="text-gray">Nama Exporter:</span><br><strong>${gr.originData.import?.exporter || '-'}</strong></div>
+                            <div><span class="text-gray">Sertifikat Refinery:</span><br><strong>${gr.originData.import?.refineryCert || '-'}</strong></div>
+                            <div><span class="text-gray">No. COO:</span><br><strong>${gr.originData.import?.cooNo || '-'}</strong></div>
+                            <div><span class="text-gray">No. PIB:</span><br><strong style="color: #2563eb;">${gr.originData.import?.pibNo || '-'}</strong></div>
+                            <div><span class="text-gray">No. SPPB:</span><br><strong style="color: #16a34a;">${gr.originData.import?.sppbNo || '-'}</strong></div>
+                            <div style="grid-column: span 3;"><span class="text-gray">No. MAWB:</span><br><strong style="color: #d97706;">${gr.originData.import?.mawbNo || '-'}</strong></div>
+                        </div>
+                    </div>
+                    ` : ''}
+
                     ${gr.isSwap ? `
                     <div class="card p-2 mb-3" style="border-left: 4px solid var(--color-primary); background: #f0f7ff;">
                         <h4 style="margin-top: 0; color: var(--color-primary);">⚡ Gold Swap (Instachange)</h4>
@@ -1456,6 +1486,9 @@ const GoodsReceipt = {
             document.getElementById('gr-import-exporter').value = profile.import?.exporter || '';
             document.getElementById('gr-import-coo-no').value = profile.import?.cooNo || '';
             document.getElementById('gr-import-refinery-cert').value = profile.import?.refineryCert || '';
+            if (document.getElementById('gr-import-pib-no')) document.getElementById('gr-import-pib-no').value = profile.import?.pibNo || '';
+            if (document.getElementById('gr-import-sppb-no')) document.getElementById('gr-import-sppb-no').value = profile.import?.sppbNo || '';
+            if (document.getElementById('gr-import-mawb-no')) document.getElementById('gr-import-mawb-no').value = profile.import?.mawbNo || '';
         }
     }
 };
