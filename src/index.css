@@ -130,11 +130,13 @@ body {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   z-index: 100;
 }
 
 .sidebar-logo {
-  padding: 24px;
+  flex-shrink: 0;
+  padding: 20px 24px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -144,23 +146,92 @@ body {
 .logo-icon {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #f59e0b, #b45309);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 800;
-  font-size: 1.2rem;
-  box-shadow: 0 4px 12px var(--accent-gold-glow);
+  object-fit: contain;
+  flex-shrink: 0;
+  user-select: none;
+  filter: drop-shadow(0 4px 12px var(--accent-gold-glow));
+}
+
+.sidebar-brand-title {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.sidebar-brand-subtitle {
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }
 
 .sidebar-nav {
-  padding: 20px 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, 0.35) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.3);
+  border-radius: 3px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.55);
+}
+
+.sidebar-group {
+  margin-bottom: 14px;
+}
+
+.sidebar-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--accent-gold-light);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sidebar-group-items {
+  padding-left: 8px;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sidebar-footer-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #34d399;
+  font-weight: 600;
 }
 
 .nav-item {
@@ -187,6 +258,19 @@ body {
   color: var(--accent-gold-light);
   border-left: 3px solid var(--accent-gold);
   font-weight: 600;
+}
+
+/* Halaman tersemat di atas sidebar, di luar grup mana pun */
+.nav-item-pinned {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+/* Item di dalam grup — lebih rapat dari item tersemat */
+.nav-item-sub {
+  padding: 8px 12px;
+  margin: 2px 0;
+  font-size: 0.82rem;
 }
 
 /* Grid & Cards Layout */

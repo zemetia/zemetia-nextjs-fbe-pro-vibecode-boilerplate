@@ -10,6 +10,7 @@
 |---|---|---|
 | [index.html](../../index.html) | 🟩 aktif | Satu-satunya entry point. Memuat `/src/index.css` + `/src/main.jsx` |
 | [src/](../../src/) | 🟩 aktif | Aplikasi React — UI yang benar-benar dipakai |
+| [public/](../../public/) | 🟩 aktif | Aset statis Vite, disalin apa adanya ke `dist/`. Berisi `logo/logo-tan.png` (brand mark PT TAN, dipakai Sidebar via `/logo/logo-tan.png`) |
 | [data/](../../data/) | 🟩 aktif | Mesin data vanilla; `storage.js` dimuat oleh `main.jsx` |
 | [modules/](../../modules/) | 🟨 sebagian | 116 file; 14 dimuat, 102 dorman |
 | [tests/](../../tests/) | 🟨 sebagian | 28 file test; mayoritas menguji modul dorman |
@@ -37,7 +38,7 @@
 | [src/App.jsx](../../src/App.jsx) | `App` | Shell: `useState('dashboard')` + render halaman aktif dari registry. 19 baris, tanpa `switch` |
 | [src/index.css](../../src/index.css) | — | Seluruh styling aplikasi. Satu file, CSS variables + class global |
 | [src/config/pages.js](../../src/config/pages.js) | `PAGES`, `PAGE_GROUPS`, `PINNED_PAGE_IDS`, `getPage`, `getPageTitle`, `getMenuItems`, `DEFAULT_PAGE_ID` | **Registry halaman** — satu-satunya tempat pendaftaran: id, judul navbar, label sidebar, ikon, komponen, dan susunan grup menu |
-| [src/components/layout/Sidebar.jsx](../../src/components/layout/Sidebar.jsx) | `Sidebar` | 5 grup menu collapsible, state `openCategories`. Isi menu dibaca dari `config/pages.js` |
+| [src/components/layout/Sidebar.jsx](../../src/components/layout/Sidebar.jsx) | `Sidebar` | 5 grup menu collapsible, state `openCategories`. Isi menu dibaca dari `config/pages.js`. Struktur tetap: header logo + nav yang bisa di-scroll + footer, semua styling di `index.css` |
 | [src/components/layout/Navbar.jsx](../../src/components/layout/Navbar.jsx) | `Navbar` | Judul halaman + badge kurs (klik = refresh BCA e-Rate) |
 | [src/pages/](../../src/pages/) | 18 halaman | Satu file = satu layar. Lihat tabel di bawah |
 | [src/services/storageService.js](../../src/services/storageService.js) | 13 fungsi | Pembungkus `window.Storage` & `window.PurchaseOrder` |

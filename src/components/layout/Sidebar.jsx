@@ -12,79 +12,51 @@ export default function Sidebar({ activePage, setActivePage }) {
     setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
   };
 
-  const pinnedItems = getMenuItems(PINNED_PAGE_IDS);
+  const renderNavItem = (item, key, className) => {
+    const Icon = item.icon;
+    return (
+      <div
+        key={key}
+        className={`nav-item ${className} ${activePage === item.id ? 'active' : ''}`}
+        onClick={() => setActivePage(item.id)}
+      >
+        <Icon size={className === 'nav-item-pinned' ? 18 : 16} />
+        <span>{item.label}</span>
+      </div>
+    );
+  };
 
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-icon">TAN</div>
+        <img src="/logo/logo-tan.png" alt="Logo PT TAN" className="logo-icon" />
         <div>
-          <h2 style={{ fontSize: '1rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>PT TAN ERP</h2>
-          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Export & Trading System</p>
+          <h2 className="sidebar-brand-title">PT TAN ERP</h2>
+          <p className="sidebar-brand-subtitle">Export &amp; Trading System</p>
         </div>
       </div>
 
-      <nav className="sidebar-nav" style={{ padding: '12px 8px' }}>
+      <nav className="sidebar-nav">
         {/* Halaman tersemat (Executive Dashboard) */}
-        {pinnedItems.map(item => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.id}
-              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-              onClick={() => setActivePage(item.id)}
-              style={{ marginBottom: '12px', fontWeight: 700 }}
-            >
-              <Icon size={18} />
-              <span>{item.label}</span>
-            </div>
-          );
-        })}
+        {getMenuItems(PINNED_PAGE_IDS).map(item =>
+          renderNavItem(item, item.id, 'nav-item-pinned')
+        )}
 
         {/* Grouped Categories */}
         {PAGE_GROUPS.map(group => {
           const isOpen = openCategories[group.id];
           return (
-            <div key={group.id} style={{ marginBottom: '14px' }}>
-              <div
-                onClick={() => toggleCategory(group.id)}
-                style={{
-                  display: 'flex',
-                  justify: 'space-between',
-                  alignItems: 'center',
-                  padding: '6px 10px',
-                  fontSize: '0.72rem',
-                  fontWeight: 800,
-                  color: '#fbbf24',
-                  letterSpacing: '0.5px',
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.03)',
-                  marginBottom: '4px'
-                }}
-              >
+            <div key={group.id} className="sidebar-group">
+              <div className="sidebar-group-header" onClick={() => toggleCategory(group.id)}>
                 <span>{group.title}</span>
                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </div>
 
               {isOpen && (
-                <div style={{ paddingLeft: '8px' }}>
-                  {getMenuItems(group.items).map(item => {
-                    const Icon = item.icon;
-                    const isActive = activePage === item.id;
-                    return (
-                      <div
-                        key={`${group.id}-${item.id}`}
-                        className={`nav-item ${isActive ? 'active' : ''}`}
-                        onClick={() => setActivePage(item.id)}
-                        style={{ padding: '8px 12px', fontSize: '0.82rem', margin: '2px 0' }}
-                      >
-                        <Icon size={16} />
-                        <span>{item.label}</span>
-                      </div>
-                    );
-                  })}
+                <div className="sidebar-group-items">
+                  {getMenuItems(group.items).map(item =>
+                    renderNavItem(item, `${group.id}-${item.id}`, 'nav-item-sub')
+                  )}
                 </div>
               )}
             </div>
@@ -92,10 +64,10 @@ export default function Sidebar({ activePage, setActivePage }) {
         })}
       </nav>
 
-      <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+      <div className="sidebar-footer">
+        <div className="sidebar-footer-badge">
           <ShieldCheck size={14} color="#10b981" />
-          <span style={{ color: '#34d399', fontWeight: 600 }}>SAK EMKM Compliant</span>
+          <span>SAK EMKM Compliant</span>
         </div>
         <p>PPN 0% Export Dedicated</p>
       </div>
