@@ -57,7 +57,8 @@ export default function Sidebar({ activePage, setActivePage }) {
       title: '💼 AKUNTANSI & KEUANGAN',
       items: [
         { id: 'accounting-reports', label: 'Jurnal Mutasi & Laporan Keuangan', icon: BarChart3 },
-        { id: 'voucher-mgmt', label: 'Voucher Kas/Bank (BKK/BKM)', icon: CreditCard },
+        { id: 'voucher-mgmt', label: 'Voucher Kas/Bank & Cek BG', icon: CreditCard },
+        { id: 'master-cheques', label: 'Master Buku Cek & Limit Bank', icon: BookOpen },
         { id: 'coa-setting', label: 'Setting COA SAK EMKM', icon: BookOpen },
       ]
     },

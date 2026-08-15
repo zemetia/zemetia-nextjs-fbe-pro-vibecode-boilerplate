@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers } from 'lucide-react';
+import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert } from 'lucide-react';
 import { getCOA } from '../services/storageService';
 
 export default function VoucherManagement() {
-  const [activeTab, setActiveTab] = useState('BBK'); // BBK, BKK, BCK (Bukti Cek Keluar), BKM, BBM, BCM (Bukti Cek Masuk)
+  const [activeTab, setActiveTab] = useState('BBK'); // BBK, BKK, BCK (Bukti Cek Keluar), BKM, BBM
   const [vouchers, setVouchers] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [coaAccounts, setCoaAccounts] = useState([]);
+  const [chequeBooks, setChequeBooks] = useState([]);
 
   const [form, setForm] = useState({
     voucherType: 'BBK',
@@ -14,8 +15,8 @@ export default function VoucherManagement() {
     date: new Date().toISOString().split('T')[0],
     payeePayer: 'Supplier Emas Lokal / Vendor',
     paymentMethod: 'transfer', // 'transfer', 'cash', 'cheque' (Cek/BG)
-    checkNumber: 'BG-BCA-998812', // Nomor Seri Lembar Cek / Bilyet Giro
     checkBankName: 'Bank BCA (KCU Thamrin)',
+    checkNumber: '', // Nomor Seri Lembar Cek / Bilyet Giro
     checkDueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], // Jatuh Tempo Kliring
     accountCode: '2111', // Hutang Usaha / Beban
     amount: 50000000,
@@ -25,7 +26,15 @@ export default function VoucherManagement() {
   useEffect(() => {
     setCoaAccounts(getCOA().filter(a => a.type === 'detail'));
     loadVouchers();
+    loadChequeBooks();
   }, [activeTab]);
+
+  const loadChequeBooks = () => {
+    if (typeof window !== 'undefined' && window.Storage) {
+      const books = window.Storage.get('pttan_cheque_books') || [];
+      setChequeBooks(books);
+    }
+  };
 
   const loadVouchers = () => {
     if (typeof window !== 'undefined' && window.Storage) {
@@ -39,7 +48,7 @@ export default function VoucherManagement() {
           payee: 'PT Antam Tbk / Pegadaian',
           payer: 'PT TAN',
           paymentMethod: 'cheque',
-          checkNumber: 'BG-BCA-998812',
+          checkNumber: 'BG-BCA-998801',
           checkBankName: 'Bank BCA (KCU Thamrin)',
           checkDueDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
           accountCode: '2111',
@@ -65,6 +74,11 @@ export default function VoucherManagement() {
     }
   };
 
+  // Ambil buku cek aktif berdasarkan bank yang dipilih
+  const currentChequeBook = chequeBooks.find(b => b.bankName === form.checkBankName) || chequeBooks[0];
+  const availableChequeLeaves = (currentChequeBook?.leaves || []).filter(l => l.status === 'AVAILABLE');
+  const maxChequeLimit = currentChequeBook?.maxLimitPerCheque || 500000000;
+
   const handleCreateVoucher = (e) => {
     e.preventDefault();
     if (!form.payeePayer || !form.amount) {
@@ -74,6 +88,18 @@ export default function VoucherManagement() {
 
     const isCheque = activeTab === 'BCK' || form.paymentMethod === 'cheque';
     const currentType = isCheque ? 'BCK' : activeTab;
+
+    // VALIDASI LIMIT MAKSIMAL PER LEMBAR CEK (GUARD RAIL)
+    if (isCheque) {
+      if (!form.checkNumber) {
+        alert('Pilih nomor lembar Cek / Bilyet Giro yang tersedia.');
+        return;
+      }
+      if (Number(form.amount) > maxChequeLimit) {
+        alert(`❌ TRANSAKSI DITOLAK! Nominal Rp ${Number(form.amount).toLocaleString()} melebihi batas limit per lembar buku cek ${form.checkBankName} (Maksimal Rp ${maxChequeLimit.toLocaleString()}).`);
+        return;
+      }
+    }
 
     const newVoucher = {
       id: Date.now(),
@@ -104,7 +130,7 @@ export default function VoucherManagement() {
       list.unshift(newVoucher);
       window.Storage.set(key, list);
 
-      // Jurnal Otomatis SAK EMKM:
+      // JURNAL SAK EMKM OTOMATIS:
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
         id: Date.now(),
@@ -121,7 +147,31 @@ export default function VoucherManagement() {
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
-      alert(`✅ Voucher ${currentType} (${newVoucher.voucherNumber}) Berhasil Diterbitkan!\n${isCheque ? `• No. Cek/BG: ${newVoucher.checkNumber}\n• Jatuh Tempo Kliring: ${newVoucher.checkDueDate}\n• Status: BEREDAR (Akun 2115)` : ''}`);
+      // KUNCI STATUS LEMBAR CEK MENJADI 'USED' DI MASTER BUKU CEK
+      if (isCheque) {
+        const books = window.Storage.get('pttan_cheque_books') || [];
+        const updatedBooks = books.map(b => {
+          if (b.bankName === form.checkBankName) {
+            return {
+              ...b,
+              leaves: (b.leaves || []).map(l => l.checkNumber === form.checkNumber ? {
+                ...l,
+                status: 'USED',
+                voucherNo: newVoucher.voucherNumber,
+                payee: newVoucher.payee,
+                amount: newVoucher.amount,
+                dueDate: newVoucher.checkDueDate,
+                isCleared: false
+              } : l)
+            };
+          }
+          return b;
+        });
+        window.Storage.set('pttan_cheque_books', updatedBooks);
+        setChequeBooks(updatedBooks);
+      }
+
+      alert(`✅ Voucher ${currentType} (${newVoucher.voucherNumber}) Berhasil Diterbitkan!\n${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Limit Plafon: Rp ${maxChequeLimit.toLocaleString()} (Aman)\n• Jatuh Tempo Kliring: ${newVoucher.checkDueDate}\n• Status: BEREDAR (Akun 2115)` : ''}`);
       loadVouchers();
       setShowForm(false);
     }
@@ -169,7 +219,16 @@ export default function VoucherManagement() {
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
-      alert(`🎉 Cek/BG (${voucher.checkNumber}) Sukses Dikliringkan & Cair di Bank!\n• Saldo Bank BCA (1111-IDR) Terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun BG Gantung (2114) Ditutup.`);
+      // 3. Update Master Cheque Leaf Status to isCleared = true
+      const books = window.Storage.get('pttan_cheque_books') || [];
+      const updatedBooks = books.map(b => ({
+        ...b,
+        leaves: (b.leaves || []).map(l => l.checkNumber === voucher.checkNumber ? { ...l, isCleared: true } : l)
+      }));
+      window.Storage.set('pttan_cheque_books', updatedBooks);
+      setChequeBooks(updatedBooks);
+
+      alert(`🎉 Cek/BG (${voucher.checkNumber}) Sukses Dikliringkan & Cair di Bank!\n• Saldo Bank BCA (1111-IDR) Terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun BG Gantung (2115) Ditutup.`);
       loadVouchers();
     }
   };
@@ -195,7 +254,7 @@ export default function VoucherManagement() {
               <CreditCard color="#f59e0b" size={24} /> Manajemen Pembayaran Kas, Bank, & Cek / Bilyet Giro (BG)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Penerbitan Voucher, Manajemen Cek/BG Beredar, Kliring Pencairan Bank, & Auto-Jurnal SAK EMKM PT TAN
+              Penerbitan Voucher, Validasi Limit Plafon Master Cek Bank, Kliring Pencairan, & Auto-Jurnal SAK EMKM
             </p>
           </div>
 
@@ -229,7 +288,9 @@ export default function VoucherManagement() {
         {/* Create Voucher Form */}
         {showForm && (
           <form onSubmit={handleCreateVoucher} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Terbitkan Voucher {activeTab} {activeTab === 'BCK' ? '(Cek / Bilyet Giro)' : ''}</h4>
+            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>
+              ➕ Form Terbitkan Voucher {activeTab} {activeTab === 'BCK' ? '(Cek / Bilyet Giro Terdaftar)' : ''}
+            </h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Tanggal Terbit Voucher</label>
@@ -251,36 +312,49 @@ export default function VoucherManagement() {
                 />
               </div>
 
-              {/* KHUSUS CEK / BILYET GIRO */}
+              {/* KHUSUS CEK / BILYET GIRO DENGAN FILTER BANK & MASTER REGISTER */}
               {activeTab === 'BCK' && (
                 <>
-                  <div className="form-group" style={{ background: 'rgba(245,158,11,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
-                    <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700 }}>Nomor Seri Lembar Cek / BG</label>
-                    <input
-                      className="form-input"
-                      style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
-                      placeholder="Contoh: BG-BCA-998812..."
-                      value={form.checkNumber}
-                      onChange={e => setForm({ ...form, checkNumber: e.target.value })}
-                    />
-                  </div>
-
                   <div className="form-group">
-                    <label className="form-label">Bank Penerbit Cek</label>
+                    <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>Bank Penerbit Buku Cek</label>
                     <select
                       className="form-select"
+                      style={{ border: '1px solid #38bdf8', color: '#38bdf8', fontWeight: 700 }}
                       value={form.checkBankName}
-                      onChange={e => setForm({ ...form, checkBankName: e.target.value })}
+                      onChange={e => setForm({ ...form, checkBankName: e.target.value, checkNumber: '' })}
                     >
-                      <option value="Bank BCA (KCU Thamrin)">Bank BCA (KCU Thamrin)</option>
-                      <option value="Bank Mandiri (Cabang Jakarta)">Bank Mandiri</option>
-                      <option value="Bank CIMB Niaga">Bank CIMB Niaga</option>
-                      <option value="Bank Danamon">Bank Danamon</option>
+                      {chequeBooks.map(b => (
+                        <option key={b.id || b.bookNumber} value={b.bankName}>
+                          {b.bankName} (Buku: {b.bookNumber} | Limit: Rp {Number(b.maxLimitPerCheque).toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ background: 'rgba(245,158,11,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700 }}>Pilih Lembar Cek/BG yang Tersedia</label>
+                      <span className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>
+                        {availableChequeLeaves.length} Lembar Siap Pakai
+                      </span>
+                    </div>
+                    <select
+                      className="form-select"
+                      style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+                      value={form.checkNumber}
+                      onChange={e => setForm({ ...form, checkNumber: e.target.value })}
+                    >
+                      <option value="">-- Pilih Lembar Cek Siap Pakai --</option>
+                      {availableChequeLeaves.map(l => (
+                        <option key={l.checkNumber} value={l.checkNumber}>
+                          {l.checkNumber} (Status: TERSEDIA)
+                        </option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="form-group" style={{ background: 'rgba(56,189,248,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid #38bdf8' }}>
-                    <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>Tanggal Jatuh Tempo Efektif Kliring (Due Date)</label>
+                    <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>Tanggal Jatuh Tempo Kliring (Due Date)</label>
                     <input
                       type="date"
                       className="form-input"
@@ -288,7 +362,6 @@ export default function VoucherManagement() {
                       value={form.checkDueDate}
                       onChange={e => setForm({ ...form, checkDueDate: e.target.value })}
                     />
-                    <small style={{ color: 'var(--text-muted)' }}>Tanggal di mana pemegang cek dapat mencairkan dana di bank.</small>
                   </div>
                 </>
               )}
@@ -309,14 +382,32 @@ export default function VoucherManagement() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Nominal Pembayaran (IDR)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label">Nominal Pembayaran (IDR)</label>
+                  {activeTab === 'BCK' && (
+                    <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700 }}>
+                      <Lock size={12} style={{ display: 'inline', marginRight: '4px' }} />
+                      Maks: Rp {maxChequeLimit.toLocaleString()}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   className="form-input"
-                  style={{ border: '1px solid #10b981', color: '#34d399', fontWeight: 800, fontSize: '1.1rem' }}
+                  style={{
+                    border: Number(form.amount) > maxChequeLimit && activeTab === 'BCK' ? '2px solid #ef4444' : '1px solid #10b981',
+                    color: Number(form.amount) > maxChequeLimit && activeTab === 'BCK' ? '#ef4444' : '#34d399',
+                    fontWeight: 800,
+                    fontSize: '1.1rem'
+                  }}
                   value={form.amount}
                   onChange={e => setForm({ ...form, amount: Number(e.target.value) })}
                 />
+                {Number(form.amount) > maxChequeLimit && activeTab === 'BCK' && (
+                  <small style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                    <ShieldAlert size={14} /> Peringatan: Melebihi batas plafon buku cek (Maks Rp {maxChequeLimit.toLocaleString()})!
+                  </small>
+                )}
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -330,7 +421,7 @@ export default function VoucherManagement() {
             </div>
 
             <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
-              <CheckCircle size={16} /> Terbitkan Voucher & Catat Status {activeTab === 'BCK' ? 'Cek Beredar (2114)' : 'Bank Keluar'}
+              <CheckCircle size={16} /> Terbitkan Voucher & Kunci Lembar {activeTab === 'BCK' ? 'Cek Beredar (2115)' : 'Bank Keluar'}
             </button>
           </form>
         )}
