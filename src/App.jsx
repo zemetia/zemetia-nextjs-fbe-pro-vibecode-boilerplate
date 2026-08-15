@@ -1,82 +1,20 @@
 import React, { useState } from 'react';
-import Sidebar from './components/Sidebar';
-import Navbar from './components/Navbar';
-import Dashboard from './pages/Dashboard';
-import LmImportTrading from './pages/LmImportTrading';
-import LmLocalTrading from './pages/LmLocalTrading';
-import BuyingScrapMelting from './pages/BuyingScrapMelting';
-import JewelryProduction from './pages/JewelryProduction';
-import ExportInvoicing from './pages/ExportInvoicing';
-import WarehouseManagement from './pages/WarehouseManagement';
-import ChartOfAccounts from './pages/ChartOfAccounts';
-import VoucherManagement from './pages/VoucherManagement';
-import MasterItemPage from './pages/MasterItemPage';
-import MasterCustomer from './pages/MasterCustomer';
-import MasterSupplier from './pages/MasterSupplier';
-import AccountingReports from './pages/AccountingReports';
-import SystemSettingsPage from './pages/SystemSettingsPage';
-import MasterFinishedGoods from './pages/MasterFinishedGoods';
-import ExportSalesOrderPage from './pages/ExportSalesOrderPage';
-import ExportDeliveryOrderPage from './pages/ExportDeliveryOrderPage';
-import GoodsReceiptPage from './pages/GoodsReceiptPage';
+import Sidebar from './components/layout/Sidebar';
+import Navbar from './components/layout/Navbar';
+import { getPage, getPageTitle, DEFAULT_PAGE_ID } from './config/pages';
 
 export default function App() {
-  const [activePage, setActivePage] = useState('dashboard');
+  const [activePage, setActivePage] = useState(DEFAULT_PAGE_ID);
 
-  const getPageTitle = () => {
-    switch (activePage) {
-      case 'dashboard': return 'Executive Dashboard & Control Center';
-      case 'import-trading': return 'Pembelian LM Import & Landed Costing';
-      case 'local-trading': return 'Pembelian & Trading LM Lokal IDR';
-      case 'scrap-melting': return 'Pembelian Pecahan Scrap & SPK Lebur';
-      case 'goods-receipt': return 'Penerimaan Barang Vault (Goods Receipt Note - TTB)';
-      case 'jewelry-production': return 'Produksi Perhiasan & Alloy Karat Calculator';
-      case 'export-so': return 'Export Sales Order (SO Ekspor & Gold Price Fixing)';
-      case 'export-invoicing': return 'Faktur Ekspor USD (PPN 0%)';
-      case 'export-do': return 'Surat Jalan Ekspor (Export Delivery Order & Packing List)';
-      case 'warehouse-mgmt': return 'Modul Gudang & Kartu Stok Brankas Vault';
-      case 'voucher-mgmt': return 'Manajemen Voucher Kas & Bank (BKK / BKM / BBK / BBM)';
-      case 'master-finished-goods': return 'Master Finished Goods (Katalog Perhiasan Emas Ekspor)';
-      case 'master-items': return 'Master Emas & Bahan Baku';
-      case 'master-customers': return 'Master Customer & Buyer Ekspor';
-      case 'master-suppliers': return 'Master Supplier Emas (Impor & Lokal)';
-      case 'accounting-reports': return 'Jurnal Mutasi & Laporan Keuangan SAK EMKM';
-      case 'coa-setting': return 'Setting COA SAK EMKM';
-      case 'system-settings': return 'Setting Logo Perusahaan, Backup & Restore Database System';
-      default: return 'PT TAN Enterprise ERP';
-    }
-  };
-
-  const renderContent = () => {
-    switch (activePage) {
-      case 'dashboard': return <Dashboard setActivePage={setActivePage} />;
-      case 'import-trading': return <LmImportTrading />;
-      case 'local-trading': return <LmLocalTrading />;
-      case 'scrap-melting': return <BuyingScrapMelting />;
-      case 'goods-receipt': return <GoodsReceiptPage />;
-      case 'jewelry-production': return <JewelryProduction />;
-      case 'export-so': return <ExportSalesOrderPage />;
-      case 'export-invoicing': return <ExportInvoicing />;
-      case 'export-do': return <ExportDeliveryOrderPage />;
-      case 'warehouse-mgmt': return <WarehouseManagement />;
-      case 'voucher-mgmt': return <VoucherManagement />;
-      case 'master-finished-goods': return <MasterFinishedGoods />;
-      case 'master-items': return <MasterItemPage />;
-      case 'master-customers': return <MasterCustomer />;
-      case 'master-suppliers': return <MasterSupplier />;
-      case 'accounting-reports': return <AccountingReports />;
-      case 'coa-setting': return <ChartOfAccounts />;
-      case 'system-settings': return <SystemSettingsPage />;
-      default: return <Dashboard setActivePage={setActivePage} />;
-    }
-  };
+  const page = getPage(activePage) || getPage(DEFAULT_PAGE_ID);
+  const PageComponent = page.component;
 
   return (
     <div className="app-container">
       <Sidebar activePage={activePage} setActivePage={setActivePage} />
       <div className="main-content">
-        <Navbar pageTitle={getPageTitle()} />
-        {renderContent()}
+        <Navbar pageTitle={getPageTitle(activePage)} />
+        <PageComponent setActivePage={setActivePage} />
       </div>
     </div>
   );

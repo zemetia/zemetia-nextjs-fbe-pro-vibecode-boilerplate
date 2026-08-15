@@ -1,201 +1,171 @@
-# Mini ERP System
+# Karpathy-Inspired Claude Code Guidelines
 
-Sistem ERP untuk bisnis pemurnian emas dengan fitur lengkap untuk procurement, quality control, dan payment management.
+> Check out my new project [Multica](https://github.com/multica-ai/multica) — an open-source platform for running and managing coding agents with reusable skills.
+>
+> Follow me on X: [https://x.com/jiayuan_jy](https://x.com/jiayuan_jy)
 
-## 🚀 Quick Start
+A single `CLAUDE.md` file to improve Claude Code behavior, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
 
-### Untuk Direktur & Management:
+English | [简体中文](./README.zh.md)
 
-**Cara Tercepat (5 Menit):**
-1. Copy folder `mini-erp` ke komputer Anda
-2. **Windows:** Double-click `START_APP.bat`
-3. **Mac/Linux:** Double-click `START_APP.sh`
-4. Login dengan `admin` / `admin123`
-5. Ganti password Anda
+## The Problems
 
-**Baca:** [QUICK_START.md](QUICK_START.md) untuk panduan singkat
+From Andrej's post:
 
-**Panduan Lengkap:** [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+> "The models make wrong assumptions on your behalf and just run along with them without checking. They don't manage their confusion, don't seek clarifications, don't surface inconsistencies, don't present tradeoffs, don't push back when they should."
 
----
+> "They really like to overcomplicate code and APIs, bloat abstractions, don't clean up dead code... implement a bloated construction over 1000 lines when 100 would do."
 
-## 📋 System Requirements
+> "They still sometimes change/remove comments and code they don't sufficiently understand as side effects, even if orthogonal to the task."
 
-- **Browser:** Chrome 90+, Firefox 88+, Safari 14+, atau Edge 90+
-- **OS:** Windows 10/11, macOS 10.14+, atau Linux
-- **Storage:** ~50 MB
-- **RAM:** 4 GB (8 GB recommended)
+## The Solution
 
----
+Four principles in one file that directly address these issues:
 
-## ✨ Features
+| Principle | Addresses |
+|-----------|-----------|
+| **Think Before Coding** | Wrong assumptions, hidden confusion, missing tradeoffs |
+| **Simplicity First** | Overcomplication, bloated abstractions |
+| **Surgical Changes** | Orthogonal edits, touching code you shouldn't |
+| **Goal-Driven Execution** | Leverage through tests-first, verifiable success criteria |
 
-### Phase 1 (Completed):
-- ✅ Payment Voucher System (BKK/BBK) dengan multi-level approval
-- ✅ Check/Giro Tracking
-- ✅ KYC Module dengan order blocking
-- ✅ Purchase Requisition (PRF) dengan budget control
+## The Four Principles in Detail
 
-### Phase 2 (Completed):
-- ✅ Goods Receipt dengan temporary warehouse
-- ✅ Lab Test Integration
-- ✅ TTB Multi-Approval (Gudang → Pembelian → Accounting)
-- ✅ 3-Way Matching (PO-GR-Invoice)
-- ✅ Supplier Invoice Management
-- ✅ Payment Schedule dengan reminders
+### 1. Think Before Coding
 
----
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-## 🎬 Demo & Simulation
+LLMs often pick an interpretation silently and run with it. This principle forces explicit reasoning:
 
-**Interactive Demo:**
-Buka file `simulation-conservative-accounting.html` untuk melihat complete flow dari Purchase Order sampai Payment dengan lab test integration.
+- **State assumptions explicitly** — If uncertain, ask rather than guess
+- **Present multiple interpretations** — Don't pick silently when ambiguity exists
+- **Push back when warranted** — If a simpler approach exists, say so
+- **Stop when confused** — Name what's unclear and ask for clarification
 
-**Key Features Demonstrated:**
-- Conservative accounting approach
-- Lab test workflow
-- Multi-level approval system
-- 3-way matching validation
+### 2. Simplicity First
 
----
+**Minimum code that solves the problem. Nothing speculative.**
 
-## 📊 Conservative Accounting Approach
+Combat the tendency toward overengineering:
 
-Sistem menggunakan **conservative accounting** dimana journal entries hanya dibuat **setelah TTB approved**, bukan saat Goods Receipt.
+- No features beyond what was asked
+- No abstractions for single-use code
+- No "flexibility" or "configurability" that wasn't requested
+- No error handling for impossible scenarios
+- If 200 lines could be 50, rewrite it
 
-**Benefits:**
-- ✅ Hanya record assets yang sudah confirmed
-- ✅ Gunakan actual lab test values
-- ✅ 50% fewer journal entries
-- ✅ No reversal needed if rejected
+**The test:** Would a senior engineer say this is overcomplicated? If yes, simplify.
 
-**Read More:** [conservative_accounting.md](docs/conservative_accounting.md)
+### 3. Surgical Changes
 
----
+**Touch only what you must. Clean up only your own mess.**
 
-## 🔐 Default Login
+When editing existing code:
+
+- Don't "improve" adjacent code, comments, or formatting
+- Don't refactor things that aren't broken
+- Match existing style, even if you'd do it differently
+- If you notice unrelated dead code, mention it — don't delete it
+
+When your changes create orphans:
+
+- Remove imports/variables/functions that YOUR changes made unused
+- Don't remove pre-existing dead code unless asked
+
+**The test:** Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform imperative tasks into verifiable goals:
+
+| Instead of... | Transform to... |
+|--------------|-----------------|
+| "Add validation" | "Write tests for invalid inputs, then make them pass" |
+| "Fix the bug" | "Write a test that reproduces it, then make it pass" |
+| "Refactor X" | "Ensure tests pass before and after" |
+
+For multi-step tasks, state a brief plan:
 
 ```
-Username: admin
-Password: admin123
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
 ```
 
-**⚠️ PENTING:** Ganti password segera setelah login pertama!
+Strong success criteria let the LLM loop independently. Weak criteria ("make it work") require constant clarification.
 
----
+## Install
 
-## 📁 Project Structure
+**Option A: Claude Code Plugin (recommended)**
 
+From within Claude Code, first add the marketplace:
 ```
-mini-erp/
-├── index.html                  # Main application
-├── login.html                  # Login page
-├── START_APP.bat              # Windows launcher
-├── START_APP.sh               # Mac/Linux launcher
-├── QUICK_START.md             # Quick start guide
-├── DEPLOYMENT_GUIDE.md        # Complete deployment guide
-├── simulation-conservative-accounting.html  # Interactive demo
-├── add-gold-accounts.html     # COA setup utility
-├── modules/                   # Application modules
-│   ├── goodsReceipt.js       # Goods Receipt (Phase 2)
-│   ├── ttb.js                # TTB Multi-Approval (Phase 2)
-│   ├── supplierInvoice.js    # Supplier Invoice (Phase 2)
-│   ├── threeWayMatching.js   # 3-Way Matching (Phase 2)
-│   ├── paymentSchedule.js    # Payment Schedule (Phase 2)
-│   ├── paymentVoucher.js     # Payment Voucher (Phase 1)
-│   ├── customerKYC.js        # KYC Module (Phase 1)
-│   └── purchaseRequisition.js # PRF Module (Phase 1)
-└── docs/                      # Documentation
+/plugin marketplace add forrestchang/andrej-karpathy-skills
 ```
 
----
+Then install the plugin:
+```
+/plugin install andrej-karpathy-skills@karpathy-skills
+```
 
-## 💾 Backup & Data
+This installs the guidelines as a Claude Code plugin, making the skill available across all your projects.
 
-**Data Storage:**
-- Semua data disimpan di browser localStorage
-- Tidak perlu database server
-- Backup manual via Settings → Backup & Restore
+**Option B: CLAUDE.md (per-project)**
 
-**Backup Schedule:**
-- Daily: Setiap akhir hari
-- Weekly: Setiap Jumat
-- Monthly: Setiap akhir bulan
+New project:
+```bash
+curl -o CLAUDE.md https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md
+```
 
----
+Existing project (append):
+```bash
+echo "" >> CLAUDE.md
+curl https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md >> CLAUDE.md
+```
 
-## 🔄 Update & Maintenance
+## Using with Cursor
 
-**Update Aplikasi:**
-1. Backup data terlebih dahulu
-2. Copy folder baru
-3. Restore data dari backup
+This repository includes a committed Cursor project rule ([`.cursor/rules/karpathy-guidelines.mdc`](.cursor/rules/karpathy-guidelines.mdc)) so the same guidelines apply when you open the project in Cursor. See **[CURSOR.md](CURSOR.md)** for setup, using the rule in other projects, and how this relates to Claude Code.
 
-**Troubleshooting:**
-- Clear browser cache jika ada masalah
-- Gunakan Chrome untuk best experience
-- Check console (F12) untuk error messages
+## Key Insight
 
----
+From Andrej:
 
-## 📞 Support
+> "LLMs are exceptionally good at looping until they meet specific goals... Don't tell it what to do, give it success criteria and watch it go."
 
-**IT Support:**
-- Email: [email-it@goalrefinery.id]
-- Phone: [phone-number]
+The "Goal-Driven Execution" principle captures this: transform imperative instructions into declarative goals with verification loops.
 
-**Developer:**
-- Felix Wijaya
-- Email: [email]
+## How to Know It's Working
 
----
+These guidelines are working if you see:
 
-## 📚 Documentation
+- **Fewer unnecessary changes in diffs** — Only requested changes appear
+- **Fewer rewrites due to overcomplication** — Code is simple the first time
+- **Clarifying questions come before implementation** — Not after mistakes
+- **Clean, minimal PRs** — No drive-by refactoring or "improvements"
 
-- [Quick Start Guide](QUICK_START.md) - 5 minute setup
-- [Deployment Guide](DEPLOYMENT_GUIDE.md) - Complete installation guide
-- [Conservative Accounting](docs/conservative_accounting.md) - Accounting approach
-- [Account Sources Explained](docs/account_sources_explained.md) - GL account flow
-- [Gold COA Guide](docs/gold_coa_guide.md) - Specialized accounts
+## Customization
 
----
+These guidelines are designed to be merged with project-specific instructions. Add them to your existing `CLAUDE.md` or create a new one.
 
-## 🎯 Key Highlights
+For project-specific rules, add sections like:
 
-**Gap Coverage:** 60% → 90% (+30%)  
-**Modules Implemented:** 9 modules  
-**Total Code:** ~95 KB  
-**Journal Entries:** 50% reduction with conservative approach  
-**Approval Workflows:** Multi-level for all critical transactions  
+```markdown
+## Project-Specific Guidelines
 
----
+- Use TypeScript strict mode
+- All API endpoints must have tests
+- Follow the existing error handling patterns in `src/utils/errors.ts`
+```
 
-## ✅ Production Ready
+## Tradeoff Note
 
-- ✅ All core modules implemented
-- ✅ Conservative accounting approach
-- ✅ Multi-level approval workflows
-- ✅ Complete audit trail
-- ✅ 3-way matching validation
-- ✅ Lab test integration
-- ✅ Payment schedule & reminders
+These guidelines bias toward **caution over speed**. For trivial tasks (simple typo fixes, obvious one-liners), use judgment — not every change needs the full rigor.
 
----
+The goal is reducing costly mistakes on non-trivial work, not slowing down simple tasks.
 
-## 🎉 Getting Started
+## License
 
-1. Read [QUICK_START.md](QUICK_START.md)
-2. Run `START_APP.bat` (Windows) or `START_APP.sh` (Mac/Linux)
-3. Login and explore
-4. Watch simulation demo
-5. Setup master data
-6. Start using!
-
-**Happy ERP-ing!** 🚀
-
----
-
-## 📄 License
-
-Proprietary - Internal Use Only  
-© 2026 PT Gold Refinery
+MIT

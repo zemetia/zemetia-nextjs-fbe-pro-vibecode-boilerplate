@@ -12,15 +12,15 @@ import {
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // Firebase configuration object
-// ✅ Golden Alura Project Configuration (Updated from Firebase Console)
+// ✅ PT TAN Project Configuration (erp-tan, from Firebase Console)
 const firebaseConfig = {
-    apiKey: "AIzaSyBwKCEJzzN5vSbdM6vAiXO-J-duEpDpRoA",
-    authDomain: "golden-alura.firebaseapp.com",
-    projectId: "golden-alura",
-    storageBucket: "golden-alura.firebasestorage.app",
-    messagingSenderId: "475614043305",
-    appId: "1:475614043305:web:297549d864b7e00c155db8",
-    measurementId: "G-CDFLR7VR9M"
+    apiKey: "AIzaSyDvlMKcrMwRH_pYgpm_kwDD3qWqIw1LV2o",
+    authDomain: "erp-tan.firebaseapp.com",
+    projectId: "erp-tan",
+    storageBucket: "erp-tan.firebasestorage.app",
+    messagingSenderId: "2472784120",
+    appId: "1:2472784120:web:32a3bde51c0fd5c6b8cb0d",
+    measurementId: "G-QJNT5J07YW"
 };
 
 // Initialize Firebase (robust against duplicate initialization)

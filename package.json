@@ -13,14 +13,17 @@
         "test:e2e": "cypress run",
         "test:e2e:open": "cypress open",
         "test:all": "npm run test:unit && npm run test:e2e",
-        "serve": "firebase serve",
-        "deploy": "firebase deploy --only hosting"
+        "serve": "firebase serve --only hosting",
+        "deploy": "firebase deploy",
+        "deploy:hosting": "firebase deploy --only hosting",
+        "deploy:firestore": "firebase deploy --only firestore"
     },
     "devDependencies": {
         "@jest/globals": "^29.7.0",
         "@testing-library/dom": "^9.3.4",
         "@testing-library/jest-dom": "^6.1.5",
         "cypress": "^13.6.2",
+        "firebase-tools": "^15.26.0",
         "jest": "^29.7.0",
         "jest-environment-jsdom": "^29.7.0"
     },

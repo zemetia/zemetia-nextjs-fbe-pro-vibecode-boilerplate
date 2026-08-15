@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, Globe, RefreshCw } from 'lucide-react';
-import { fetchBcaERateUSD } from '../services/currencyService';
+import { fetchBcaERateUSD } from '../../services/currencyService';
+import { formatIDR } from '../../utils/format';
 
 export default function Navbar({ pageTitle }) {
   const [rateInfo, setRateInfo] = useState({ rate: 16250, source: 'BCA e-Rate (Live)' });
@@ -31,7 +32,7 @@ export default function Navbar({ pageTitle }) {
           title="Klik untuk Refresh Kurs BCA e-Rate Terbaru"
         >
           <DollarSign size={14} />
-          <span>USD/IDR: Rp {(rateInfo.rate || 16250).toLocaleString('id-ID')}</span>
+          <span>USD/IDR: {formatIDR(rateInfo.rate || 16250)}</span>
           <RefreshCw size={12} className={loading ? 'spin' : ''} style={{ marginLeft: '4px' }} />
         </div>
         <div className="badge badge-emerald">
