@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign, ArrowUpRight, ArrowDownRight, Scale, Clock, Award } from 'lucide-react';
 import { getCOA } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function AccountingReports() {
+  const { modalProps, showModal } = useModal();
   const [activeTab, setActiveTab] = useState('journals'); // journals, gl, trial, income, balance, cashflow, aging, calk
   const [journals, setJournals] = useState([]);
   const [selectedAccountCode, setSelectedAccountCode] = useState('1157');
@@ -32,7 +34,7 @@ export default function AccountingReports() {
   const handleCreateJournal = (e) => {
     e.preventDefault();
     if (!newJournal.amount || !newJournal.description) {
-      alert('Deskripsi dan nominal jurnal wajib diisi');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Deskripsi dan nominal jurnal wajib diisi.' });
       return;
     }
 
@@ -52,7 +54,11 @@ export default function AccountingReports() {
       const list = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       list.unshift(entry);
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, list);
-      alert(`✅ Jurnal Mutasi (${entry.entryNumber}) Berhasil Diposting!`);
+      showModal({
+        variant: 'success',
+        title: `✅ Jurnal Mutasi (${entry.entryNumber}) Diposting`,
+        message: `${entry.description}\nNominal: Rp ${Number(newJournal.amount).toLocaleString()}`
+      });
       loadJournals();
       setShowAddForm(false);
     }
@@ -94,7 +100,7 @@ export default function AccountingReports() {
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn-primary" onClick={() => alert('🖨️ Mencetak Laporan Keuangan PDF...')}>
+            <button className="btn-primary" onClick={() => showModal({ variant: 'info', title: '🖨️ Cetak Laporan Keuangan PDF', message: 'Menyiapkan berkas PDF laporan keuangan PT TAN.' })}>
               <Printer size={16} /> Cetak Laporan PDF
             </button>
             <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
@@ -501,6 +507,8 @@ export default function AccountingReports() {
           </div>
         </div>
       )}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

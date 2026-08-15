@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Hammer, Sparkles, Layers, RefreshCw, Plus, CheckCircle2, Settings, Package, Sliders, Save } from 'lucide-react';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function JewelryProduction() {
+  const { modalProps, showModal } = useModal();
   const [activeTab, setActiveTab] = useState('calculator'); // calculator, bom-settings, settlement
 
   // Dynamic BOM Presets State (Manual Setting, NOT hardcoded)
@@ -56,7 +58,7 @@ export default function JewelryProduction() {
       updated.push(editingFormula);
     }
     setBomFormulas(updated);
-    alert(`✅ Rumus Formula BOM Karat ${editingFormula.code} Berhasil Diperbarui & Disimpan!`);
+    showModal({ variant: 'success', title: '✅ Rumus BOM Diperbarui', message: `Formula BOM karat ${editingFormula.code} berhasil disimpan.` });
   };
 
   const handleIssueToWIP = (e) => {
@@ -75,13 +77,21 @@ export default function JewelryProduction() {
         createdAt: new Date().toISOString()
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
-      alert(`✅ SPK Produksi Terbit! ${fineGoldNeeded.toFixed(2)}g Emas Murni 999.9 Berhasil Dikeluarkan dari Vault Utama ke Vault Emas WIP (Akun 11502)!`);
+      showModal({
+        variant: 'success',
+        title: '✅ SPK Produksi Terbit',
+        message: `${fineGoldNeeded.toFixed(2)}g emas murni 999.9 dikeluarkan dari Vault Utama (1157) ke Vault Emas WIP (11502).`
+      });
     }
   };
 
   const handleSettlementProduction = (e) => {
     e.preventDefault();
-    alert(`✅ Settlement Produksi (${settlementForm.joNumber}) Berhasil Disimpan! ${settlementForm.jewelryOutputWeight}g Perhiasan Jadi Dipindahkan ke Vault Perhiasan Siap Ekspor (Akun 1160)!`);
+    showModal({
+      variant: 'success',
+      title: `✅ Settlement Produksi (${settlementForm.joNumber}) Tersimpan`,
+      message: `${settlementForm.jewelryOutputWeight}g perhiasan jadi dipindahkan ke Vault Perhiasan Siap Ekspor (Akun 1160).`
+    });
   };
 
   return (
@@ -397,6 +407,8 @@ export default function JewelryProduction() {
           </form>
         </div>
       )}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

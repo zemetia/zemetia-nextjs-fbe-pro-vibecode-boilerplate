@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, CheckCircle, AlertTriangle, ShieldCheck, Filter, Search, Ban, Clock, CheckSquare, Layers, Lock, BookOpen } from 'lucide-react';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function MasterChequePage() {
+  const { modalProps, showModal } = useModal();
   const [chequeBooks, setChequeBooks] = useState([]);
   const [selectedBankFilter, setSelectedBankFilter] = useState('ALL');
   const [showAddBookModal, setShowAddBookModal] = useState(false);
@@ -89,7 +91,7 @@ export default function MasterChequePage() {
     const end = Number(newBookForm.endNumber);
 
     if (end < start) {
-      alert('Nomor akhir cek harus lebih besar atau sama dengan nomor awal.');
+      showModal({ variant: 'warning', title: 'Rentang Nomor Tidak Valid', message: 'Nomor akhir cek harus lebih besar atau sama dengan nomor awal.' });
       return;
     }
 
@@ -128,7 +130,11 @@ export default function MasterChequePage() {
       const list = window.Storage.get('pttan_cheque_books') || [];
       list.unshift(newBook);
       window.Storage.set('pttan_cheque_books', list);
-      alert(`✅ Master Buku Cek/BG (${newBook.bookNumber}) Berhasil Didaftarkan!\n• Jumlah Lembar: ${totalLeaves} Lembar\n• Plafon Maks per Lembar: Rp ${newBook.maxLimitPerCheque.toLocaleString()}`);
+      showModal({
+        variant: 'success',
+        title: `✅ Buku Cek/BG (${newBook.bookNumber}) Terdaftar`,
+        message: `• Jumlah lembar: ${totalLeaves} lembar\n• Plafon maks per lembar: Rp ${newBook.maxLimitPerCheque.toLocaleString()}`
+      });
       loadChequeData();
       setShowAddBookModal(false);
     }
@@ -136,10 +142,16 @@ export default function MasterChequePage() {
 
   // Batalkan Lembar Cek (Void)
   const handleVoidLeaf = (bookId, checkNumber) => {
-    if (!confirm(`Yakin ingin MEMBATALKAN (VOID) nomor lembar cek ${checkNumber}? Lembar ini tidak akan bisa digunakan lagi untuk transaksi.`)) {
-      return;
-    }
+    showModal({
+      variant: 'confirm',
+      title: `Batalkan (VOID) Lembar Cek ${checkNumber}`,
+      message: 'Lembar ini tidak akan bisa dipakai lagi untuk transaksi apa pun.\n\nLanjutkan pembatalan?',
+      confirmLabel: 'Ya, Batalkan Lembar',
+      onConfirm: () => voidLeaf(bookId, checkNumber)
+    });
+  };
 
+  const voidLeaf = (bookId, checkNumber) => {
     if (typeof window !== 'undefined' && window.Storage) {
       const list = window.Storage.get('pttan_cheque_books') || [];
       const updated = list.map(b => {
@@ -152,7 +164,7 @@ export default function MasterChequePage() {
         return b;
       });
       window.Storage.set('pttan_cheque_books', updated);
-      alert(`🚫 Lembar Cek ${checkNumber} Berhasil Dibatalkan (VOID).`);
+      showModal({ variant: 'success', title: '🚫 Lembar Cek Dibatalkan', message: `Lembar cek ${checkNumber} berhasil di-VOID.` });
       loadChequeData();
     }
   };
@@ -389,6 +401,8 @@ export default function MasterChequePage() {
           </div>
         );
       })}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

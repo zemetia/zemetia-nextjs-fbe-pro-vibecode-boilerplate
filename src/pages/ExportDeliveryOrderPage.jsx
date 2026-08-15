@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, Plus, Search, Printer, CheckCircle2, ShieldCheck, FileText, Package, Award, Tag } from 'lucide-react';
 import { getPurchaseOrders } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function ExportDeliveryOrderPage() {
+  const { modalProps, showModal } = useModal();
   const [activeView, setActiveView] = useState('list'); // 'list' or 'create'
   const [deliveryOrders, setDeliveryOrders] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -80,14 +82,18 @@ export default function ExportDeliveryOrderPage() {
         netWeightGram: foundInv.weightGrams,
         grossWeightGram: Math.round(foundInv.weightGrams * 1.25)
       });
-      alert(`✅ Surat Jalan Ditarik Otomatis Dari Invoice ${foundInv.invoiceNo}! Ref SO: ${foundInv.soNumber || 'SO-EXP-2026-001'} & Buyer: ${foundInv.buyerName} Terisi.`);
+      showModal({
+        variant: 'success',
+        title: `✅ Data Ditarik Dari Invoice ${foundInv.invoiceNo}`,
+        message: `• Ref SO: ${foundInv.soNumber || 'SO-EXP-2026-001'}\n• Buyer: ${foundInv.buyerName}\nForm surat jalan sudah terisi otomatis.`
+      });
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.doNumber || !form.buyerName || !form.netWeightGram || !form.soNumber) {
-      alert('Mohon lengkapi No. Surat Jalan, Ref Sales Order (SO), Buyer, dan Berat Barang.');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No. Surat Jalan, Ref Sales Order (SO), Buyer, dan Berat Barang.' });
       return;
     }
 
@@ -106,7 +112,11 @@ export default function ExportDeliveryOrderPage() {
       window.Storage.set('pttan_export_delivery_orders', list);
 
       // 2. Deduct Physical Stock from Vault 1160
-      alert(`✅ Surat Jalan Ekspor (${newDO.doNumber}) Berhasil Diterbitkan! Ref SO: ${newDO.soNumber}, Sertifikat Emas: ${newDO.goldCertificateNo}, Sertifikat Kadar: ${newDO.purityCertificateNo}!`);
+      showModal({
+        variant: 'success',
+        title: `✅ Surat Jalan Ekspor (${newDO.doNumber}) Diterbitkan`,
+        message: `• Ref SO: ${newDO.soNumber}\n• Sertifikat Emas: ${newDO.goldCertificateNo}\n• Sertifikat Kadar: ${newDO.purityCertificateNo}`
+      });
       loadInitialData();
       setActiveView('list');
     }
@@ -205,7 +215,11 @@ export default function ExportDeliveryOrderPage() {
                       <button
                         className="btn-primary"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => alert(`🖨️ Mencetak Surat Jalan Ekspor PDF (${d.doNumber}) [SO: ${d.soNumber} | Cert Emas: ${d.goldCertificateNo} | Cert Kadar: ${d.purityCertificateNo}]...`)}
+                        onClick={() => showModal({
+                          variant: 'info',
+                          title: `🖨️ Cetak Surat Jalan Ekspor ${d.doNumber}`,
+                          message: `• SO: ${d.soNumber}\n• Cert Emas: ${d.goldCertificateNo}\n• Cert Kadar: ${d.purityCertificateNo}`
+                        })}
                       >
                         <Printer size={14} /> Cetak Surat Jalan
                       </button>
@@ -390,6 +404,8 @@ export default function ExportDeliveryOrderPage() {
           </form>
         </div>
       )}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

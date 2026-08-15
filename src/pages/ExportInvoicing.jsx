@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Globe, DollarSign, Download, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck, ShoppingBag } from 'lucide-react';
 import { getCustomers, getFinishedGoods } from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function ExportInvoicing() {
+  const { modalProps, showModal } = useModal();
   const [activeView, setActiveView] = useState('list'); // 'list' (Table Register) or 'create' (Form)
   const [invoices, setInvoices] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
@@ -86,7 +88,11 @@ export default function ExportInvoicing() {
         pricePerGramUSD: foundSO.pricePerGramUSD,
         exchangeRate: foundSO.exchangeRate || 16250
       });
-      alert(`✅ Data Faktur Ekspor Ditarik Otomatis Dari ${foundSO.soNumber}! Harga Fixing $${foundSO.pricePerGramUSD}/g & Total $${foundSO.totalUSD.toLocaleString()} USD Terunci.`);
+      showModal({
+        variant: 'success',
+        title: `✅ Data Ditarik Dari ${foundSO.soNumber}`,
+        message: `• Harga fixing: $ ${foundSO.pricePerGramUSD}/g\n• Total terkunci: $ ${foundSO.totalUSD.toLocaleString()} USD`
+      });
     }
   };
 
@@ -97,7 +103,7 @@ export default function ExportInvoicing() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.invoiceNo || !form.buyerName || !form.weightGrams) {
-      alert('Mohon lengkapi No Invoice, Buyer, dan Berat Perhiasan Ekspor.');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No Invoice, Buyer, dan Berat Perhiasan Ekspor.' });
       return;
     }
 
@@ -131,7 +137,11 @@ export default function ExportInvoicing() {
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
-      alert(`✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Berhasil Diterbitkan & Auto-Jurnal PPN 0% Diposting ke Akun 4120!`);
+      showModal({
+        variant: 'success',
+        title: `✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Diterbitkan`,
+        message: `• Buyer: ${newInvoice.buyerName}\n• Jurnal PPN 0% diposting ke Akun 4120.`
+      });
       loadInitialData();
       setActiveView('list');
     }
@@ -228,7 +238,11 @@ export default function ExportInvoicing() {
                       <button
                         className="btn-primary"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => alert(`🖨️ Mencetak Commercial Export Invoice PDF (${inv.invoiceNo}) untuk ${inv.buyerName}...`)}
+                        onClick={() => showModal({
+                          variant: 'info',
+                          title: `🖨️ Cetak Commercial Export Invoice ${inv.invoiceNo}`,
+                          message: `Dokumen PDF untuk ${inv.buyerName}.`
+                        })}
                       >
                         <Printer size={14} /> Cetak Invoice
                       </button>
@@ -406,6 +420,8 @@ export default function ExportInvoicing() {
           </form>
         </div>
       )}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

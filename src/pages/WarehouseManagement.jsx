@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Warehouse, Package, ArrowRightLeft, ShieldCheck, FileText, Plus, CheckCircle2, X, Hammer } from 'lucide-react';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function WarehouseManagement() {
+  const { modalProps, showModal } = useModal();
   const [warehouses, setWarehouses] = useState([
     { id: 'WH-VAULT-01', name: 'Vault Utama PT TAN', code: 'VAULT-PRI', location: 'Lantai 2 Safe Room', manager: 'Budi Santoso', status: 'Active', account: '1157' },
     { id: 'WH-VAULT-02', name: 'Vault Emas Impor Transit', code: 'VAULT-IMP', location: 'Lantai 2 Customs Safe', manager: 'Siti Aminah', status: 'Active', account: '1158' },
@@ -29,11 +31,11 @@ export default function WarehouseManagement() {
   const handleExecuteTransfer = (e) => {
     e.preventDefault();
     if (transferForm.fromVault === transferForm.toVault) {
-      alert('Gudang asal dan gudang tujuan tidak boleh sama.');
+      showModal({ variant: 'warning', title: 'Gudang Tidak Valid', message: 'Gudang asal dan gudang tujuan tidak boleh sama.' });
       return;
     }
     if (!transferForm.quantityGrams || transferForm.quantityGrams <= 0) {
-      alert('Jumlah gram transfer harus lebih besar dari 0.');
+      showModal({ variant: 'warning', title: 'Jumlah Tidak Valid', message: 'Jumlah gram transfer harus lebih besar dari 0.' });
       return;
     }
 
@@ -65,7 +67,11 @@ export default function WarehouseManagement() {
 
     setStockCards([newRecordTo, newRecordFrom, ...stockCards]);
     setShowTransferModal(false);
-    alert(`✅ Emas ${transferForm.quantityGrams} gram berhasil ditransfer ke ${transferForm.toVault}!`);
+    showModal({
+      variant: 'success',
+      title: '✅ Transfer Antar Vault Tercatat',
+      message: `Emas ${transferForm.quantityGrams} gram dipindahkan dari ${transferForm.fromVault} ke ${transferForm.toVault}.`
+    });
   };
 
   return (
@@ -260,6 +266,8 @@ export default function WarehouseManagement() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

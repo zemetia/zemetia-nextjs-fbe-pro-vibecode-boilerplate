@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { PackageCheck, Plus, Search, Printer, CheckCircle2, ShieldCheck, FileText, Warehouse, PlaneTakeoff, ShoppingCart } from 'lucide-react';
 import { getPurchaseOrders, getSuppliers } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function GoodsReceiptPage() {
+  const { modalProps, showModal } = useModal();
   const [activeView, setActiveView] = useState('list'); // 'list' or 'create'
   const [receipts, setReceipts] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -82,14 +84,18 @@ export default function GoodsReceiptPage() {
         unitPriceIDRPerGram: foundPO.pricePerGramIDR || 1350000,
         totalValueIDR: (foundPO.weightGrams || 1000) * (foundPO.pricePerGramIDR || 1350000)
       });
-      alert(`✅ Tanda Terima Ditarik Otomatis Dari PO PT TAN (${foundPO.poNumber})! Supplier: ${foundPO.supplierName} & Weight ${foundPO.weightGrams}g Terisi.`);
+      showModal({
+        variant: 'success',
+        title: `✅ Data Ditarik Dari PO ${foundPO.poNumber}`,
+        message: `• Supplier: ${foundPO.supplierName}\n• Berat: ${foundPO.weightGrams}g\nForm tanda terima sudah terisi otomatis.`
+      });
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.grnNumber || !form.supplierName || !form.receivedWeightGram || !form.poNumber || !form.supplierDoNumber) {
-      alert('Mohon lengkapi No TTB/GRN, Ref No. PO PT TAN, No. Surat Jalan Supplier, Supplier, dan Berat Emas.');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No TTB/GRN, Ref No. PO PT TAN, No. Surat Jalan Supplier, Supplier, dan Berat Emas.' });
       return;
     }
 
@@ -123,7 +129,11 @@ export default function GoodsReceiptPage() {
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
-      alert(`✅ Penerimaan Barang (TTB ${newGRN.grnNumber}) Berhasil Disimpan! Ref PO PT TAN: ${newGRN.poNumber} & No SJ Supplier: ${newGRN.supplierDoNumber}. Stok Vault ${form.targetVaultName} Bertambah ${newGRN.receivedWeightGram}g!`);
+      showModal({
+        variant: 'success',
+        title: `✅ Penerimaan Barang (TTB ${newGRN.grnNumber}) Tersimpan`,
+        message: `• Ref PO PT TAN: ${newGRN.poNumber}\n• No. SJ Supplier: ${newGRN.supplierDoNumber}\n• Stok Vault ${form.targetVaultName} bertambah ${newGRN.receivedWeightGram}g`
+      });
       loadInitialData();
       setActiveView('list');
     }
@@ -223,7 +233,11 @@ export default function GoodsReceiptPage() {
                       <button
                         className="btn-primary"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                        onClick={() => alert(`🖨️ Mencetak Tanda Terima Barang (TTB / GRN PDF) ${r.grnNumber} [Ref PO PT TAN: ${r.poNumber} | SJ Supplier: ${r.supplierDoNumber}] untuk ${r.supplierName}...`)}
+                        onClick={() => showModal({
+                          variant: 'info',
+                          title: `🖨️ Cetak TTB / GRN ${r.grnNumber}`,
+                          message: `• Ref PO PT TAN: ${r.poNumber}\n• SJ Supplier: ${r.supplierDoNumber}\n• Untuk: ${r.supplierName}`
+                        })}
                       >
                         <Printer size={14} /> Cetak TTB
                       </button>
@@ -406,6 +420,8 @@ export default function GoodsReceiptPage() {
           </form>
         </div>
       )}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { ShoppingBag, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck, ArrowRight, DollarSign } from 'lucide-react';
 import { getCustomers, getFinishedGoods } from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function ExportSalesOrderPage() {
+  const { modalProps, showModal } = useModal();
   const [activeView, setActiveView] = useState('list'); // 'list' or 'create'
   const [salesOrders, setSalesOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -104,7 +106,7 @@ export default function ExportSalesOrderPage() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.soNumber || !form.buyerName || !form.weightGrams || !form.pricePerGramUSD) {
-      alert('Mohon lengkapi No SO, Buyer, Berat Gram, dan Harga USD/Gram Fixing.');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No SO, Buyer, Berat Gram, dan Harga USD/Gram Fixing.' });
       return;
     }
 
@@ -123,7 +125,11 @@ export default function ExportSalesOrderPage() {
       list.unshift(newSO);
       window.Storage.set('pttan_export_sales_orders', list);
 
-      alert(`✅ Export Sales Order (${newSO.soNumber}) Berhasil Disimpan & Harga USD $${form.pricePerGramUSD}/g Dikunci (Fixed Price)!`);
+      showModal({
+        variant: 'success',
+        title: `✅ Export Sales Order (${newSO.soNumber}) Tersimpan`,
+        message: `• Buyer: ${newSO.buyerName}\n• Harga dikunci (fixed price): $ ${form.pricePerGramUSD}/g\n• Berat: ${newSO.weightGrams}g`
+      });
       loadInitialData();
       setActiveView('list');
     }
@@ -220,7 +226,11 @@ export default function ExportSalesOrderPage() {
                         <button
                           className="btn-primary"
                           style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                          onClick={() => alert(`🖨️ Mencetak Export Sales Order PDF (${so.soNumber}) untuk ${so.buyerName}...`)}
+                          onClick={() => showModal({
+                            variant: 'info',
+                            title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
+                            message: `Dokumen PDF untuk ${so.buyerName}.`
+                          })}
                         >
                           <Printer size={14} /> Cetak SO
                         </button>
@@ -383,6 +393,8 @@ export default function ExportSalesOrderPage() {
           </form>
         </div>
       )}
+
+      <Modal {...modalProps} />
     </div>
   );
 }

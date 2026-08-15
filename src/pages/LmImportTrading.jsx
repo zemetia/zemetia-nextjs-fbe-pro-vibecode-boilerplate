@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { PlaneTakeoff, Plus, CheckCircle, Calculator, RefreshCw, Building2, CreditCard, DollarSign, ShieldCheck, Truck, Scale, Tag, Printer, Sparkles, FileText } from 'lucide-react';
 import { createPurchaseOrder, getPurchaseOrders } from '../services/storageService';
 import { fetchBcaERateUSD, getStoredUsdRate } from '../services/currencyService';
+import Modal, { useModal } from '../components/ui/Modal';
 
 export default function LmImportTrading() {
+  const { modalProps, showModal } = useModal();
   const [orders, setOrders] = useState([]);
   const [loadingRate, setLoadingRate] = useState(false);
   const [unitMode, setUnitMode] = useState('oz'); // 'oz' (Troy Ounce) or 'gram' (Gram)
@@ -72,7 +74,7 @@ export default function LmImportTrading() {
   const handleDirectSubmit = async (e) => {
     e.preventDefault();
     if (!formData.quantityUnits || !formData.baseAmountUSD) {
-      alert('Mohon lengkapi Jumlah Pesanan dan Nilai Kesepakatan Base FOB USD.');
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi Jumlah Pesanan dan Nilai Kesepakatan Base FOB USD.' });
       return;
     }
 
@@ -123,10 +125,14 @@ export default function LmImportTrading() {
 
     const res = await createPurchaseOrder(poPayload);
     if (res.success) {
-      alert(`🎉 PURCHASE ORDER RESMI BERHASIL DITERBITKAN!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• No. PO: ${res.order?.poNumber || 'PO-IMP'}\n• Supplier: ${formData.supplierName}\n• Dokumen Kepabeanan:\n   1. No. PIB: ${formData.pibNo || '-'}\n   2. No. SPPB: ${formData.sppbNo || '-'}\n   3. No. MAWB: ${formData.mawbNo || '-'}\n• Total All-In (USD): $ ${totalAllInGoldUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n• Total Landed Cost: Rp ${totalLandedCostIDR.toLocaleString()}\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Rekening Bayar: ${formData.paymentBankAccountName}\n• Status: APPROVED & SIAP PENERIMAAN TTB VAULT`);
+      showModal({
+        variant: 'success',
+        title: `🎉 Purchase Order ${res.order?.poNumber || 'PO-IMP'} Diterbitkan`,
+        message: `• Supplier: ${formData.supplierName}\n• Dokumen Kepabeanan:\n   1. No. PIB: ${formData.pibNo || '-'}\n   2. No. SPPB: ${formData.sppbNo || '-'}\n   3. No. MAWB: ${formData.mawbNo || '-'}\n• Total All-In (USD): $ ${totalAllInGoldUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n• Total Landed Cost: Rp ${totalLandedCostIDR.toLocaleString()}\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Rekening Bayar: ${formData.paymentBankAccountName}\n• Status: APPROVED & SIAP PENERIMAAN TTB VAULT`
+      });
       loadOrders();
     } else {
-      alert('❌ Gagal menyimpan PO: ' + JSON.stringify(res.errors));
+      showModal({ variant: 'error', title: '❌ Gagal Menyimpan PO', message: JSON.stringify(res.errors, null, 2) });
     }
   };
 
@@ -469,7 +475,11 @@ export default function LmImportTrading() {
                       <button
                         className="btn-primary"
                         style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                        onClick={() => alert(`🖨️ Mencetak PDF Dokumen PO Impor Resmi ${po.poNumber} untuk ${po.supplierName}...`)}
+                        onClick={() => showModal({
+                          variant: 'info',
+                          title: `🖨️ Cetak PDF PO Impor ${po.poNumber}`,
+                          message: `Dokumen PO impor resmi untuk ${po.supplierName}.`
+                        })}
                       >
                         <Printer size={13} /> Cetak PO
                       </button>
@@ -481,6 +491,8 @@ export default function LmImportTrading() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

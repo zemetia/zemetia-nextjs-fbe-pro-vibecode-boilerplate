@@ -101,6 +101,7 @@ export default function NamaHalaman() {
 | `title` | Satu baris. Boleh diawali emoji penanda, sesuai konvensi proyek |
 | `message` | Multi-baris dengan `\n` — dirender `white-space: pre-wrap`, jadi baris `•` tetap utuh |
 | `onConfirm` | Ada → modal jadi konfirmasi (tombol `Batal` + tombol aksi). Tidak ada → hanya tombol `Mengerti` |
+| `onDismiss` | Dipanggil setiap kali modal ditutup **tanpa** menjalankan `onConfirm` (tombol `Mengerti`/`Batal`, ✕, overlay, Esc). Untuk efek samping yang membongkar halaman — lihat aturan di bawah |
 | `confirmLabel` / `cancelLabel` | Label tombol. Default `Lanjutkan` / `Mengerti` dan `Batal` |
 | `children` | Isi kustom di bawah `message` — untuk kasus yang butuh tabel atau input |
 
@@ -111,6 +112,7 @@ Aturan pemakaian:
 - Judul memuat inti kejadian (nomor dokumen, nominal); `message` memuat rinciannya (baris jurnal, akun, catatan).
 - `onConfirm` dipanggil setelah modal ditutup, jadi handler-nya bebas memanggil `showModal` lagi untuk pesan sukses — pola dua tahap konfirmasi → sukses berjalan tanpa penanganan khusus.
 - Konfirmasi ireversibel wajib memakai `variant: 'confirm'`, bukan modal biasa yang tombolnya cuma menutup.
+- **Efek samping yang membongkar halaman** (`window.location.reload()`, redirect, reset tampilan) dijalankan di `onDismiss`, **bukan** sebaris setelah `showModal`. `alert()` memblokir thread sehingga pesan sempat terbaca; modal tidak — reload akan menyapu pesannya sebelum terlihat. Contoh: `applyRestore` di `SystemSettingsPage`.
 - Overlay, tombol ✕, dan tombol `Esc` semuanya menutup modal tanpa menjalankan `onConfirm`.
 
 ---

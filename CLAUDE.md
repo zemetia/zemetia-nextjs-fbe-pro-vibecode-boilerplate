@@ -58,6 +58,7 @@ Tanpa TypeScript, tanpa ESLint, tanpa Prettier, tanpa Tailwind, tanpa React Rout
 - Tidak ada angka laporan yang di-hardcode di JSX. Bila data belum ada, tampilkan keadaan kosong yang jujur
 - Jangan menyentuh 102 modul dorman di `modules/` kecuali diminta; jangan membuat file backup longgar (`.bak`, `_new.js`, `.final`)
 - `README.md`, `README.zh.md`, `EXAMPLES.md`, `CURSOR.md`, dan `skills/` di root berasal dari repo *karpathy-skills* yang ikut ter-merge — **bukan** dokumentasi ERP ini
+- **Git Sync Sebelum Perubahan:** Setiap kali session hendak melakukan perubahan kode/file, wajib cek nama branch yang sedang aktif (`git branch --show-current`) dan lakukan pengecekan / pull dari remote branch tersebut (`git pull origin <current-branch>`) agar workspace selalu sinkron sebelum menulis kode baru.
 - Verifikasi sebelum menyatakan selesai: `npm run build` lolos, halaman dibuka tanpa exception di konsol, dan `npm run test:unit` hijau bila `modules/` atau `data/` tersentuh. Laporkan apa yang dijalankan dan apa yang tidak diuji
 
 ---
