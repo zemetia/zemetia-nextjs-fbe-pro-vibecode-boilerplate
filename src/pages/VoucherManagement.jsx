@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert } from 'lucide-react';
-import { getCOA } from '../services/storageService';
+import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert, FileText, DollarSign, Calculator } from 'lucide-react';
+import { getCOA, getPurchaseOrders } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
 
 export default function VoucherManagement() {
   const { modalProps, showModal } = useModal();
   const [activeTab, setActiveTab] = useState('BBK'); // BBK, BKK, BCK (Bukti Cek Keluar), BKM, BBM
   const [vouchers, setVouchers] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [coaAccounts, setCoaAccounts] = useState([]);
   const [chequeBooks, setChequeBooks] = useState([]);
@@ -15,21 +16,32 @@ export default function VoucherManagement() {
     voucherType: 'BBK',
     voucherNo: '',
     date: new Date().toISOString().split('T')[0],
+    selectedPONumber: '', // Ref No. PO
+    poTotalAmountIDR: 0,
+    poPaidAmountIDR: 0,
+    poRemainingIDR: 0,
     payeePayer: 'Supplier Emas Lokal / Vendor',
+    bankAccountCode: '1111-IDR', // Bank BCA IDR (1111-IDR), Bank BCA USD (1111-USD), SGD (1111-SGD)
     paymentMethod: 'transfer', // 'transfer', 'cash', 'cheque' (Cek/BG)
     checkBankName: 'Bank BCA (KCU Thamrin)',
     checkNumber: '', // Nomor Seri Lembar Cek / Bilyet Giro
     checkDueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], // Jatuh Tempo Kliring
     accountCode: '2111', // Hutang Usaha / Beban
     amount: 50000000,
-    description: 'Pembayaran Pembelian Emas Batangan via Bilyet Giro BCA (Tempo 7 Hari)'
+    description: 'Pembayaran Pelunasan Tagihan PO Emas'
   });
 
   useEffect(() => {
     setCoaAccounts(getCOA().filter(a => a.type === 'detail'));
     loadVouchers();
     loadChequeBooks();
+    loadPurchaseOrders();
   }, [activeTab]);
+
+  const loadPurchaseOrders = () => {
+    const list = getPurchaseOrders();
+    setPurchaseOrders(list);
+  };
 
   const loadChequeBooks = () => {
     if (typeof window !== 'undefined' && window.Storage) {
@@ -42,22 +54,21 @@ export default function VoucherManagement() {
     if (typeof window !== 'undefined' && window.Storage) {
       const pmt = window.Storage.get(window.Storage.KEYS.PAYMENT_VOUCHERS) || [
         {
-          id: 'VOUCH-BCK-001',
-          voucherNumber: 'BCK-2026-001',
-          voucherType: 'BCK',
-          type: 'BCK',
+          id: 'VOUCH-BBK-001',
+          voucherNumber: 'BBK-2026-001',
+          voucherType: 'BBK',
+          type: 'BBK',
           date: new Date().toISOString().split('T')[0],
-          payee: 'PT Antam Tbk / Pegadaian',
+          selectedPONumber: 'PO-IMP-2026-001',
+          payee: 'YLG Bullion Singapore Pte Ltd',
           payer: 'PT TAN',
-          paymentMethod: 'cheque',
-          checkNumber: 'BG-BCA-998801',
-          checkBankName: 'Bank BCA (KCU Thamrin)',
-          checkDueDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+          bankAccountCode: '1111-USD',
+          bankAccountName: 'Bank BCA Devisa USD',
           accountCode: '2111',
-          amount: 150000000,
-          description: 'Pembayaran 100g Emas Batangan via Bilyet Giro BCA (Jatuh Tempo Kliring 5 Hari)',
-          status: 'BEREDAR (OUTSTANDING)',
-          isCleared: false,
+          amount: 21645000000,
+          description: 'Pelunasan Pembayaran Impor 16,000 oz Gold Bullion YLG Singapore (Ref: PO-IMP-2026-001)',
+          status: 'APPROVED & PAID',
+          isCleared: true,
           createdAt: new Date().toISOString()
         }
       ];
@@ -73,6 +84,44 @@ export default function VoucherManagement() {
         return true;
       });
       setVouchers(filtered);
+    }
+  };
+
+  // Handler Saat User Memilih Nomor PO Pembelian (Auto-Pull Tagihan & Sisa Hutang)
+  const handleSelectPO = (e) => {
+    const poNum = e.target.value;
+    if (!poNum) {
+      setForm(prev => ({
+        ...prev,
+        selectedPONumber: '',
+        poTotalAmountIDR: 0,
+        poPaidAmountIDR: 0,
+        poRemainingIDR: 0
+      }));
+      return;
+    }
+
+    const selectedPO = purchaseOrders.find(p => (p.poNumber === poNum || p.id === poNum));
+    if (selectedPO) {
+      const totalIDR = selectedPO.totalLandedCostIDR || ((selectedPO.totalAmountUSD || 0) * (selectedPO.exchangeRate || 16250)) || Number(selectedPO.total || 0);
+      const paidIDR = Number(selectedPO.paidAmountIDR || 0);
+      const remaining = Math.max(0, totalIDR - paidIDR);
+
+      // Tentukan default bank rekening bayar (USD jika impor, IDR jika lokal)
+      const defaultBank = selectedPO.currency === 'USD' ? '1111-USD' : selectedPO.currency === 'SGD' ? '1111-SGD' : '1111-IDR';
+
+      setForm(prev => ({
+        ...prev,
+        selectedPONumber: selectedPO.poNumber || selectedPO.id,
+        payeePayer: selectedPO.supplierName || selectedPO.supplier || 'Supplier Emas',
+        bankAccountCode: defaultBank,
+        accountCode: '2111', // Hutang Usaha Dagang
+        poTotalAmountIDR: totalIDR,
+        poPaidAmountIDR: paidIDR,
+        poRemainingIDR: remaining,
+        amount: remaining > 0 ? remaining : totalIDR,
+        description: `Pembayaran Tagihan PO ${selectedPO.poNumber || selectedPO.id} - ${selectedPO.supplierName || selectedPO.supplier}`
+      }));
     }
   };
 
@@ -99,9 +148,9 @@ export default function VoucherManagement() {
       }
       if (Number(form.amount) > maxChequeLimit) {
         showModal({
-          variant: 'error',
-          title: '❌ Transaksi Ditolak — Melebihi Limit Per Lembar',
-          message: `Nominal Rp ${Number(form.amount).toLocaleString()} melebihi batas limit per lembar buku cek ${form.checkBankName}.\nMaksimal: Rp ${maxChequeLimit.toLocaleString()}`
+          variant: 'danger',
+          title: 'Melebihi Limit Plafon Cek',
+          message: `Nominal Rp ${Number(form.amount).toLocaleString()} melebihi batas limit per lembar buku cek ${form.checkBankName} (Maksimal Rp ${maxChequeLimit.toLocaleString()}).`
         });
         return;
       }
@@ -113,8 +162,10 @@ export default function VoucherManagement() {
       voucherType: currentType,
       type: currentType,
       date: form.date,
+      selectedPONumber: form.selectedPONumber,
       payee: form.payeePayer,
       payer: form.payeePayer,
+      bankAccountCode: form.bankAccountCode,
       paymentMethod: isCheque ? 'cheque' : 'transfer',
       checkNumber: isCheque ? form.checkNumber : '',
       checkBankName: isCheque ? form.checkBankName : '',
@@ -137,21 +188,55 @@ export default function VoucherManagement() {
       window.Storage.set(key, list);
 
       // JURNAL SAK EMKM OTOMATIS:
+      const creditBankGl = isCheque ? '2115' : form.bankAccountCode;
+      const creditBankName = isCheque 
+        ? 'Hutang Cek / Bilyet Giro Beredar' 
+        : form.bankAccountCode === '1111-USD'
+        ? 'Bank BCA Devisa USD'
+        : form.bankAccountCode === '1111-SGD'
+        ? 'Bank BCA Devisa SGD'
+        : 'Bank BCA IDR Operasional';
+
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
         id: Date.now(),
         entryNumber: `JRN-${currentType}-${Date.now().toString().slice(-6)}`,
         date: form.date,
         description: isCheque
-          ? `Penerbitan Cek/Bilyet Giro (${newVoucher.checkNumber}) - Penerima: ${newVoucher.payee} [Jatuh Tempo: ${newVoucher.checkDueDate}]`
-          : `Pembayaran Voucher ${currentType} (${newVoucher.voucherNumber}) - ${newVoucher.payee}`,
+          ? `Penerbitan Cek/Bilyet Giro (${newVoucher.checkNumber}) - ${newVoucher.payee} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
+          : `Pembayaran Voucher ${currentType} (${newVoucher.voucherNumber}) - ${newVoucher.payee} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`,
         lines: [
           { accountCode: form.accountCode, accountName: coaAccounts.find(a => a.code === form.accountCode)?.name || 'Hutang Usaha', debit: Number(form.amount), credit: 0 },
-          { accountCode: isCheque ? '2115' : '1111-IDR', accountName: isCheque ? 'Hutang Cek / Bilyet Giro Beredar' : 'Bank BCA IDR', debit: 0, credit: Number(form.amount) }
+          { accountCode: creditBankGl, accountName: creditBankName, debit: 0, credit: Number(form.amount) }
         ],
         createdAt: new Date().toISOString()
       });
       window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+
+      // UPDATE REKONSILIASI CICILAN / SISA HUTANG PADA PURCHASE ORDER TERKAIT
+      if (form.selectedPONumber) {
+        const storedPOs = window.Storage.get('erp_purchase_orders') || [];
+        const updatedPOs = storedPOs.map(po => {
+          if (po.poNumber === form.selectedPONumber || po.id === form.selectedPONumber) {
+            const currentPaid = Number(po.paidAmountIDR || 0) + Number(form.amount);
+            const totalCost = Number(po.totalLandedCostIDR || po.total || 0);
+            const newRemaining = Math.max(0, totalCost - currentPaid);
+            const isFullyPaid = newRemaining === 0;
+
+            return {
+              ...po,
+              paidAmountIDR: currentPaid,
+              remainingBalanceIDR: newRemaining,
+              paymentStatus: isFullyPaid ? 'PAID (LUNAS)' : 'PARTIALLY_PAID (MENYICIL)',
+              lastPaymentVoucher: newVoucher.voucherNumber,
+              lastPaymentDate: form.date
+            };
+          }
+          return po;
+        });
+        window.Storage.set('erp_purchase_orders', updatedPOs);
+        loadPurchaseOrders();
+      }
 
       // KUNCI STATUS LEMBAR CEK MENJADI 'USED' DI MASTER BUKU CEK
       if (isCheque) {
@@ -179,11 +264,10 @@ export default function VoucherManagement() {
 
       showModal({
         variant: 'success',
-        title: `✅ Voucher ${currentType} (${newVoucher.voucherNumber}) Diterbitkan`,
-        message: isCheque
-          ? `• No. Cek/BG terkunci: ${newVoucher.checkNumber}\n• Limit plafon: Rp ${maxChequeLimit.toLocaleString()} (aman)\n• Jatuh tempo kliring: ${newVoucher.checkDueDate}\n• Status: BEREDAR (Akun 2115)`
-          : `Penerima / Penyetor: ${newVoucher.payee}\nNominal: Rp ${Number(newVoucher.amount).toLocaleString()}`
+        title: `Voucher ${currentType} Diterbitkan!`,
+        message: `Voucher (${newVoucher.voucherNumber}) berhasil disimpan dan diposting ke Buku Besar!\n${newVoucher.selectedPONumber ? `• Tagihan PO: ${newVoucher.selectedPONumber} berhasil direkonsiliasi.\n` : ''}${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Status: BEREDAR (Akun 2115)` : `• Sumber Bank: ${creditBankName}`}`
       });
+
       loadVouchers();
       setShowForm(false);
     }
@@ -192,20 +276,14 @@ export default function VoucherManagement() {
   // Handler Pencairan / Kliring Cek di Bank
   const handleClearCheque = (voucher) => {
     if (voucher.isCleared) {
-      showModal({ variant: 'info', title: 'Sudah Dicairkan', message: 'Cek / Bilyet Giro ini sudah dicairkan sebelumnya.' });
+      showModal({ variant: 'info', title: 'Sudah Cair', message: 'Cek / Bilyet Giro ini sudah dicairkan sebelumnya.' });
       return;
     }
 
-    showModal({
-      variant: 'confirm',
-      title: `Kliring & Pencairan Cek/BG (${voucher.checkNumber})`,
-      message: `Nominal: Rp ${voucher.amount.toLocaleString()}\nSaldo Bank BCA IDR (Akun 1111) akan resmi terpotong.`,
-      confirmLabel: 'Ya, Cairkan',
-      onConfirm: () => postChequeClearing(voucher)
-    });
-  };
+    if (!confirm(`Konfirmasi Kliring & Pencairan Cek/BG (${voucher.checkNumber}) senilai Rp ${voucher.amount.toLocaleString()}?\nSaldo Bank BCA IDR (Akun 1111) akan resmi terpotong.`)) {
+      return;
+    }
 
-  const postChequeClearing = (voucher) => {
     if (typeof window !== 'undefined' && window.Storage) {
       // 1. Update Voucher Status
       const pmt = window.Storage.get(window.Storage.KEYS.PAYMENT_VOUCHERS) || [];
@@ -248,8 +326,8 @@ export default function VoucherManagement() {
 
       showModal({
         variant: 'success',
-        title: `🎉 Cek/BG (${voucher.checkNumber}) Sukses Dikliringkan`,
-        message: `• Saldo Bank BCA (1111-IDR) terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun BG gantung (2115) ditutup.`
+        title: 'Cek Sukses Dicairkan!',
+        message: `Cek/BG (${voucher.checkNumber}) sukses dikliringkan di Bank BCA!\n• Saldo Bank Terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun Cek Gantung (2115) Ditutup Nol.`
       });
       loadVouchers();
     }
@@ -276,7 +354,7 @@ export default function VoucherManagement() {
               <CreditCard color="#f59e0b" size={24} /> Manajemen Pembayaran Kas, Bank, & Cek / Bilyet Giro (BG)
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Penerbitan Voucher, Validasi Limit Plafon Master Cek Bank, Kliring Pencairan, & Auto-Jurnal SAK EMKM
+              Penerbitan Voucher BBK/BCK Terhubung No. PO Pembelian, Validasi Sisa Tagihan, & Auto-Jurnal SAK EMKM
             </p>
           </div>
 
@@ -310,10 +388,48 @@ export default function VoucherManagement() {
         {/* Create Voucher Form */}
         {showForm && (
           <form onSubmit={handleCreateVoucher} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>
-              ➕ Form Terbitkan Voucher {activeTab} {activeTab === 'BCK' ? '(Cek / Bilyet Giro Terdaftar)' : ''}
+            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={18} /> Form Terbitkan Voucher {activeTab} {activeTab === 'BCK' ? '(Cek / Bilyet Giro)' : ''}
             </h4>
+
             <div className="form-grid">
+              {/* DROPDOWN PILIH REFERENSI NO. PO PEMBELIAN */}
+              <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(56,189,248,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid #38bdf8' }}>
+                <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText size={16} /> Hubungkan Pembayaran ke Nomor Purchase Order (PO):
+                </label>
+                <select
+                  className="form-select"
+                  style={{ border: '1px solid #38bdf8', color: '#38bdf8', fontWeight: 700, fontSize: '0.95rem' }}
+                  value={form.selectedPONumber}
+                  onChange={handleSelectPO}
+                >
+                  <option value="">-- Tanpa PO (Pembayaran Operasional / Non-PO) --</option>
+                  {purchaseOrders.map(po => (
+                    <option key={po.id || po.poNumber} value={po.poNumber || po.id}>
+                      {po.poNumber} — {po.supplierName || po.supplier} (Total: {po.currency || 'IDR'} {(po.totalAmountUSD || po.total || 0).toLocaleString()} | Status: {po.paymentStatus || 'UNPAID'})
+                    </option>
+                  ))}
+                </select>
+
+                {form.selectedPONumber && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginTop: '10px', background: 'rgba(15,23,42,0.8)', padding: '10px', borderRadius: '6px' }}>
+                    <div>
+                      <span className="stat-lbl">Total Nilai PO</span>
+                      <div style={{ fontWeight: 700, color: '#f8fafc' }}>Rp {form.poTotalAmountIDR.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <span className="stat-lbl">Sudah Dibayar</span>
+                      <div style={{ fontWeight: 700, color: '#34d399' }}>Rp {form.poPaidAmountIDR.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <span className="stat-lbl">Sisa Hutang Tagihan</span>
+                      <div style={{ fontWeight: 800, color: '#fbbf24' }}>Rp {form.poRemainingIDR.toLocaleString()}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Tanggal Terbit Voucher</label>
                 <input
@@ -325,7 +441,7 @@ export default function VoucherManagement() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Penerima Pembayaran (Payee)</label>
+                <label className="form-label">Penerima Pembayaran (Payee / Supplier)</label>
                 <input
                   className="form-input"
                   style={{ fontWeight: 700, color: '#fbbf24' }}
@@ -334,7 +450,23 @@ export default function VoucherManagement() {
                 />
               </div>
 
-              {/* KHUSUS CEK / BILYET GIRO DENGAN FILTER BANK & MASTER REGISTER */}
+              {/* SUMBER REKENING BANK */}
+              {activeTab !== 'BKK' && activeTab !== 'BKM' && (
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>Rekening Bank Pembayar</label>
+                  <select
+                    className="form-select"
+                    value={form.bankAccountCode}
+                    onChange={e => setForm({ ...form, bankAccountCode: e.target.value })}
+                  >
+                    <option value="1111-IDR">Bank BCA IDR Operasional (1111-IDR)</option>
+                    <option value="1111-USD">Bank BCA Devisa USD (1111-USD)</option>
+                    <option value="1111-SGD">Bank BCA Devisa SGD (1111-SGD)</option>
+                  </select>
+                </div>
+              )}
+
+              {/* KHUSUS CEK / BILYET GIRO */}
               {activeTab === 'BCK' && (
                 <>
                   <div className="form-group">
@@ -405,7 +537,7 @@ export default function VoucherManagement() {
 
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label className="form-label">Nominal Pembayaran (IDR)</label>
+                  <label className="form-label">Nominal Bayar / Cicilan (IDR)</label>
                   {activeTab === 'BCK' && (
                     <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700 }}>
                       <Lock size={12} style={{ display: 'inline', marginRight: '4px' }} />
@@ -425,15 +557,10 @@ export default function VoucherManagement() {
                   value={form.amount}
                   onChange={e => setForm({ ...form, amount: Number(e.target.value) })}
                 />
-                {Number(form.amount) > maxChequeLimit && activeTab === 'BCK' && (
-                  <small style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                    <ShieldAlert size={14} /> Peringatan: Melebihi batas plafon buku cek (Maks Rp {maxChequeLimit.toLocaleString()})!
-                  </small>
-                )}
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Keterangan / Keperluan Pembayaran</label>
+                <label className="form-label">Keterangan Pembayaran</label>
                 <input
                   className="form-input"
                   value={form.description}
@@ -443,7 +570,7 @@ export default function VoucherManagement() {
             </div>
 
             <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
-              <CheckCircle size={16} /> Terbitkan Voucher & Kunci Lembar {activeTab === 'BCK' ? 'Cek Beredar (2115)' : 'Bank Keluar'}
+              <CheckCircle size={16} /> Terbitkan Voucher {activeTab} & Rekonsiliasi Sisa Tagihan PO
             </button>
           </form>
         )}
@@ -460,19 +587,20 @@ export default function VoucherManagement() {
               <tr>
                 <th>No. Voucher</th>
                 <th>Tanggal</th>
+                <th>Ref No. PO</th>
                 <th>Penerima Pembayaran</th>
                 {activeTab === 'BCK' && <th>No. Cek / Bank</th>}
                 {activeTab === 'BCK' && <th>Jatuh Tempo Kliring</th>}
-                <th>Akun COA</th>
+                <th>Rekening / COA</th>
                 <th style={{ textAlign: 'right' }}>Nominal (IDR)</th>
                 <th>Status Pembayaran</th>
-                <th>Aksi & Pencairan</th>
+                <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {vouchers.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'BCK' ? 9 : 7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                  <td colSpan={activeTab === 'BCK' ? 10 : 8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
                     Belum ada data voucher {activeTab} yang diterbitkan.
                   </td>
                 </tr>
@@ -481,6 +609,16 @@ export default function VoucherManagement() {
                   <tr key={v.id || v.voucherNumber}>
                     <td><strong>{v.voucherNumber}</strong></td>
                     <td>{v.date}</td>
+                    <td>
+                      {v.selectedPONumber ? (
+                        <span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>
+                          <FileText size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                          {v.selectedPONumber}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Non-PO</span>
+                      )}
+                    </td>
                     <td><strong>{v.payee || v.payer || '-'}</strong></td>
                     {activeTab === 'BCK' && (
                       <td>
@@ -496,13 +634,17 @@ export default function VoucherManagement() {
                         </span>
                       </td>
                     )}
-                    <td><small style={{ color: '#38bdf8' }}>{v.accountCode}</small></td>
+                    <td>
+                      <small style={{ color: '#38bdf8' }}>
+                        {v.bankAccountCode || v.accountCode}
+                      </small>
+                    </td>
                     <td style={{ textAlign: 'right', fontWeight: 800, color: '#34d399' }}>
                       Rp {(v.amount || 0).toLocaleString()}
                     </td>
                     <td>
                       {v.isCleared ? (
-                        <span className="badge badge-emerald">✅ CAIR (CLEARED)</span>
+                        <span className="badge badge-emerald">✅ CAIR / LUNAS</span>
                       ) : (
                         <span className="badge badge-gold" style={{ background: 'rgba(245,158,11,0.2)', border: '1px solid #f59e0b' }}>
                           ⏳ BEREDAR (OUTSTANDING)
@@ -523,11 +665,7 @@ export default function VoucherManagement() {
                         <button
                           className="btn-primary"
                           style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                          onClick={() => showModal({
-                            variant: 'info',
-                            title: `🖨️ Cetak PDF Voucher ${v.voucherNumber}`,
-                            message: `No. Cek/BG: ${v.checkNumber || '-'}\nUntuk: ${v.payee}`
-                          })}
+                          onClick={() => alert(`🖨️ Mencetak PDF Voucher ${v.voucherNumber} [Ref PO: ${v.selectedPONumber || 'Non-PO'}] untuk ${v.payee}...`)}
                         >
                           <Printer size={13} /> Cetak
                         </button>
