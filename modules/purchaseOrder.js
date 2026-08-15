@@ -226,7 +226,7 @@ const PurchaseOrder = {
             total: 0,
             reference: orderData.reference || '',
             notes: orderData.notes || '',
-            status: 'draft', // draft, submitted, approved, received, cancelled
+            status: orderData.status || 'draft', // draft, submitted, approved, received, cancelled
             createdBy: Auth?.getCurrentUser?.()?.id || 'system',
             createdByName: Auth?.getCurrentUser?.()?.name || 'system',
             createdAt: new Date().toISOString(),
