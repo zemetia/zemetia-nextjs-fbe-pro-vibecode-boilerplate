@@ -2085,6 +2085,13 @@ const Storage = {
         "balance": 0
     },
     {
+        "code": "2115",
+        "name": "Hutang Cek / Bilyet Giro Beredar",
+        "type": "detail",
+        "category": "kewajiban",
+        "balance": 0
+    },
+    {
         "code": "2114",
         "name": "Hutang pajak",
         "type": "detail",

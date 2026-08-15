@@ -18,6 +18,7 @@ import ExportInvoicing from '../pages/ExportInvoicing';
 import ExportDeliveryOrderPage from '../pages/ExportDeliveryOrderPage';
 import WarehouseManagement from '../pages/WarehouseManagement';
 import VoucherManagement from '../pages/VoucherManagement';
+import MasterChequePage from '../pages/MasterChequePage';
 import MasterFinishedGoods from '../pages/MasterFinishedGoods';
 import MasterItemPage from '../pages/MasterItemPage';
 import MasterCustomer from '../pages/MasterCustomer';
@@ -104,10 +105,17 @@ export const PAGES = [
   },
   {
     id: 'voucher-mgmt',
-    title: 'Manajemen Voucher Kas & Bank (BKK / BKM / BBK / BBM)',
-    label: 'Voucher Kas/Bank (BKK/BKM)',
+    title: 'Manajemen Voucher Kas & Bank (BKK / BKM / BBK / BBM / BCK)',
+    label: 'Voucher Kas/Bank & Cek BG',
     icon: CreditCard,
     component: VoucherManagement
+  },
+  {
+    id: 'master-cheques',
+    title: 'Master Buku Cek / Bilyet Giro & Kontrol Plafon Bank',
+    label: 'Master Buku Cek & Limit Bank',
+    icon: BookOpen,
+    component: MasterChequePage
   },
   {
     id: 'master-finished-goods',
@@ -189,7 +197,7 @@ export const PAGE_GROUPS = [
   {
     id: 'accounting',
     title: '💼 AKUNTANSI & KEUANGAN',
-    items: ['accounting-reports', 'voucher-mgmt', 'coa-setting']
+    items: ['accounting-reports', 'voucher-mgmt', 'master-cheques', 'coa-setting']
   },
   {
     id: 'system',
