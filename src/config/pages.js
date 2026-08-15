@@ -4,12 +4,13 @@
 import {
   LayoutDashboard, ShoppingCart, PlaneTakeoff, Flame,
   FileText, CreditCard, Warehouse, BookOpen, Package,
-  Users, Truck, Hammer, BarChart3, Settings, Sparkles, ShoppingBag, PackageCheck
+  Users, Truck, Hammer, BarChart3, Settings, Sparkles, ShoppingBag, PackageCheck, ClipboardList
 } from 'lucide-react';
 
 import Dashboard from '../pages/Dashboard';
 import LmImportTrading from '../pages/LmImportTrading';
 import LmLocalTrading from '../pages/LmLocalTrading';
+import PurchaseRequestPage from '../pages/PurchaseRequestPage';
 import BuyingScrapMelting from '../pages/BuyingScrapMelting';
 import GoodsReceiptPage from '../pages/GoodsReceiptPage';
 import JewelryProduction from '../pages/JewelryProduction';
@@ -53,6 +54,13 @@ export const PAGES = [
     label: 'PO LM Lokal IDR',
     icon: ShoppingCart,
     component: LmLocalTrading
+  },
+  {
+    id: 'purchase-request',
+    title: 'Purchase Request (PR - Permintaan Pengadaan Barang & Bahan Operasional)',
+    label: 'Purchase Request (PR)',
+    icon: ClipboardList,
+    component: PurchaseRequestPage
   },
   {
     id: 'scrap-melting',
@@ -176,7 +184,7 @@ export const PAGE_GROUPS = [
   {
     id: 'purchasing',
     title: '📦 MODUL PEMBELIAN',
-    items: ['import-trading', 'local-trading', 'scrap-melting', 'goods-receipt', 'master-suppliers']
+    items: ['import-trading', 'local-trading', 'purchase-request', 'scrap-melting', 'goods-receipt', 'master-suppliers']
   },
   {
     id: 'sales',
