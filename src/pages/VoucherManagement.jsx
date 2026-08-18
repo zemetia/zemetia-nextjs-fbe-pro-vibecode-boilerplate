@@ -223,6 +223,7 @@ export default function VoucherManagement() {
             const totalCost = Number(po.totalLandedCostIDR || po.total || 0);
             const newRemaining = Math.max(0, totalCost - currentPaid);
             const isFullyPaid = newRemaining === 0;
+            const existingHistory = po.paymentHistory || [];
 
             return {
               ...po,
@@ -230,7 +231,18 @@ export default function VoucherManagement() {
               remainingBalanceIDR: newRemaining,
               paymentStatus: isFullyPaid ? 'PAID (LUNAS)' : 'PARTIALLY_PAID (MENYICIL)',
               lastPaymentVoucher: newVoucher.voucherNumber,
-              lastPaymentDate: form.date
+              lastPaymentDate: form.date,
+              paymentHistory: [
+                ...existingHistory,
+                {
+                  voucherNo: newVoucher.voucherNumber,
+                  voucherType: currentType,
+                  date: form.date,
+                  amount: Number(form.amount),
+                  bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : creditBankName,
+                  notes: form.description
+                }
+              ]
             };
           }
           return po;
