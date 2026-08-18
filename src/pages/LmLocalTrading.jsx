@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2, Box, ArrowRightLeft } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2, Box, ArrowRightLeft, History, AlertCircle } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
 import Combobox from '../components/ui/Combobox';
@@ -10,6 +10,7 @@ export default function LmLocalTrading() {
   const [purchases, setPurchases] = useState([]);
   const [masterItemsList, setMasterItemsList] = useState([]);
   const [paymentMode, setPaymentMode] = useState('cash'); // 'cash' (Direct Tunai Pegadaian) or 'credit' (Tempo PO)
+  const [selectedPOHistory, setSelectedPOHistory] = useState(null); // State for Payment History Modal
 
   const [formData, setFormData] = useState({
     receiptNo: 'KW-PEG-2026-001',
@@ -134,10 +135,10 @@ export default function LmLocalTrading() {
     }
 
     const isCash = paymentMode === 'cash';
-    const creditAccount = isCash ? formData.paymentSourceAccount : '2110';
+    const creditAccount = isCash ? formData.paymentSourceAccount : '2111';
     const creditAccountName = isCash
       ? formData.paymentSourceAccountName
-      : 'Hutang Usaha Supplier Lokal (Akun 2110)';
+      : 'Hutang Usaha Supplier Lokal (Akun 2111)';
 
     // Tahap 1: Pembayaran Tunai Direct mencatat ke Akun Transit 1159 (Emas Dalam Perjalanan Kurir)
     const debitAccountStage1 = isCash ? '1159' : '1157';
@@ -171,6 +172,21 @@ export default function LmLocalTrading() {
       warehouseName: 'Vault Utama PT TAN (Akun 1157)',
       status: isCash ? 'IN TRANSIT (DIAMBIL KURIR DI PEGADAIAN JAKARTA)' : 'RECEIVED (CREDIT TEMPO)',
       isVaultReceived: false,
+      
+      // Tracking Pembayaran
+      paidAmountIDR: isCash ? totalAmount : 0,
+      remainingBalanceIDR: isCash ? 0 : totalAmount,
+      paymentStatus: isCash ? 'PAID' : 'UNPAID',
+      paymentHistory: isCash ? [{
+        id: Date.now(),
+        voucherNo: `CASH-${formData.receiptNo}`,
+        voucherType: 'CASH',
+        date: formData.orderDate,
+        bank: creditAccountName,
+        amount: totalAmount,
+        notes: `Pembayaran Tunai Langsung Pengambilan Emas Pegadaian (${formData.receiptNo})`
+      }] : [],
+
       createdAt: new Date().toISOString()
     };
 
@@ -188,7 +204,7 @@ export default function LmLocalTrading() {
         date: formData.orderDate,
         description: isCash
           ? `[TAHAP 1] Pembayaran Tunai Direct & Ambil Emas Pegadaian (${newPurchase.receiptNo}) - Barang: ${newPurchase.itemName} (${newPurchase.quantityGrams}g) | Debet: Akun 1159 (Transit Kurir ${newPurchase.courierName}) | Kredit: ${creditAccountName}`
-          : `Pembelian LM Kredit PO (${newPurchase.poNumber}) - ${formData.supplierName}`,
+          : `Pembelian LM Kredit PO (${newPurchase.poNumber}) - ${formData.supplierName} [Debet 1157 vs Kredit 2111]`,
         lines: [
           { accountCode: debitAccountStage1, accountName: debitAccountNameStage1, debit: totalAmount, credit: 0 },
           { accountCode: creditAccount, accountName: creditAccountName, debit: 0, credit: totalAmount }
@@ -204,7 +220,7 @@ export default function LmLocalTrading() {
           : '✅ Pembelian Kredit Tempo Tersimpan',
         message: isCash
           ? `• Jurnal Tahap 1: Debet Akun 1159 (Emas Dalam Perjalanan Kurir) vs Kredit ${creditAccountName}\n• Kurir (${newPurchase.courierName}) ditugaskan ambil emas di Pegadaian Jakarta.\n• Catatan: Persediaan Vault Utama (1157) BELUM DIDEBET sampai kurir tiba membawa fisik emas ke kantor PT TAN!`
-          : `Nomor PO: ${newPurchase.poNumber}`
+          : `Nomor PO: ${newPurchase.poNumber}\nStatus Pembayaran: 🔴 UNPAID (Siap dibayar via BBK di Voucher Kasir)`
       });
       loadInitialData();
     }
@@ -526,7 +542,7 @@ export default function LmLocalTrading() {
                 <span className="stat-lbl">Jurnal Tahap 1 (Transfer Bayar)</span>
                 <div className="font-bold text-sky-light text-[0.85rem]">
                   Debet: Akun 1159 (Transit Kurir {formData.courierName})<br/>
-                  Kredit: {paymentMode === 'cash' ? formData.paymentSourceAccountName : 'Akun 2110 (Utang)'}
+                  Kredit: {paymentMode === 'cash' ? formData.paymentSourceAccountName : 'Akun 2111 (Hutang Usaha)'}
                 </div>
               </div>
               <div>
@@ -553,7 +569,7 @@ export default function LmLocalTrading() {
               </>
             ) : (
               <>
-                <Plus size={18} /> Terbitkan PO & Catat Pembelian Emas Kredit
+                <Plus size={18} /> Terbitkan PO & Catat Pembelian Emas Kredit (Hutang 2111)
               </>
             )}
           </button>
@@ -576,6 +592,7 @@ export default function LmLocalTrading() {
                 <th>Barang Master & Multi-No Seri Bar</th>
                 <th>Berat Gram</th>
                 <th className="text-right">Total Valuasi (IDR)</th>
+                <th>Status Pembayaran (Cicilan)</th>
                 <th>Otorisasi Pemilik</th>
                 <th>Aksi Verifikasi & Dokumen</th>
               </tr>
@@ -583,7 +600,7 @@ export default function LmLocalTrading() {
             <tbody>
               {purchases.length === 0 ? (
                 <tr>
-                  <td className="text-center text-fg-muted p-7.5" colSpan="9">
+                  <td className="text-center text-fg-muted p-7.5" colSpan="10">
                     Belum ada riwayat pembelian Emas Lokal.
                   </td>
                 </tr>
@@ -591,6 +608,31 @@ export default function LmLocalTrading() {
                 purchases.map(p => {
                   const certList = (p.barCertificateNo || '').split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
                   const isReceived = p.isVaultReceived || p.status?.includes('RECEIVED & STOCKED');
+                  const totalAmt = Number(p.totalAmount || 0);
+                  const isCash = p.paymentMode === 'cash';
+                  const paidIDR = Number(p.paidAmountIDR || (isCash ? totalAmt : 0));
+                  const remainingIDR = typeof p.remainingBalanceIDR !== 'undefined' ? Number(p.remainingBalanceIDR) : Math.max(0, totalAmt - paidIDR);
+
+                  let paymentBadge = (
+                    <span className="badge badge-rose">
+                      🔴 UNPAID
+                    </span>
+                  );
+                  if (paidIDR >= totalAmt && totalAmt > 0) {
+                    paymentBadge = (
+                      <span className="badge badge-emerald">
+                        🟢 LUNAS {isCash ? '(TUNAI DIRECT)' : '(PAID)'}
+                      </span>
+                    );
+                  } else if (paidIDR > 0 && remainingIDR > 0) {
+                    paymentBadge = (
+                      <span className="badge badge-gold text-xs">
+                        🟡 DICICIL<br/>
+                        <small className="font-bold">Bayar: Rp {paidIDR.toLocaleString()} | Sisa: Rp {remainingIDR.toLocaleString()}</small>
+                      </span>
+                    );
+                  }
+
                   return (
                     <tr key={p.id}>
                       <td>
@@ -629,7 +671,8 @@ export default function LmLocalTrading() {
                         </div>
                       </td>
                       <td className="font-extrabold text-gold-light">{p.quantityGrams} g</td>
-                      <td className="text-right font-bold text-emerald-light">Rp {(p.totalAmount || 0).toLocaleString()}</td>
+                      <td className="text-right font-bold text-emerald-light">Rp {totalAmt.toLocaleString()}</td>
+                      <td>{paymentBadge}</td>
                       <td>
                         <span className="badge badge-gold text-xs">
                           <UserCheck className="inline mr-1" size={12} />
@@ -646,12 +689,18 @@ export default function LmLocalTrading() {
                               <Box size={13} /> 📦 Konfirmasi Tiba Di Vault (Debet 1157)
                             </button>
                           )}
-                          <div className="flex gap-1.5">
+                          <div className="flex gap-1.5 flex-wrap">
+                            <button
+                              className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(56,189,248,0.2)] border border-sky-light text-sky-light"
+                              onClick={() => setSelectedPOHistory(p)}
+                            >
+                              <History size={13} /> Riwayat Cicilan
+                            </button>
                             <button
                               className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#0284c7,_#0369a1)]"
                               onClick={() => showModal({
                                 variant: 'info',
-                                title: `📱 Dispatch WhatsApp PDF (${p.receiptNo})`,
+                                title: `📱 Dispatch WhatsApp PDF (${p.receiptNo || p.poNumber})`,
                                 message: `Mengirimkan PDF Surat Kuasa Ambil Emas resmi & Kuitansi Lunas ke WhatsApp Kurir (${p.courierName}) & Kasir ${p.supplierName} Jakarta.\nDokumen dapat langsung di-print di Pegadaian Jakarta.`
                               })}
                             >
@@ -662,7 +711,7 @@ export default function LmLocalTrading() {
                               onClick={() => showModal({
                                 variant: 'info',
                                 title: `🖨️ Cetak Bukti Serah Terima Vault (${p.receiptNo || p.poNumber})`,
-                                message: `Barang: ${p.itemName} (${p.itemCode})\nJurnal Status: ${isReceived ? 'Tahap 2 Selesai (Debet 1157 Vault)' : 'Tahap 1 (Debet 1159 Transit Kurir)'}\n\nLengkap dengan 4 kolom tanda tangan fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`
+                                message: `Barang: ${p.itemName} (${p.itemCode})\nJurnal Status: ${isReceived ? 'Tahap 2 Selesai (Debet 1157 Vault)' : 'Tahap 1 (Debet 1159 Transit Kurir)'}\nStatus Pembayaran: ${paidIDR >= totalAmt && totalAmt > 0 ? '🟢 LUNAS' : paidIDR > 0 ? `🟡 DICICIL (Sisa Rp ${remainingIDR.toLocaleString()})` : '🔴 BELUM BAYAR'}\n\nLengkap dengan 4 kolom tanda tangan fisik:\n1. Kurir Pengambil: ${p.courierName || 'Bpk Budi'} (No. ${p.courierDocNo || 'SK-KURIR-01'})\n2. Yang Menyerahkan: ${p.supplierName} (${p.pickupLocation || 'Jakarta'})\n3. Penerima Vault: Petugas Brankas PT TAN (Vault 1157)\n4. Disetujui & TTD Pemilik: ${p.ownerApprovedBy || 'Pemilik PT TAN'}`
                               })}
                             >
                               <Printer size={13} /> Cetak (4 TTD)
@@ -678,6 +727,91 @@ export default function LmLocalTrading() {
           </table>
         </div>
       </div>
+
+      {/* MODAL POPUP RIWAYAT CICILAN PEMBAYARAN PO LOKAL (AUDIT TRAIL) */}
+      {selectedPOHistory && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-5">
+          <div className="glass-panel w-full max-w-[650px] p-6 bg-[#0f172a] border border-gold">
+            <div className="flex justify-between items-center mb-4 border-b border-line pb-3">
+              <h3 className="font-heading text-[1.2rem] text-gold-light flex items-center gap-2">
+                <History size={20} /> Log Riwayat Pembayaran BBK / Kas (Audit Trail)
+              </h3>
+              <button
+                className="btn-primary py-1 px-2.5 text-xs bg-rose/20 border border-rose text-rose cursor-pointer"
+                onClick={() => setSelectedPOHistory(null)}
+              >
+                ✕ Tutup
+              </button>
+            </div>
+
+            <div className="bg-white/3 p-3.5 rounded-lg mb-4">
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <span className="stat-lbl">No. Transaksi / PO</span>
+                  <strong className="text-sky-light">{selectedPOHistory.receiptNo || selectedPOHistory.poNumber}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Supplier</span>
+                  <strong>{selectedPOHistory.supplierName}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Total Tagihan</span>
+                  <strong className="text-gold-light">
+                    Rp {Number(selectedPOHistory.totalAmount || 0).toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <h4 className="text-[0.9rem] text-sky-light mb-2.5">
+              📋 Rincian Transaksi Voucher Pembayaran yang Diterbitkan:
+            </h4>
+
+            {(!selectedPOHistory.paymentHistory || selectedPOHistory.paymentHistory.length === 0) ? (
+              <div className="p-6 text-center text-fg-muted bg-[rgba(15,23,42,0.6)] rounded-lg">
+                <AlertCircle size={28} className="text-rose mx-auto mb-2" />
+                Belum ada transaksi pembayaran (BBK) untuk transaksi ini. (Status: 🔴 UNPAID)
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>No. Voucher / Ref</th>
+                      <th>Tanggal Bayar</th>
+                      <th>Akun Bank / Sumber</th>
+                      <th className="text-right">Nominal Cicilan</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedPOHistory.paymentHistory.map((pmt, i) => (
+                      <tr key={i}>
+                        <td><strong className="text-sky-light">{pmt.voucherNo}</strong></td>
+                        <td>{pmt.date}</td>
+                        <td><small>{pmt.bank || 'Bank BCA IDR'}</small></td>
+                        <td className="text-right font-extrabold text-emerald-light">
+                          Rp {Number(pmt.amount || 0).toLocaleString()}
+                        </td>
+                        <td><span className="badge badge-emerald">✅ POSTED</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                className="btn-primary"
+                onClick={() => setSelectedPOHistory(null)}
+              >
+                Selesai / Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal {...modalProps} />
     </div>

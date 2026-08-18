@@ -262,6 +262,12 @@ const PurchaseOrder = {
         order.totalLandedCostIDR = totalLandedCostIDR;
         order.unitLandedCostIDRPerGram = unitLandedCostIDRPerGram;
 
+        // Payment Tracking Fields
+        order.paidAmountIDR = parseFloat(orderData.paidAmountIDR || 0);
+        order.remainingBalanceIDR = typeof orderData.remainingBalanceIDR !== 'undefined' ? parseFloat(orderData.remainingBalanceIDR) : Math.max(0, totalLandedCostIDR - order.paidAmountIDR);
+        order.paymentStatus = orderData.paymentStatus || (order.paidAmountIDR >= totalLandedCostIDR && totalLandedCostIDR > 0 ? 'PAID' : order.paidAmountIDR > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
+        order.paymentHistory = Array.isArray(orderData.paymentHistory) ? orderData.paymentHistory : [];
+
         this.orders.unshift(order);
         const saved = await this.saveOrders();
         if (!saved) {
@@ -275,6 +281,49 @@ const PurchaseOrder = {
         }
 
         return { success: true, order };
+    },
+
+    async recordPayment(poNumberOrId, paymentData) {
+        this.orders = this.getStoredOrders();
+        const index = this.orders.findIndex(o => o.id === poNumberOrId || o.poNumber === poNumberOrId);
+        if (index === -1) {
+            return { success: false, error: 'Order not found' };
+        }
+
+        const order = this.orders[index];
+        const paymentAmount = parseFloat(paymentData.amount || 0);
+        const currentPaid = parseFloat(order.paidAmountIDR || 0) + paymentAmount;
+        const totalCost = parseFloat(order.totalLandedCostIDR || order.total || order.subtotalIDR || 0);
+        const newRemaining = Math.max(0, totalCost - currentPaid);
+        const isFullyPaid = newRemaining === 0;
+
+        const historyEntry = {
+            id: paymentData.id || Date.now(),
+            voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
+            voucherType: paymentData.voucherType || 'BBK',
+            date: paymentData.date || new Date().toISOString().split('T')[0],
+            bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
+            bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
+            amount: paymentAmount,
+            notes: paymentData.notes || paymentData.description || '',
+            recordedAt: new Date().toISOString()
+        };
+
+        const existingHistory = Array.isArray(order.paymentHistory) ? order.paymentHistory : [];
+
+        this.orders[index] = {
+            ...order,
+            paidAmountIDR: currentPaid,
+            remainingBalanceIDR: newRemaining,
+            paymentStatus: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
+            lastPaymentVoucher: historyEntry.voucherNo,
+            lastPaymentDate: historyEntry.date,
+            paymentHistory: [historyEntry, ...existingHistory],
+            updatedAt: new Date().toISOString()
+        };
+
+        await this.saveOrders();
+        return { success: true, order: this.orders[index] };
     },
 
     updateOrder(id, updates) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert, FileText, DollarSign, Calculator } from 'lucide-react';
-import { getCOA, getPurchaseOrders } from '../services/storageService';
+import { getCOA, getPurchaseOrders, recordPOPayment } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
 import Combobox from '../components/ui/Combobox';
 import NumberInput from '../components/ui/NumberInput';
@@ -41,8 +41,30 @@ export default function VoucherManagement() {
   }, [activeTab]);
 
   const loadPurchaseOrders = () => {
-    const list = getPurchaseOrders();
-    setPurchaseOrders(list);
+    const importPOs = getPurchaseOrders();
+    const localPurchases = (typeof window !== 'undefined' && window.Storage)
+      ? (window.Storage.get('pttan_local_purchases') || []).filter(p => !p.paymentMode || p.paymentMode === 'credit' || String(p.poNumber || '').startsWith('PO-LOKAL'))
+      : [];
+
+    const unifiedList = [
+      ...importPOs,
+      ...localPurchases.map(lp => ({
+        ...lp,
+        id: lp.poNumber || lp.id,
+        poNumber: lp.poNumber,
+        supplierName: lp.supplierName,
+        supplier: lp.supplierName,
+        currency: 'IDR',
+        exchangeRate: 1,
+        total: lp.totalAmount,
+        totalLandedCostIDR: lp.totalAmount,
+        paidAmountIDR: Number(lp.paidAmountIDR || 0),
+        remainingBalanceIDR: typeof lp.remainingBalanceIDR !== 'undefined' ? Number(lp.remainingBalanceIDR) : Math.max(0, Number(lp.totalAmount || 0) - Number(lp.paidAmountIDR || 0)),
+        paymentStatus: lp.paymentStatus || (Number(lp.paidAmountIDR || 0) >= Number(lp.totalAmount || 0) && Number(lp.totalAmount || 0) > 0 ? 'PAID' : Number(lp.paidAmountIDR || 0) > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
+        paymentHistory: lp.paymentHistory || []
+      }))
+    ];
+    setPurchaseOrders(unifiedList);
   };
 
   const loadChequeBooks = () => {
@@ -131,10 +153,20 @@ export default function VoucherManagement() {
   const availableChequeLeaves = (currentChequeBook?.leaves || []).filter(l => l.status === 'AVAILABLE');
   const maxChequeLimit = currentChequeBook?.maxLimitPerCheque || 500000000;
 
-  const handleCreateVoucher = (e) => {
+  const handleCreateVoucher = async (e) => {
     e.preventDefault();
-    if (!form.payeePayer || !form.amount) {
-      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Penerima / Penyetor dan Jumlah Nominal wajib diisi.' });
+    if (!form.payeePayer || !form.amount || Number(form.amount) <= 0) {
+      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Penerima / Penyetor dan Jumlah Nominal wajib diisi dengan benar (lebih dari 0).' });
+      return;
+    }
+
+    // VALIDASI SISA TAGIHAN PO (GUARD RAIL OVERPAYMENT)
+    if (form.selectedPONumber && form.poRemainingIDR > 0 && Number(form.amount) > form.poRemainingIDR) {
+      showModal({
+        variant: 'warning',
+        title: '⚠️ Nominal Melebihi Sisa Tagihan',
+        message: `Nominal cicilan yang Anda input (Rp ${Number(form.amount).toLocaleString()}) melebihi sisa tagihan PO ${form.selectedPONumber} (Sisa: Rp ${Number(form.poRemainingIDR).toLocaleString()}).\n\nSilakan sesuaikan nominal cicilan atau bayar pas sisa tagihan.`
+      });
       return;
     }
 
@@ -186,7 +218,7 @@ export default function VoucherManagement() {
       
       const list = window.Storage.get(key) || [];
       list.unshift(newVoucher);
-      window.Storage.set(key, list);
+      await window.Storage.set(key, list);
 
       // JURNAL SAK EMKM OTOMATIS:
       const creditBankGl = isCheque ? '2115' : form.bankAccountCode;
@@ -212,42 +244,20 @@ export default function VoucherManagement() {
         ],
         createdAt: new Date().toISOString()
       });
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
 
       // UPDATE REKONSILIASI CICILAN / SISA HUTANG PADA PURCHASE ORDER TERKAIT
       if (form.selectedPONumber) {
-        const storedPOs = window.Storage.get('erp_purchase_orders') || [];
-        const updatedPOs = storedPOs.map(po => {
-          if (po.poNumber === form.selectedPONumber || po.id === form.selectedPONumber) {
-            const currentPaid = Number(po.paidAmountIDR || 0) + Number(form.amount);
-            const totalCost = Number(po.totalLandedCostIDR || po.total || 0);
-            const newRemaining = Math.max(0, totalCost - currentPaid);
-            const isFullyPaid = newRemaining === 0;
-            const existingHistory = po.paymentHistory || [];
-
-            return {
-              ...po,
-              paidAmountIDR: currentPaid,
-              remainingBalanceIDR: newRemaining,
-              paymentStatus: isFullyPaid ? 'PAID (LUNAS)' : 'PARTIALLY_PAID (MENYICIL)',
-              lastPaymentVoucher: newVoucher.voucherNumber,
-              lastPaymentDate: form.date,
-              paymentHistory: [
-                ...existingHistory,
-                {
-                  voucherNo: newVoucher.voucherNumber,
-                  voucherType: currentType,
-                  date: form.date,
-                  amount: Number(form.amount),
-                  bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : creditBankName,
-                  notes: form.description
-                }
-              ]
-            };
-          }
-          return po;
+        await recordPOPayment(form.selectedPONumber, {
+          id: newVoucher.id,
+          voucherNo: newVoucher.voucherNumber,
+          voucherType: currentType,
+          date: form.date,
+          amount: Number(form.amount),
+          bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : creditBankName,
+          bankAccountCode: creditBankGl,
+          description: form.description
         });
-        window.Storage.set('erp_purchase_orders', updatedPOs);
         loadPurchaseOrders();
       }
 

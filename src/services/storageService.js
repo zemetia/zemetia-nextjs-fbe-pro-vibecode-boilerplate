@@ -106,3 +106,58 @@ export const createPurchaseOrder = async (orderData) => {
   }
   return { success: false, errors: { system: 'PurchaseOrder module not ready' } };
 };
+
+export const recordPOPayment = async (poNumberOrId, paymentData) => {
+  let updated = false;
+
+  // 1. Update di PurchaseOrder (PO Impor & Standar)
+  if (typeof window !== 'undefined' && window.PurchaseOrder) {
+    const res = await window.PurchaseOrder.recordPayment(poNumberOrId, paymentData);
+    if (res && res.success) {
+      updated = true;
+    }
+  }
+
+  // 2. Update di Local Purchases (PO Lokal Tempo) jika ada
+  if (typeof window !== 'undefined' && window.Storage) {
+    const localPurchases = window.Storage.get('pttan_local_purchases') || [];
+    const pIndex = localPurchases.findIndex(p => p.id === poNumberOrId || p.poNumber === poNumberOrId || p.receiptNo === poNumberOrId);
+    if (pIndex !== -1) {
+      const p = localPurchases[pIndex];
+      const pmtAmount = parseFloat(paymentData.amount || 0);
+      const curPaid = parseFloat(p.paidAmountIDR || 0) + pmtAmount;
+      const totalAmt = parseFloat(p.totalAmount || 0);
+      const rem = Math.max(0, totalAmt - curPaid);
+      const isPaid = rem === 0;
+
+      const historyEntry = {
+        id: paymentData.id || Date.now(),
+        voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
+        voucherType: paymentData.voucherType || 'BBK',
+        date: paymentData.date || new Date().toISOString().split('T')[0],
+        bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
+        amount: pmtAmount,
+        notes: paymentData.notes || paymentData.description || '',
+        recordedAt: new Date().toISOString()
+      };
+
+      const existingHistory = Array.isArray(p.paymentHistory) ? p.paymentHistory : [];
+
+      localPurchases[pIndex] = {
+        ...p,
+        paidAmountIDR: curPaid,
+        remainingBalanceIDR: rem,
+        paymentStatus: isPaid ? 'PAID' : 'PARTIALLY_PAID',
+        lastPaymentVoucher: historyEntry.voucherNo,
+        lastPaymentDate: historyEntry.date,
+        paymentHistory: [historyEntry, ...existingHistory],
+        updatedAt: new Date().toISOString()
+      };
+
+      await window.Storage.set('pttan_local_purchases', localPurchases);
+      updated = true;
+    }
+  }
+
+  return { success: updated };
+};

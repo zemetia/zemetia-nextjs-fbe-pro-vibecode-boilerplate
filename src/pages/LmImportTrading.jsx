@@ -433,7 +433,11 @@ export default function LmImportTrading() {
                           <button
                             className="btn-primary"
                             style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                            onClick={() => alert(`🖨️ Mencetak PDF Dokumen PO Impor Resmi ${po.poNumber} untuk ${po.supplierName}...`)}
+                            onClick={() => showModal({
+                              variant: 'info',
+                              title: `🖨️ Cetak Dokumen PO ${po.poNumber}`,
+                              message: `• Supplier: ${po.supplierName || po.supplier}\n• Total All-In: $ ${(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalCostIDR.toLocaleString()})\n• Status Pembayaran: ${paidIDR >= totalCostIDR && totalCostIDR > 0 ? '🟢 LUNAS' : paidIDR > 0 ? `🟡 DICICIL (Terbayar Rp ${paidIDR.toLocaleString()} | Sisa Rp ${remainingIDR.toLocaleString()})` : '🔴 BELUM BAYAR'}\n• Status Fisik: ${po.status === 'received' ? 'Diterima di Vault TTB' : 'Approved (Open)'}`
+                            })}
                           >
                             <Printer size={13} /> Cetak
                           </button>
