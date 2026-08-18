@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Warehouse, Package, ArrowRightLeft, ShieldCheck, FileText, Plus, CheckCircle2, X, Hammer } from 'lucide-react';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function WarehouseManagement() {
   const { modalProps, showModal } = useModal();
@@ -77,14 +79,14 @@ export default function WarehouseManagement() {
   return (
     <div>
       {/* Header Cards */}
-      <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5 mb-6">
         <div className="glass-panel stat-card">
           <div>
             <span className="stat-lbl">Total Stok Vault LM</span>
-            <div className="stat-val gold-gradient-text">3.000 Gram</div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Valcambi, Antam & Granule</p>
+            <div className="stat-val bg-linear-135 from-[#fef08a] via-gold to-gold-dark bg-clip-text text-transparent">3.000 Gram</div>
+            <p className="text-xs text-fg-soft">Valcambi, Antam & Granule</p>
           </div>
-          <div style={{ padding: '12px', background: 'rgba(245,158,11,0.1)', borderRadius: '12px', color: '#f59e0b' }}>
+          <div className="p-3 bg-[rgba(245,158,11,0.1)] rounded-[12px] text-gold">
             <Warehouse size={24} />
           </div>
         </div>
@@ -92,10 +94,10 @@ export default function WarehouseManagement() {
         <div className="glass-panel stat-card">
           <div>
             <span className="stat-lbl">Stok Vault Emas WIP Produksi</span>
-            <div className="stat-val" style={{ color: '#fbbf24' }}>500 Gram</div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Dalam Proses Karat 750/700 (Akun 11502)</p>
+            <div className="stat-val text-gold-light">500 Gram</div>
+            <p className="text-xs text-fg-soft">Dalam Proses Karat 750/700 (Akun 11502)</p>
           </div>
-          <div style={{ padding: '12px', background: 'rgba(245,158,11,0.15)', borderRadius: '12px', color: '#fbbf24' }}>
+          <div className="p-3 bg-[rgba(245,158,11,0.15)] rounded-[12px] text-gold-light">
             <Hammer size={24} />
           </div>
         </div>
@@ -103,30 +105,30 @@ export default function WarehouseManagement() {
         <div className="glass-panel stat-card">
           <div>
             <span className="stat-lbl">Stok Perhiasan Siap Ekspor</span>
-            <div className="stat-val" style={{ color: '#34d399' }}>1.300 Gram</div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Karat 750 & 700 (Akun 1160)</p>
+            <div className="stat-val text-emerald-light">1.300 Gram</div>
+            <p className="text-xs text-fg-soft">Karat 750 & 700 (Akun 1160)</p>
           </div>
-          <div style={{ padding: '12px', background: 'rgba(16,185,129,0.1)', borderRadius: '12px', color: '#10b981' }}>
+          <div className="p-3 bg-[rgba(16,185,129,0.1)] rounded-[12px] text-emerald">
             <Package size={24} />
           </div>
         </div>
       </div>
 
       {/* Warehouse Locations */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <h3 className="font-heading text-[1.1rem] mb-4 flex items-center gap-2.5">
           <Warehouse color="#f59e0b" size={20} /> Lokasi Brankas / Gudang Vault PT TAN (Termasuk Vault WIP)
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
           {warehouses.map(w => (
-            <div key={w.id} style={{ background: w.code === 'VAULT-WIP' ? 'rgba(245,158,11,0.08)' : 'rgba(15, 23, 42, 0.6)', padding: '18px', borderRadius: '12px', border: w.code === 'VAULT-WIP' ? '1px solid #fbbf24' : '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <strong style={{ fontSize: '0.95rem', color: w.code === 'VAULT-WIP' ? '#fbbf24' : '#fff' }}>{w.name}</strong>
+            <div key={w.id} className={`rounded-[12px] border p-4.5 ${w.code === 'VAULT-WIP' ? 'border-gold-light bg-gold/[0.08]' : 'border-line bg-[rgba(15,23,42,0.6)]'}`}>
+              <div className="flex justify-between items-center mb-2">
+                <strong className={`text-[0.95rem] ${w.code === 'VAULT-WIP' ? 'text-gold-light' : 'text-white'}`}>{w.name}</strong>
                 <span className="badge badge-emerald">{w.status}</span>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>📍 {w.location}</p>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>👤 PJ: {w.manager}</p>
-              <span className="badge badge-gold" style={{ fontSize: '0.7rem' }}>Akun COA: {w.account}</span>
+              <p className="text-[0.8rem] text-fg-soft mb-1">📍 {w.location}</p>
+              <p className="text-[0.8rem] text-fg-muted mb-1">👤 PJ: {w.manager}</p>
+              <span className="badge badge-gold text-[0.7rem]">Akun COA: {w.account}</span>
             </div>
           ))}
         </div>
@@ -134,73 +136,67 @@ export default function WarehouseManagement() {
 
       {/* Interactive Transfer Modal */}
       {showTransferModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
-          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px'
-        }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '24px', position: 'relative', border: '1px solid var(--accent-gold)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontFamily: 'var(--font-heading)', color: '#fbbf24', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-[rgba(0,0,0,0.75)] backdrop-blur-[4px] flex justify-center items-center z-[1000] p-4">
+          <div className="glass-panel w-full max-w-[540px] p-6 relative border border-gold">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-heading text-gold-light text-[1.1rem] flex items-center gap-2">
                 <ArrowRightLeft size={20} /> Form Transfer Emas Ke Vault WIP / Antar Vault
               </h3>
-              <button onClick={() => setShowTransferModal(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
+              <button onClick={() => setShowTransferModal(false)} className="cursor-pointer border-0 bg-none text-white">
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handleExecuteTransfer}>
-              <div className="form-group" style={{ marginBottom: '14px' }}>
+              <div className="form-group mb-3.5">
                 <label className="form-label">Gudang Vault Asal (Pengirim)</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={transferForm.fromVault}
-                  onChange={e => setTransferForm({ ...transferForm, fromVault: e.target.value })}
-                >
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.name}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Gudang Vault Tujuan (Penerima)</label>
-                <select
-                  className="form-select"
-                  value={transferForm.toVault}
-                  onChange={e => setTransferForm({ ...transferForm, toVault: e.target.value })}
-                >
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.name}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Pilih Barang Emas Yang Ditransfer</label>
-                <select
-                  className="form-select"
-                  value={transferForm.itemCode}
-                  onChange={e => setTransferForm({ ...transferForm, itemCode: e.target.value })}
-                >
-                  <option value="GOLD-WIP-9999">Granul Emas Murni 999.9 (Bahan WIP)</option>
-                  <option value="LM-VALCAMBI-1KG">Valcambi Suisse Gold Bar 1kg (999.9)</option>
-                  <option value="LM-ANTAM-1000G">Emas Batangan Antam 1kg (999.9)</option>
-                  <option value="JEWELRY-750">Perhiasan Emas 750 (18K)</option>
-                </select>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Jumlah Berat Emas (Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={transferForm.quantityGrams}
-                  onChange={e => setTransferForm({ ...transferForm, quantityGrams: Number(e.target.value) })}
+                  onChange={fromVault => setTransferForm({ ...transferForm, fromVault })}
+                  placeholder="-- Pilih Gudang Asal --"
+                  searchPlaceholder="Cari nama gudang vault…"
+                  emptyText="Gudang tidak ditemukan."
+                  options={warehouses.map(w => ({ value: w.name, label: w.name }))}
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '20px' }}>
+              <div className="form-group mb-3.5">
+                <label className="form-label">Gudang Vault Tujuan (Penerima)</label>
+                <Combobox
+                  value={transferForm.toVault}
+                  onChange={toVault => setTransferForm({ ...transferForm, toVault })}
+                  placeholder="-- Pilih Gudang Tujuan --"
+                  searchPlaceholder="Cari nama gudang vault…"
+                  emptyText="Gudang tidak ditemukan."
+                  options={warehouses.map(w => ({ value: w.name, label: w.name }))}
+                />
+              </div>
+
+              <div className="form-group mb-3.5">
+                <label className="form-label">Pilih Barang Emas Yang Ditransfer</label>
+                <Combobox
+                  value={transferForm.itemCode}
+                  onChange={itemCode => setTransferForm({ ...transferForm, itemCode })}
+                  searchPlaceholder="Cari kode atau nama barang…"
+                  emptyText="Barang tidak ditemukan."
+                  options={[
+                    { value: 'GOLD-WIP-9999', label: 'Granul Emas Murni 999.9 (Bahan WIP)' },
+                    { value: 'LM-VALCAMBI-1KG', label: 'Valcambi Suisse Gold Bar 1kg (999.9)' },
+                    { value: 'LM-ANTAM-1000G', label: 'Emas Batangan Antam 1kg (999.9)' },
+                    { value: 'JEWELRY-750', label: 'Perhiasan Emas 750 (18K)' }
+                  ]}
+                />
+              </div>
+
+              <div className="form-group mb-3.5">
+                <label className="form-label">Jumlah Berat Emas (Gram)</label>
+                <NumberInput
+                  value={transferForm.quantityGrams}
+                  onChange={quantityGrams => setTransferForm({ ...transferForm, quantityGrams })}
+                />
+              </div>
+
+              <div className="form-group mb-5">
                 <label className="form-label">Catatan Keterangan Transfer</label>
                 <input
                   className="form-input"
@@ -209,8 +205,8 @@ export default function WarehouseManagement() {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn-primary" style={{ background: 'rgba(255,255,255,0.1)' }} onClick={() => setShowTransferModal(false)}>
+              <div className="flex gap-3 justify-end">
+                <button type="button" className="btn-primary bg-[rgba(255,255,255,0.1)]" onClick={() => setShowTransferModal(false)}>
                   Batal
                 </button>
                 <button type="submit" className="btn-primary">
@@ -223,12 +219,12 @@ export default function WarehouseManagement() {
       )}
 
       {/* Stock Movement Card Table */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="glass-panel p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-heading text-[1.1rem] flex items-center gap-2.5">
             <FileText color="#38bdf8" size={20} /> Kartu Stok Bar / Vault Stock Position (Termasuk Vault WIP)
           </h3>
-          <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.8rem' }} onClick={() => setShowTransferModal(true)}>
+          <button className="btn-primary py-2 px-4 text-[0.8rem]" onClick={() => setShowTransferModal(true)}>
             <ArrowRightLeft size={16} /> Transfer Emas Antar Vault
           </button>
         </div>
@@ -242,7 +238,7 @@ export default function WarehouseManagement() {
                 <th>Gudang Vault</th>
                 <th>Masuk (g)</th>
                 <th>Keluar (g)</th>
-                <th style={{ textAlign: 'right' }}>Saldo Stok Akhir</th>
+                <th className="text-right">Saldo Stok Akhir</th>
                 <th>Bar Serial ID / Job No</th>
               </tr>
             </thead>
@@ -252,14 +248,14 @@ export default function WarehouseManagement() {
                   <td><strong>{sc.itemCode}</strong></td>
                   <td>{sc.itemName}</td>
                   <td>
-                    <span className={`badge ${sc.warehouse.includes('WIP') ? 'badge-gold' : ''}`} style={{ fontSize: '0.75rem' }}>
+                    <span className={`badge text-xs ${sc.warehouse.includes('WIP') ? 'badge-gold' : ''}`}>
                       {sc.warehouse}
                     </span>
                   </td>
-                  <td style={{ color: '#34d399' }}>{sc.inQty > 0 ? `+${sc.inQty} g` : '-'}</td>
-                  <td style={{ color: '#ef4444' }}>{sc.outQty > 0 ? `-${sc.outQty} g` : '-'}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 800, color: '#fbbf24', fontSize: '1rem' }}>{sc.balanceQty} g</td>
-                  <td><small style={{ color: '#38bdf8' }}>{sc.serialNo}</small></td>
+                  <td className="text-emerald-light">{sc.inQty > 0 ? `+${sc.inQty} g` : '-'}</td>
+                  <td className="text-danger">{sc.outQty > 0 ? `-${sc.outQty} g` : '-'}</td>
+                  <td className="text-right font-extrabold text-gold-light text-base">{sc.balanceQty} g</td>
+                  <td><small className="text-sky-light">{sc.serialNo}</small></td>
                 </tr>
               ))}
             </tbody>

@@ -19,21 +19,20 @@ export default function Navbar({ pageTitle }) {
   };
 
   return (
-    <div className="navbar glass-panel">
-      <div className="navbar-title">
-        <h1>{pageTitle}</h1>
+    <div className="glass-panel mb-7 flex items-center justify-between rounded-md px-7 py-4">
+      <div>
+        <h1 className="text-[1.4rem]">{pageTitle}</h1>
       </div>
 
-      <div className="navbar-badges">
-        <div 
-          className="badge badge-gold" 
+      <div className="flex gap-3">
+        <div
+          className="badge badge-gold cursor-pointer"
           onClick={loadRate}
-          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
           title="Klik untuk Refresh Kurs BCA e-Rate Terbaru"
         >
           <DollarSign size={14} />
           <span>USD/IDR: {formatIDR(rateInfo.rate || 16250)}</span>
-          <RefreshCw size={12} className={loading ? 'spin' : ''} style={{ marginLeft: '4px' }} />
+          <RefreshCw size={12} className={loading ? 'ml-1 animate-spin' : 'ml-1'} />
         </div>
         <div className="badge badge-emerald">
           <Globe size={14} />

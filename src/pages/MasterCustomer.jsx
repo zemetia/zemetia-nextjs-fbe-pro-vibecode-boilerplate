@@ -55,13 +55,13 @@ export default function MasterCustomer() {
 
   return (
     <div>
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <Users color="#34d399" size={24} /> Master Customer / Buyer Ekspor
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Kelola Data Pembeli Ekspor Luar Negeri (UAE, Singapore, Hong Kong, USA, Europe)
             </p>
           </div>
@@ -72,8 +72,8 @@ export default function MasterCustomer() {
         </div>
 
         {showForm && (
-          <form onSubmit={handleSubmit} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent-emerald)' }}>
-            <h4 style={{ color: '#34d399', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Tambah Customer / Buyer Ekspor</h4>
+          <form className="bg-[rgba(15,23,42,0.7)] p-5 rounded-[12px] mb-5 border border-emerald" onSubmit={handleSubmit}>
+            <h4 className="text-emerald-light mb-3.5 text-[0.95rem]">➕ Form Tambah Customer / Buyer Ekspor</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Kode Customer</label>
@@ -124,17 +124,16 @@ export default function MasterCustomer() {
                 />
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px', background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+            <button type="submit" className="btn-primary mt-3 bg-[linear-gradient(135deg,_#10b981,_#059669)]">
               <CheckCircle size={16} /> Simpan Buyer Ekspor
             </button>
           </form>
         )}
 
-        <div style={{ position: 'relative', maxWidth: '400px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <div className="relative max-w-[400px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
           <input
-            className="form-input"
-            style={{ paddingLeft: '38px', width: '100%' }}
+            className="form-input pl-9.5 w-full"
             placeholder="Cari kode, nama buyer, atau negara..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -142,8 +141,8 @@ export default function MasterCustomer() {
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+      <div className="glass-panel p-6">
+        <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Customer Ekspor ({filteredCust.length})
         </h3>
         <div className="table-container">
@@ -163,7 +162,7 @@ export default function MasterCustomer() {
                 <tr key={c.id || c.code}>
                   <td><strong>{c.code}</strong></td>
                   <td>{c.name}</td>
-                  <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>{c.country || 'Global'}</span></td>
+                  <td><span className="badge badge-gold text-xs">{c.country || 'Global'}</span></td>
                   <td>{c.phone || c.email}</td>
                   <td>{c.paymentTerms || 'NET-30'}</td>
                   <td><span className="badge badge-emerald">EXPORT ONLY</span></td>

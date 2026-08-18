@@ -37,7 +37,9 @@ Repo ini **bukan** aplikasi framework-modern. Ini SPA React tanpa router, tanpa 
 | cypress | ^13.6.2 | `npm run test:e2e` — belum ada spec |
 | @google/generative-ai | ^0.21.0 | dipakai modul legacy `aiAdvisor.js` (dorman) |
 
-Tidak ada TypeScript, tidak ada ESLint, tidak ada Prettier, tidak ada Tailwind, tidak ada React Router, tidak ada state library. **Jangan menambahkannya tanpa diminta.**
+Tidak ada TypeScript, tidak ada ESLint, tidak ada Prettier, tidak ada React Router, tidak ada state library. **Jangan menambahkannya tanpa diminta.**
+
+Tailwind v4 ada sejak 2026-08-18 tapi **terbatas**: tanpa preflight, dan utility-nya hanya dipakai di `src/components/ui/` (komponen shadcn/ui). Halaman tetap class global + inline style. Rinciannya di [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md).
 
 ---
 

@@ -56,6 +56,11 @@ export default function Modal({
 
   if (!open) return null;
 
+  // Nama varian salah ketik akan diam-diam jadi biru — warna yang salah arti di aplikasi ini.
+  if (!VARIANTS[variant]) {
+    console.warn(`<Modal>: variant "${variant}" tidak dikenal. Pakai: ${Object.keys(VARIANTS).join(' | ')}`);
+  }
+
   const v = VARIANTS[variant] || VARIANTS.info;
   const Icon = v.Icon;
   const isConfirm = typeof onConfirm === 'function';
@@ -63,32 +68,41 @@ export default function Modal({
   const handleConfirm = () => { onClose(); onConfirm(); };
 
   return (
-    <div className="modal-overlay" onClick={handleDismiss}>
+    <div
+      className="animate-modal-fade fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(3,7,18,0.72)] p-6 backdrop-blur-[6px]"
+      onClick={handleDismiss}
+    >
       <div
-        className="modal-card"
+        className="animate-modal-rise relative max-h-[85vh] w-full max-w-[540px] overflow-y-auto rounded-lg border border-t-[3px] border-line bg-linear-160 from-[#1a2338] to-surface px-7 pb-5 pt-[26px] shadow-modal"
         role="dialog"
         aria-modal="true"
         style={{ borderTopColor: v.color }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button className="modal-close" onClick={handleDismiss} aria-label="Tutup">
+        <button
+          className="absolute right-3.5 top-3.5 inline-flex cursor-pointer rounded-sm bg-transparent p-1.5 text-fg-muted transition-colors duration-200 hover:bg-white/[0.06] hover:text-fg"
+          onClick={handleDismiss}
+          aria-label="Tutup"
+        >
           <X size={16} />
         </button>
 
-        <div className="modal-head">
+        <div className="mb-4 flex items-center gap-3.5 pr-7">
           <span
-            className="modal-icon"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-transparent"
             style={{ color: v.color, background: `${v.color}1f`, borderColor: `${v.color}40` }}
           >
             <Icon size={22} />
           </span>
-          <h3 className="modal-title">{title || v.fallbackTitle}</h3>
+          <h3 className="text-[1.1rem] font-semibold leading-[1.35]">{title || v.fallbackTitle}</h3>
         </div>
 
-        {message && <p className="modal-message">{message}</p>}
+        {message && (
+          <p className="mb-5 whitespace-pre-wrap text-sm leading-[1.7] text-fg-soft">{message}</p>
+        )}
         {children}
 
-        <div className="modal-actions">
+        <div className="flex justify-end gap-2.5 border-t border-line pt-4">
           {isConfirm && (
             <button className="btn-ghost" onClick={handleDismiss}>{cancelLabel}</button>
           )}

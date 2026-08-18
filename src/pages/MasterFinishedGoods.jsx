@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Package, Plus, Search, CheckCircle2, Tag, Sparkles, Sliders } from 'lucide-react';
 import { getFinishedGoods, saveFinishedGood } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function MasterFinishedGoods() {
   const { modalProps, showModal } = useModal();
@@ -64,13 +66,13 @@ export default function MasterFinishedGoods() {
   return (
     <div>
       {/* Header & Controls */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <Package color="#fbbf24" size={24} /> Master Finished Goods (Katalog Perhiasan Emas Ekspor)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Katalog SKU Barang Jadi Perhiasan Ekspor (Cincin, Kalung, Gelang, Anting) Lengkap dengan Karat, Warna, Berat Standar, & HS Code
             </p>
           </div>
@@ -82,8 +84,8 @@ export default function MasterFinishedGoods() {
 
         {/* Create Form Collapsible */}
         {showForm && (
-          <form onSubmit={handleSubmit} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Tambah Model Perhiasan Ekspor</h4>
+          <form className="bg-[rgba(15,23,42,0.7)] p-5 rounded-[12px] mb-5 border border-gold" onSubmit={handleSubmit}>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Tambah Model Perhiasan Ekspor</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Kode SKU Perhiasan (misal JWL-RNG-750-002)</label>
@@ -103,61 +105,63 @@ export default function MasterFinishedGoods() {
               </div>
               <div className="form-group">
                 <label className="form-label">Jenis Perhiasan</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.type}
-                  onChange={e => setForm({ ...form, type: e.target.value })}
-                >
-                  <option value="Cincin (Ring)">Cincin (Ring)</option>
-                  <option value="Kalung (Necklace)">Kalung (Necklace / Chain)</option>
-                  <option value="Gelang (Bangle)">Gelang (Bangle / Bracelet)</option>
-                  <option value="Anting (Earring)">Anting (Earring)</option>
-                  <option value="Liontin (Pendant)">Liontin (Pendant)</option>
-                </select>
+                  onChange={type => setForm({ ...form, type })}
+                  searchPlaceholder="Cari jenis perhiasan…"
+                  emptyText="Jenis perhiasan tidak ditemukan."
+                  options={[
+                    { value: 'Cincin (Ring)', label: 'Cincin (Ring)' },
+                    { value: 'Kalung (Necklace)', label: 'Kalung (Necklace / Chain)' },
+                    { value: 'Gelang (Bangle)', label: 'Gelang (Bangle / Bracelet)' },
+                    { value: 'Anting (Earring)', label: 'Anting (Earring)' },
+                    { value: 'Liontin (Pendant)', label: 'Liontin (Pendant)' }
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Kode Karat (Purity)</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.karat}
-                  onChange={e => setForm({ ...form, karat: e.target.value })}
-                >
-                  <option value="750">Karat 750 (18K - 75.0%)</option>
-                  <option value="700">Karat 700 (17K - 70.0%)</option>
-                  <option value="375">Karat 375 (8K - 37.5%)</option>
-                  <option value="916">Karat 916 (22K - 91.6%)</option>
-                </select>
+                  onChange={karat => setForm({ ...form, karat })}
+                  searchPlaceholder="Cari kode karat…"
+                  emptyText="Kode karat tidak ditemukan."
+                  options={[
+                    { value: '750', label: 'Karat 750 (18K - 75.0%)' },
+                    { value: '700', label: 'Karat 700 (17K - 70.0%)' },
+                    { value: '375', label: 'Karat 375 (8K - 37.5%)' },
+                    { value: '916', label: 'Karat 916 (22K - 91.6%)' }
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Warna Emas (Gold Color)</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.goldColor}
-                  onChange={e => setForm({ ...form, goldColor: e.target.value })}
-                >
-                  <option value="Yellow Gold">Yellow Gold (Kuning)</option>
-                  <option value="Rose Gold">Rose / Red Gold (Merah)</option>
-                  <option value="White Gold">White Gold (Putih)</option>
-                  <option value="Two-Tone">Two-Tone (Kuning-Putih)</option>
-                </select>
+                  onChange={goldColor => setForm({ ...form, goldColor })}
+                  searchPlaceholder="Cari warna emas…"
+                  emptyText="Warna emas tidak ditemukan."
+                  options={[
+                    { value: 'Yellow Gold', label: 'Yellow Gold (Kuning)' },
+                    { value: 'Rose Gold', label: 'Rose / Red Gold (Merah)' },
+                    { value: 'White Gold', label: 'White Gold (Putih)' },
+                    { value: 'Two-Tone', label: 'Two-Tone (Kuning-Putih)' }
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Berat Standar (Gram / Pcs)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={form.stdWeightGram}
-                  onChange={e => setForm({ ...form, stdWeightGram: Number(e.target.value) })}
+                  onChange={stdWeightGram => setForm({ ...form, stdWeightGram })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Ongkos Tukang Standar IDR / Gram</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
                   value={form.laborFeeIDRPerGram}
-                  onChange={e => setForm({ ...form, laborFeeIDRPerGram: Number(e.target.value) })}
+                  onChange={laborFeeIDRPerGram => setForm({ ...form, laborFeeIDRPerGram })}
                 />
               </div>
               <div className="form-group">
@@ -169,26 +173,25 @@ export default function MasterFinishedGoods() {
                 />
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
+            <button type="submit" className="btn-primary mt-3">
               <CheckCircle2 size={16} /> Simpan Model Finished Goods
             </button>
           </form>
         )}
 
         {/* Search & Karat Filter Tabs */}
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: '1', minWidth: '240px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <div className="flex gap-4 flex-wrap items-center">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
             <input
-              className="form-input"
-              style={{ paddingLeft: '38px', width: '100%' }}
+              className="form-input pl-9.5 w-full"
               placeholder="Cari SKU, nama model, atau jenis perhiasan..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+          <div className="flex gap-2 overflow-x-auto">
             {[
               { id: 'all', label: 'Semua Karat' },
               { id: '750', label: 'Karat 750 (18K)' },
@@ -198,17 +201,11 @@ export default function MasterFinishedGoods() {
               <button
                 key={tab.id}
                 onClick={() => setSelectedKarat(tab.id)}
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)',
-                  background: selectedKarat === tab.id ? 'rgba(245,158,11,0.2)' : 'transparent',
-                  color: selectedKarat === tab.id ? '#fbbf24' : 'var(--text-secondary)',
-                  fontWeight: selectedKarat === tab.id ? 600 : 400,
-                  cursor: 'pointer',
-                  fontSize: '0.8rem',
-                  whiteSpace: 'nowrap'
-                }}
+                className={`cursor-pointer whitespace-nowrap rounded-sm border border-line px-3.5 py-2 text-[0.8rem] ${
+                  selectedKarat === tab.id
+                    ? 'bg-gold/20 font-semibold text-gold-light'
+                    : 'bg-transparent font-normal text-fg-soft'
+                }`}
               >
                 {tab.label}
               </button>
@@ -218,8 +215,8 @@ export default function MasterFinishedGoods() {
       </div>
 
       {/* Finished Goods Table */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+      <div className="glass-panel p-6">
+        <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Katalog Barang Jadi Perhiasan Ekspor ({filteredGoods.length})
         </h3>
 
@@ -244,12 +241,12 @@ export default function MasterFinishedGoods() {
                   <td><strong>{fg.sku}</strong></td>
                   <td>{fg.name}</td>
                   <td>{fg.type}</td>
-                  <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>Karat {fg.karat} ({fg.purity}%)</span></td>
-                  <td><span className="badge badge-emerald" style={{ fontSize: '0.75rem' }}>{fg.goldColor}</span></td>
-                  <td style={{ fontWeight: 700 }}>{fg.stdWeightGram} g</td>
+                  <td><span className="badge badge-gold text-xs">Karat {fg.karat} ({fg.purity}%)</span></td>
+                  <td><span className="badge badge-emerald text-xs">{fg.goldColor}</span></td>
+                  <td className="font-bold">{fg.stdWeightGram} g</td>
                   <td>Rp {(fg.laborFeeIDRPerGram || 0).toLocaleString()}</td>
-                  <td><small style={{ color: '#38bdf8' }}>{fg.hsCode || '7113.19.90'}</small></td>
-                  <td><small style={{ color: '#34d399' }}>1160 (Perhiasan Ekspor)</small></td>
+                  <td><small className="text-sky-light">{fg.hsCode || '7113.19.90'}</small></td>
+                  <td><small className="text-emerald-light">1160 (Perhiasan Ekspor)</small></td>
                 </tr>
               ))}
             </tbody>

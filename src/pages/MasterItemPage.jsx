@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Package, Plus, Search, CheckCircle, Tag, Layers } from 'lucide-react';
 import { getMasterItems, saveMasterItem, getCOA } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function MasterItemPage() {
   const { modalProps, showModal } = useModal();
@@ -61,13 +63,13 @@ export default function MasterItemPage() {
 
   return (
     <div>
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <Package color="#f59e0b" size={24} /> Master Data Barang / Produk Emas
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Kelola Katalog Emas Batangan 999.9 (Lokal/Impor), Scrap, Perhiasan Karat, Master Alloy, & Batu Permata
             </p>
           </div>
@@ -78,8 +80,8 @@ export default function MasterItemPage() {
         </div>
 
         {showForm && (
-          <form onSubmit={handleSubmit} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Tambah Barang Master</h4>
+          <form className="bg-[rgba(15,23,42,0.7)] p-5 rounded-[12px] mb-5 border border-gold" onSubmit={handleSubmit}>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Tambah Barang Master</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Kode Barang (misal: LM-ANTAM-500G)</label>
@@ -99,20 +101,22 @@ export default function MasterItemPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Kategori Produk</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.category}
-                  onChange={e => setForm({ ...form, category: e.target.value })}
-                >
-                  <option value="Emas Murni">Emas Murni 999.9 (LM Lokal/Import)</option>
-                  <option value="Emas Impor">Emas Impor Valcambi/PAMP</option>
-                  <option value="Perhiasan 750">Perhiasan Emas 750 (18K)</option>
-                  <option value="Perhiasan 700">Perhiasan Emas 700 (17K)</option>
-                  <option value="Perhiasan 375">Perhiasan Emas 375 (8K)</option>
-                  <option value="Scrap">Pecahan / Rongsok Scrap</option>
-                  <option value="Master Alloy">Master Alloy (Perak/Tembaga/Zinc)</option>
-                  <option value="Batu Permata">Batu Permata & Zircon</option>
-                </select>
+                  onChange={category => setForm({ ...form, category })}
+                  searchPlaceholder="Cari kategori produk…"
+                  emptyText="Kategori tidak ditemukan."
+                  options={[
+                    { value: 'Emas Murni', label: 'Emas Murni 999.9 (LM Lokal/Import)' },
+                    { value: 'Emas Impor', label: 'Emas Impor Valcambi/PAMP' },
+                    { value: 'Perhiasan 750', label: 'Perhiasan Emas 750 (18K)' },
+                    { value: 'Perhiasan 700', label: 'Perhiasan Emas 700 (17K)' },
+                    { value: 'Perhiasan 375', label: 'Perhiasan Emas 375 (8K)' },
+                    { value: 'Scrap', label: 'Pecahan / Rongsok Scrap' },
+                    { value: 'Master Alloy', label: 'Master Alloy (Perak/Tembaga/Zinc)' },
+                    { value: 'Batu Permata', label: 'Batu Permata & Zircon' }
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Satuan</label>
@@ -124,11 +128,10 @@ export default function MasterItemPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Kadar Emas (%)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={form.purity}
-                  onChange={e => setForm({ ...form, purity: Number(e.target.value) })}
+                  onChange={purity => setForm({ ...form, purity })}
                 />
               </div>
               <div className="form-group">
@@ -140,17 +143,16 @@ export default function MasterItemPage() {
                 />
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
+            <button type="submit" className="btn-primary mt-3">
               <CheckCircle size={16} /> Simpan Barang Master
             </button>
           </form>
         )}
 
-        <div style={{ position: 'relative', maxWidth: '400px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <div className="relative max-w-[400px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
           <input
-            className="form-input"
-            style={{ paddingLeft: '38px', width: '100%' }}
+            className="form-input pl-9.5 w-full"
             placeholder="Cari kode, nama, atau kategori barang..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -158,8 +160,8 @@ export default function MasterItemPage() {
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+      <div className="glass-panel p-6">
+        <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Barang Master ({filteredItems.length})
         </h3>
         <div className="table-container">
@@ -180,11 +182,11 @@ export default function MasterItemPage() {
                 <tr key={item.id || item.code}>
                   <td><strong>{item.code}</strong></td>
                   <td>{item.name}</td>
-                  <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>{item.category}</span></td>
+                  <td><span className="badge badge-gold text-xs">{item.category}</span></td>
                   <td>{item.unit}</td>
                   <td>{item.purity || '-'}%</td>
-                  <td><small style={{ color: '#34d399' }}>{item.inventoryAccount || '1157'}</small></td>
-                  <td><small style={{ color: '#38bdf8' }}>{item.cogsAccount || '5114'}</small></td>
+                  <td><small className="text-emerald-light">{item.inventoryAccount || '1157'}</small></td>
+                  <td><small className="text-sky-light">{item.cogsAccount || '5114'}</small></td>
                 </tr>
               ))}
             </tbody>

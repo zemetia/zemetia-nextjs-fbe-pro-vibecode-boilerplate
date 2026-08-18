@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Hammer, Sparkles, Layers, RefreshCw, Plus, CheckCircle2, Settings, Package, Sliders, Save } from 'lucide-react';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function JewelryProduction() {
   const { modalProps, showModal } = useModal();
@@ -97,20 +99,20 @@ export default function JewelryProduction() {
   return (
     <div>
       {/* Header & Tab Navigation */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <Hammer color="#8b5cf6" size={24} /> Produksi Perhiasan & Dynamic BOM Karat Setting
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Kalkulator Raw Material Ekspor, Setting Formula BOM Karat Manual, & Settlement Hasil In-House Workshop
             </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
+        <div className="flex gap-2.5 overflow-x-auto">
           {[
             { id: 'calculator', label: '🧮 Kalkulator Konversi & SPK WIP' },
             { id: 'bom-settings', label: '⚙️ Setting Formula BOM Karat (Manual)' },
@@ -119,16 +121,11 @@ export default function JewelryProduction() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '10px 18px',
-                borderRadius: '10px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === tab.id ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : 'rgba(15,23,42,0.6)',
-                color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
-                fontWeight: activeTab === tab.id ? 700 : 500,
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
+              className={`cursor-pointer rounded-[10px] border border-line px-4.5 py-2.5 text-[0.85rem] ${
+                activeTab === tab.id
+                  ? 'bg-linear-135 from-purple to-purple-dark font-bold text-white'
+                  : 'bg-[rgba(15,23,42,0.6)] font-medium text-fg-soft'
+              }`}
             >
               {tab.label}
             </button>
@@ -138,8 +135,8 @@ export default function JewelryProduction() {
 
       {/* Tab 1: Calculator & SPK Issue */}
       {activeTab === 'calculator' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#a78bfa' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4 text-[#a78bfa]">
             🧮 Kalkulator Konversi Raw Material Pesanan Ekspor
           </h3>
 
@@ -163,67 +160,63 @@ export default function JewelryProduction() {
               </div>
               <div className="form-group">
                 <label className="form-label">Target Karat (Menggunakan Formula BOM)</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={orderForm.targetKarat}
-                  onChange={e => setOrderForm({ ...orderForm, targetKarat: e.target.value })}
-                >
-                  {bomFormulas.map(f => (
-                    <option key={f.code} value={f.code}>{f.name}</option>
-                  ))}
-                </select>
+                  onChange={targetKarat => setOrderForm({ ...orderForm, targetKarat })}
+                  placeholder="-- Pilih Formula BOM --"
+                  searchPlaceholder="Cari kode atau nama formula…"
+                  emptyText="Formula BOM tidak ditemukan."
+                  options={bomFormulas.map(f => ({ value: f.code, label: f.name }))}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Berat Pesanan Perhiasan (Gross Weight Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={orderForm.grossWeight}
-                  onChange={e => setOrderForm({ ...orderForm, grossWeight: Number(e.target.value) })}
+                  onChange={grossWeight => setOrderForm({ ...orderForm, grossWeight })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Toleransi Loss Lebur / Polishing (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={orderForm.lossTolerancePct}
-                  onChange={e => setOrderForm({ ...orderForm, lossTolerancePct: Number(e.target.value) })}
+                  onChange={lossTolerancePct => setOrderForm({ ...orderForm, lossTolerancePct })}
                 />
               </div>
             </div>
 
             {/* Real-time Dynamic BOM Output Card */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid rgba(139,92,246,0.4)' }}>
-              <h4 style={{ color: '#a78bfa', marginBottom: '12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] my-5 mx-0 border border-[rgba(139,92,246,0.4)]">
+              <h4 className="text-[#a78bfa] mb-3 text-[0.9rem] flex items-center gap-2">
                 <Sparkles size={16} /> Rincian Konversi Bahan Baku berdasarkan Setting Formula BOM {selectedFormula.code}:
               </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                 <div>
                   <span className="stat-lbl">Emas Murni 999.9 (Fine Gold)</span>
-                  <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.3rem' }}>
+                  <div className="font-extrabold text-gold-light text-[1.3rem]">
                     {fineGoldNeeded.toFixed(2)} Gram
                   </div>
-                  <small style={{ color: 'var(--text-muted)' }}>Target: {selectedFormula.fineGoldPct}% + Safety Margin {selectedFormula.safetyMarginPct}%</small>
+                  <small className="text-fg-muted">Target: {selectedFormula.fineGoldPct}% + Safety Margin {selectedFormula.safetyMarginPct}%</small>
                 </div>
                 <div>
                   <span className="stat-lbl">Master Alloy Campuran (Perak/Tembaga)</span>
-                  <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '1.3rem' }}>
+                  <div className="font-extrabold text-sky-light text-[1.3rem]">
                     {masterAlloyNeeded.toFixed(2)} Gram
                   </div>
-                  <small style={{ color: 'var(--text-muted)' }}>Perak: {selectedFormula.alloyAgPct}% | Tembaga: {selectedFormula.alloyCuPct}%</small>
+                  <small className="text-fg-muted">Perak: {selectedFormula.alloyAgPct}% | Tembaga: {selectedFormula.alloyCuPct}%</small>
                 </div>
                 <div>
                   <span className="stat-lbl">Posting Ke Vault ERP</span>
-                  <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.9rem' }}>
+                  <div className="font-bold text-emerald-light text-[0.9rem]">
                     Debet: Akun 11502 (Vault Emas WIP)
                   </div>
                 </div>
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+            <button type="submit" className="btn-primary bg-[linear-gradient(135deg,_#8b5cf6,_#6d28d9)]">
               <Layers size={18} /> Terbitkan SPK & Keluarkan Bahan Emas Murni Ke Vault WIP
             </button>
           </form>
@@ -232,15 +225,15 @@ export default function JewelryProduction() {
 
       {/* Tab 2: Manual Dynamic BOM Formula Settings */}
       {activeTab === 'bom-settings' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4 text-gold-light flex items-center gap-2.5">
             <Sliders color="#fbbf24" size={20} /> Form Setting Manual Formula BOM Karat (Dapat Disesuaikan)
           </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          <p className="text-[0.8rem] text-fg-soft mb-5">
             BOM di ERP PT TAN <strong>TIDAK DI-HARDCODE</strong>. Tim Engineer / R&D dapat menyesuaikan persentase kemurnian emas, safety margin, dan komposisi alloy secara manual.
           </p>
 
-          <form onSubmit={handleSaveFormula} style={{ background: 'rgba(15,23,42,0.6)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
+          <form className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] border border-line mb-6" onSubmit={handleSaveFormula}>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Kode Karat (misal 750, 700, 375)</label>
@@ -260,53 +253,45 @@ export default function JewelryProduction() {
               </div>
               <div className="form-group">
                 <label className="form-label">Kadar Standar Emas Murni (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={editingFormula.fineGoldPct}
-                  onChange={e => setEditingFormula({ ...editingFormula, fineGoldPct: Number(e.target.value) })}
+                  onChange={fineGoldPct => setEditingFormula({ ...editingFormula, fineGoldPct })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Safety Margin Tolerance (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={editingFormula.safetyMarginPct}
-                  onChange={e => setEditingFormula({ ...editingFormula, safetyMarginPct: Number(e.target.value) })}
+                  onChange={safetyMarginPct => setEditingFormula({ ...editingFormula, safetyMarginPct })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Komposisi Perak Ag (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={editingFormula.alloyAgPct}
-                  onChange={e => setEditingFormula({ ...editingFormula, alloyAgPct: Number(e.target.value) })}
+                  onChange={alloyAgPct => setEditingFormula({ ...editingFormula, alloyAgPct })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Komposisi Tembaga Cu (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={editingFormula.alloyCuPct}
-                  onChange={e => setEditingFormula({ ...editingFormula, alloyCuPct: Number(e.target.value) })}
+                  onChange={alloyCuPct => setEditingFormula({ ...editingFormula, alloyCuPct })}
                 />
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ marginTop: '14px' }}>
+            <button type="submit" className="btn-primary mt-3.5">
               <Save size={16} /> Simpan Pengaturan Formula BOM Karat
             </button>
           </form>
 
           {/* Active Preset Formulas Table */}
-          <h4 style={{ color: '#38bdf8', fontSize: '0.95rem', marginBottom: '12px' }}>📋 Daftar Preset Formula BOM Karat Aktif</h4>
+          <h4 className="text-sky-light text-[0.95rem] mb-3">📋 Daftar Preset Formula BOM Karat Aktif</h4>
           <div className="table-container">
             <table className="custom-table">
               <thead>
@@ -325,14 +310,13 @@ export default function JewelryProduction() {
                   <tr key={f.code}>
                     <td><strong>{f.code}</strong></td>
                     <td>{f.name}</td>
-                    <td style={{ color: '#fbbf24', fontWeight: 700 }}>{f.fineGoldPct}%</td>
+                    <td className="text-gold-light font-bold">{f.fineGoldPct}%</td>
                     <td>+{f.safetyMarginPct}%</td>
-                    <td style={{ color: '#34d399', fontWeight: 700 }}>{(f.fineGoldPct + f.safetyMarginPct).toFixed(1)}%</td>
+                    <td className="text-emerald-light font-bold">{(f.fineGoldPct + f.safetyMarginPct).toFixed(1)}%</td>
                     <td>Perak: {f.alloyAgPct}% | Tembaga: {f.alloyCuPct}%</td>
                     <td>
                       <button
-                        className="btn-primary"
-                        style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                        className="btn-primary py-1.5 px-3 text-xs"
                         onClick={() => setEditingFormula(f)}
                       >
                         Edit Formula
@@ -348,8 +332,8 @@ export default function JewelryProduction() {
 
       {/* Tab 3: Production Settlement */}
       {activeTab === 'settlement' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4 text-gold-light flex items-center gap-2.5">
             <Package color="#fbbf24" size={20} /> Form Settlement Laporan Hasil Produksi In-House Workshop
           </h3>
 
@@ -365,43 +349,38 @@ export default function JewelryProduction() {
               </div>
               <div className="form-group">
                 <label className="form-label">Hasil Perhiasan Jadi (Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={settlementForm.jewelryOutputWeight}
-                  onChange={e => setSettlementForm({ ...settlementForm, jewelryOutputWeight: Number(e.target.value) })}
+                  onChange={jewelryOutputWeight => setSettlementForm({ ...settlementForm, jewelryOutputWeight })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Emas Scrap Retur / Sisa Leburan (Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={settlementForm.scrapReturnWeight}
-                  onChange={e => setSettlementForm({ ...settlementForm, scrapReturnWeight: Number(e.target.value) })}
+                  onChange={scrapReturnWeight => setSettlementForm({ ...settlementForm, scrapReturnWeight })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Susut Emas Lebur / Gold Loss (Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={settlementForm.goldLossWeight}
-                  onChange={e => setSettlementForm({ ...settlementForm, goldLossWeight: Number(e.target.value) })}
+                  onChange={goldLossWeight => setSettlementForm({ ...settlementForm, goldLossWeight })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Biaya Ongkos Tukang / Jasa Lebur (IDR)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
                   value={settlementForm.laborFeeIDR}
-                  onChange={e => setSettlementForm({ ...settlementForm, laborFeeIDR: Number(e.target.value) })}
+                  onChange={laborFeeIDR => setSettlementForm({ ...settlementForm, laborFeeIDR })}
                 />
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ marginTop: '16px' }}>
+            <button type="submit" className="btn-primary mt-4">
               <CheckCircle2 size={16} /> Pelunasan WIP & Transfer Perhiasan Ke Vault Siap Ekspor
             </button>
           </form>

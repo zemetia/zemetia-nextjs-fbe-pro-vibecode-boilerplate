@@ -10,9 +10,9 @@ export default function App() {
   const PageComponent = page.component;
 
   return (
-    <div className="app-container">
+    <div className="flex min-h-screen">
       <Sidebar activePage={activePage} setActivePage={setActivePage} />
-      <div className="main-content">
+      <div className="ml-[260px] min-w-0 flex-1 px-8 py-6">
         <Navbar pageTitle={getPageTitle(activePage)} />
         <PageComponent setActivePage={setActivePage} />
       </div>

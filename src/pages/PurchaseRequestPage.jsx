@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, Plus, Printer, CheckCircle, Clock, AlertTriangle, ShieldCheck, ArrowRight, Trash2, Layers, Tag, CheckSquare, Search, Filter } from 'lucide-react';
 import { getMasterItems, getSuppliers, createPurchaseOrder } from '../services/storageService';
+import Modal, { useModal } from '../components/ui/Modal';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function PurchaseRequestPage() {
+  const { modalProps, showModal } = useModal();
   const [requests, setRequests] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [masterItems, setMasterItems] = useState([]);
@@ -92,7 +95,7 @@ export default function PurchaseRequestPage() {
 
   const handleAddItem = () => {
     if (!newItem.itemName || !newItem.quantity) {
-      alert('Nama barang dan jumlah kuantitas wajib diisi.');
+      showModal({ variant: 'warning', title: 'Data Item Belum Lengkap', message: 'Nama barang dan jumlah kuantitas wajib diisi.' });
       return;
     }
     const itemToAdd = {
@@ -124,7 +127,7 @@ export default function PurchaseRequestPage() {
   const handleCreatePR = (e) => {
     e.preventDefault();
     if (form.items.length === 0) {
-      alert('Minimal 1 item barang yang diajukan dalam PR.');
+      showModal({ variant: 'warning', title: 'Item PR Masih Kosong', message: 'Minimal 1 item barang yang diajukan dalam PR.' });
       return;
     }
 
@@ -149,27 +152,52 @@ export default function PurchaseRequestPage() {
       const list = window.Storage.get('pttan_purchase_requests') || [];
       list.unshift(newPR);
       window.Storage.set('pttan_purchase_requests', list);
-      alert(`✅ Purchase Request (${newPR.prNumber}) Berhasil Diajukan!\n• Departemen: ${newPR.department}\n• Total Estimasi: Rp ${totalEstAmount.toLocaleString()}\n• Status: PENDING APPROVAL`);
+      showModal({
+        variant: 'success',
+        title: `✅ Purchase Request (${newPR.prNumber}) Diajukan`,
+        message: `• Departemen: ${newPR.department}\n• Total estimasi: Rp ${totalEstAmount.toLocaleString()}\n• Status: PENDING APPROVAL`
+      });
       loadRequests();
       setShowForm(false);
     }
   };
 
   const handleApprovePR = (prId) => {
-    if (!confirm('Setujui Purchase Request (PR) ini?')) return;
+    showModal({
+      variant: 'confirm',
+      title: 'Setujui Purchase Request',
+      message: 'PR yang disetujui siap diterbitkan menjadi Purchase Order resmi.\n\nLanjutkan persetujuan?',
+      confirmLabel: 'Ya, Setujui',
+      onConfirm: () => approvePR(prId)
+    });
+  };
+
+  const approvePR = (prId) => {
     if (typeof window !== 'undefined' && window.Storage) {
       const list = window.Storage.get('pttan_purchase_requests') || [];
       const updated = list.map(pr => pr.id === prId ? { ...pr, status: 'APPROVED', approvedBy: 'Owner / Direktur' } : pr);
       window.Storage.set('pttan_purchase_requests', updated);
-      alert('🎉 Purchase Request Berhasil Disetujui (APPROVED)! Siap Diterbitkan Menjadi PO.');
+      showModal({
+        variant: 'success',
+        title: '🎉 Purchase Request Disetujui',
+        message: 'Status PR kini APPROVED dan siap diterbitkan menjadi PO.'
+      });
       loadRequests();
     }
   };
 
   // Convert Approved PR to Purchase Order (1-Klik)
-  const handleConvertToPO = async (pr) => {
-    if (!confirm(`Konversi PR (${pr.prNumber}) menjadi Purchase Order (PO) Resmi?`)) return;
+  const handleConvertToPO = (pr) => {
+    showModal({
+      variant: 'confirm',
+      title: `Konversi PR ${pr.prNumber} Menjadi PO`,
+      message: `• Departemen: ${pr.department}\n• Jumlah item: ${pr.items?.length || 0}\n• Total estimasi: Rp ${Number(pr.totalEstAmount || 0).toLocaleString()}\n\nTerbitkan Purchase Order resmi dari PR ini?`,
+      confirmLabel: 'Ya, Terbitkan PO',
+      onConfirm: () => convertToPO(pr)
+    });
+  };
 
+  const convertToPO = async (pr) => {
     const poPayload = {
       supplier: 'SUPP-GENERAL-01',
       supplierName: 'Mitra Kimia & Alat Laboratorium',
@@ -197,10 +225,14 @@ export default function PurchaseRequestPage() {
         const updated = list.map(p => p.id === pr.id ? { ...p, status: 'CONVERTED TO PO', convertedPoNumber: res.order?.poNumber } : p);
         window.Storage.set('pttan_purchase_requests', updated);
       }
-      alert(`🎉 BERHASIL! PO Pembelian Resmi Diterbitkan dari PR (${pr.prNumber})!\n• No. PO: ${res.order?.poNumber}\n• Status: APPROVED`);
+      showModal({
+        variant: 'success',
+        title: `🎉 PO Diterbitkan Dari PR ${pr.prNumber}`,
+        message: `• No. PO: ${res.order?.poNumber}\n• Status: APPROVED`
+      });
       loadRequests();
     } else {
-      alert('Gagal membuat PO: ' + JSON.stringify(res.errors));
+      showModal({ variant: 'error', title: '❌ Gagal Membuat PO', message: JSON.stringify(res.errors, null, 2) });
     }
   };
 
@@ -216,13 +248,13 @@ export default function PurchaseRequestPage() {
   return (
     <div>
       {/* Header Panel */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <ClipboardList color="#f59e0b" size={24} /> Purchase Request (PR - Permintaan Pengadaan Barang & Kimia)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Alur Pengajuan Kebutuhan Non-Emas (Bahan Kimia, Kowi Lebur, Safety, Consumables) & Konversi 1-Klik ke PO
             </p>
           </div>
@@ -233,12 +265,11 @@ export default function PurchaseRequestPage() {
         </div>
 
         {/* Filter Controls */}
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Filter size={16} color="var(--text-muted)" />
+        <div className="flex gap-3 flex-wrap items-center">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-fg-muted" />
             <select
-              className="form-select"
-              style={{ maxWidth: '220px' }}
+              className="form-select max-w-[220px]"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
             >
@@ -249,7 +280,7 @@ export default function PurchaseRequestPage() {
             </select>
           </div>
 
-          <div style={{ flex: 1, minWidth: '220px' }}>
+          <div className="flex-1 min-w-[220px]">
             <input
               className="form-input"
               placeholder="Cari nomor PR, departemen, nama pemohon..."
@@ -261,8 +292,8 @@ export default function PurchaseRequestPage() {
 
         {/* Form Create PR */}
         {showForm && (
-          <form onSubmit={handleCreatePR} style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Pengajuan Permintaan Pembelian Barang (PR)</h4>
+          <form className="bg-[rgba(15,23,42,0.8)] p-5 rounded-[12px] mt-5 border border-gold" onSubmit={handleCreatePR}>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Pengajuan Permintaan Pembelian Barang (PR)</h4>
             
             <div className="form-grid">
               <div className="form-group">
@@ -282,8 +313,7 @@ export default function PurchaseRequestPage() {
               <div className="form-group">
                 <label className="form-label">Nama Pemohon (Requester)</label>
                 <input
-                  className="form-input"
-                  style={{ fontWeight: 700, color: '#fbbf24' }}
+                  className="form-input font-bold text-gold-light"
                   value={form.requesterName}
                   onChange={e => setForm({ ...form, requesterName: e.target.value })}
                 />
@@ -332,12 +362,12 @@ export default function PurchaseRequestPage() {
             </div>
 
             {/* Sub-Form Item List */}
-            <div style={{ marginTop: '20px', background: 'rgba(15,23,42,0.6)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-              <h5 style={{ color: '#38bdf8', marginBottom: '12px', fontSize: '0.9rem' }}>📦 Daftar Barang yang Diminta:</h5>
+            <div className="mt-5 bg-[rgba(15,23,42,0.6)] p-4 rounded-[10px] border border-line">
+              <h5 className="text-sky-light mb-3 text-[0.9rem]">📦 Daftar Barang yang Diminta:</h5>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.5fr auto', gap: '8px', alignItems: 'flex-end', marginBottom: '12px' }}>
+              <div className="grid grid-cols-[2fr1fr1fr1.5frauto] gap-2 items-end mb-3">
                 <div>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Nama Barang</label>
+                  <label className="form-label text-xs">Nama Barang</label>
                   <input
                     className="form-input"
                     placeholder="Nama barang / kimia..."
@@ -346,16 +376,14 @@ export default function PurchaseRequestPage() {
                   />
                 </div>
                 <div>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Jumlah</label>
-                  <input
-                    type="number"
-                    className="form-input"
+                  <label className="form-label text-xs">Jumlah</label>
+                  <NumberInput
                     value={newItem.quantity}
-                    onChange={e => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
+                    onChange={quantity => setNewItem({ ...newItem, quantity })}
                   />
                 </div>
                 <div>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Satuan</label>
+                  <label className="form-label text-xs">Satuan</label>
                   <input
                     className="form-input"
                     placeholder="pcs / kg / liter"
@@ -364,18 +392,15 @@ export default function PurchaseRequestPage() {
                   />
                 </div>
                 <div>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Est. Harga (Rp)</label>
-                  <input
-                    type="number"
-                    className="form-input"
+                  <label className="form-label text-xs">Est. Harga (Rp)</label>
+                  <NumberInput
                     value={newItem.estUnitPrice}
-                    onChange={e => setNewItem({ ...newItem, estUnitPrice: Number(e.target.value) })}
+                    onChange={estUnitPrice => setNewItem({ ...newItem, estUnitPrice })}
                   />
                 </div>
                 <button
                   type="button"
-                  className="btn-primary"
-                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)', padding: '8px 14px' }}
+                  className="btn-primary bg-[linear-gradient(135deg,_#10b981,_#059669)] py-2 px-3.5"
                   onClick={handleAddItem}
                 >
                   <Plus size={16} /> Tambah
@@ -383,14 +408,14 @@ export default function PurchaseRequestPage() {
               </div>
 
               {/* Items Table in Form */}
-              <table className="custom-table" style={{ marginTop: '10px' }}>
+              <table className="custom-table mt-2.5">
                 <thead>
                   <tr>
                     <th>Nama Barang</th>
                     <th>Jumlah</th>
                     <th>Satuan</th>
-                    <th style={{ textAlign: 'right' }}>Est. Harga</th>
-                    <th style={{ textAlign: 'right' }}>Subtotal</th>
+                    <th className="text-right">Est. Harga</th>
+                    <th className="text-right">Subtotal</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
@@ -400,15 +425,14 @@ export default function PurchaseRequestPage() {
                       <td><strong>{it.itemName}</strong></td>
                       <td>{it.quantity}</td>
                       <td>{it.unit}</td>
-                      <td style={{ textAlign: 'right' }}>Rp {Number(it.estUnitPrice || 0).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>
+                      <td className="text-right">Rp {Number(it.estUnitPrice || 0).toLocaleString()}</td>
+                      <td className="text-right font-bold text-emerald-light">
                         Rp {(Number(it.quantity) * Number(it.estUnitPrice || 0)).toLocaleString()}
                       </td>
                       <td>
                         <button
                           type="button"
-                          className="btn-primary"
-                          style={{ padding: '4px 8px', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', color: '#ef4444' }}
+                          className="btn-primary py-1 px-2 bg-[rgba(239,68,68,0.2)] border border-danger text-danger"
                           onClick={() => handleRemoveItem(idx)}
                         >
                           <Trash2 size={13} />
@@ -420,7 +444,7 @@ export default function PurchaseRequestPage() {
               </table>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ marginTop: '16px', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+            <button type="submit" className="btn-primary mt-4 bg-[linear-gradient(135deg,_#f59e0b,_#d97706)]">
               <CheckCircle size={16} /> Ajukan Purchase Request (PR)
             </button>
           </form>
@@ -428,8 +452,8 @@ export default function PurchaseRequestPage() {
       </div>
 
       {/* PR Table List */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+      <div className="glass-panel p-6">
+        <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Purchase Request / Pengajuan Barang ({filteredRequests.length})
         </h3>
         <div className="table-container">
@@ -440,7 +464,7 @@ export default function PurchaseRequestPage() {
                 <th>Tgl Pengajuan</th>
                 <th>Departemen & Pemohon</th>
                 <th>Rincian Kebutuhan Item</th>
-                <th style={{ textAlign: 'right' }}>Total Estimasi</th>
+                <th className="text-right">Total Estimasi</th>
                 <th>Prioritas</th>
                 <th>Status PR</th>
                 <th>Aksi & Konversi PO</th>
@@ -449,31 +473,31 @@ export default function PurchaseRequestPage() {
             <tbody>
               {filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                  <td className="text-center text-fg-muted p-7.5" colSpan="8">
                     Belum ada data Purchase Request (PR).
                   </td>
                 </tr>
               ) : (
                 filteredRequests.map(pr => (
                   <tr key={pr.id || pr.prNumber}>
-                    <td><strong style={{ color: '#38bdf8' }}>{pr.prNumber}</strong></td>
+                    <td><strong className="text-sky-light">{pr.prNumber}</strong></td>
                     <td>{pr.requestDate}</td>
                     <td>
                       <strong>{pr.department}</strong><br/>
-                      <small style={{ color: 'var(--text-muted)' }}>Pemohon: {pr.requesterName}</small>
+                      <small className="text-fg-muted">Pemohon: {pr.requesterName}</small>
                     </td>
                     <td>
                       {(pr.items || []).map((it, i) => (
-                        <div key={i} style={{ fontSize: '0.8rem' }}>
+                        <div className="text-[0.8rem]" key={i}>
                           • {it.itemName} ({it.quantity} {it.unit})
                         </div>
                       ))}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#34d399' }}>
+                    <td className="text-right font-extrabold text-emerald-light">
                       Rp {(pr.totalEstAmount || 0).toLocaleString()}
                     </td>
                     <td>
-                      <span className={`badge ${pr.priority === 'Urgent' ? 'badge-rose' : 'badge-gold'}`} style={{ fontSize: '0.75rem' }}>
+                      <span className={`badge text-xs ${pr.priority === 'Urgent' ? 'badge-rose' : 'badge-gold'}`}>
                         {pr.priority}
                       </span>
                     </td>
@@ -485,11 +509,10 @@ export default function PurchaseRequestPage() {
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      <div className="flex gap-1.5 flex-wrap">
                         {pr.status === 'PENDING' && (
                           <button
-                            className="btn-primary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                            className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#10b981,_#059669)]"
                             onClick={() => handleApprovePR(pr.id)}
                           >
                             <CheckSquare size={13} /> Setujui (Approve)
@@ -497,17 +520,19 @@ export default function PurchaseRequestPage() {
                         )}
                         {pr.status === 'APPROVED' && (
                           <button
-                            className="btn-primary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #38bdf8, #0284c7)' }}
+                            className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#38bdf8,_#0284c7)]"
                             onClick={() => handleConvertToPO(pr)}
                           >
                             <ArrowRight size={13} /> Terbitkan PO
                           </button>
                         )}
                         <button
-                          className="btn-primary"
-                          style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                          onClick={() => alert(`🖨️ Mencetak PDF Formulir Purchase Request ${pr.prNumber} (${pr.department})...`)}
+                          className="btn-primary py-1.5 px-2.5 text-xs"
+                          onClick={() => showModal({
+                            variant: 'info',
+                            title: `🖨️ Cetak Formulir Purchase Request ${pr.prNumber}`,
+                            message: `Departemen: ${pr.department}`
+                          })}
                         >
                           <Printer size={13} /> Cetak PR
                         </button>
@@ -520,6 +545,8 @@ export default function PurchaseRequestPage() {
           </table>
         </div>
       </div>
+
+      <Modal {...modalProps} />
     </div>
   );
 }

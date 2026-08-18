@@ -3,6 +3,8 @@ import { ShoppingBag, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck, 
 import { getCustomers, getFinishedGoods } from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function ExportSalesOrderPage() {
   const { modalProps, showModal } = useModal();
@@ -74,8 +76,7 @@ export default function ExportSalesOrderPage() {
     }
   };
 
-  const handleCustomerSelect = (e) => {
-    const custId = e.target.value;
+  const handleCustomerSelect = (custId) => {
     const found = customers.find(c => (c.id === custId || c.code === custId));
     if (found) {
       setForm({
@@ -87,8 +88,7 @@ export default function ExportSalesOrderPage() {
     }
   };
 
-  const handleSKUSelect = (e) => {
-    const skuCode = e.target.value;
+  const handleSKUSelect = (skuCode) => {
     const found = finishedGoods.find(fg => (fg.sku === skuCode || fg.id === skuCode));
     if (found) {
       setForm({
@@ -143,28 +143,34 @@ export default function ExportSalesOrderPage() {
   return (
     <div>
       {/* Header */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <ShoppingBag color="#f59e0b" size={24} /> Export Sales Order (SO Ekspor & Gold Price Fixing)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Modul Input Kontrak Pesanan Ekspor & Penguncian Harga Emas USD/Gram (Price Fixing Basis Faktur Ekspor)
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="flex gap-3">
             <button
-              className="btn-primary"
-              style={{ background: activeView === 'list' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)' }}
+              className={`btn-primary ${
+                activeView === 'list'
+                  ? 'bg-linear-135 from-gold to-gold-dark'
+                  : 'bg-none bg-[rgba(15,23,42,0.6)]'
+              }`}
               onClick={() => setActiveView('list')}
             >
               <ShoppingBag size={18} /> Register Sales Order (SO)
             </button>
             <button
-              className="btn-primary"
-              style={{ background: activeView === 'create' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(15,23,42,0.6)' }}
+              className={`btn-primary ${
+                activeView === 'create'
+                  ? 'bg-linear-135 from-emerald to-emerald-dark'
+                  : 'bg-none bg-[rgba(15,23,42,0.6)]'
+              }`}
               onClick={() => setActiveView('create')}
             >
               <Plus size={18} /> Buat Sales Order (SO) Baru
@@ -175,17 +181,16 @@ export default function ExportSalesOrderPage() {
 
       {/* VIEW 1: REGISTER TABLE SO EKSPOR */}
       {activeView === 'list' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem' }}>
+        <div className="glass-panel p-6">
+          <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
+            <h3 className="font-heading text-[1.1rem]">
               📋 Daftar Sales Order Ekspor Aktif ({filteredOrders.length})
             </h3>
 
-            <div style={{ position: 'relative', width: '300px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <div className="relative w-75">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
               <input
-                className="form-input"
-                style={{ paddingLeft: '38px', width: '100%' }}
+                className="form-input pl-9.5 w-full"
                 placeholder="Cari No. SO atau Nama Buyer..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -202,15 +207,15 @@ export default function ExportSalesOrderPage() {
                   <th>Buyer Overseas</th>
                   <th>Negara</th>
                   <th>Berat Gram</th>
-                  <th style={{ textAlign: 'right' }}>Harga Fixing USD/g</th>
-                  <th style={{ textAlign: 'right' }}>Total Contract USD</th>
+                  <th className="text-right">Harga Fixing USD/g</th>
+                  <th className="text-right">Total Contract USD</th>
                   <th>Status Pesanan</th>
                   <th>Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredOrders.length === 0 ? (
-                  <tr><td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Belum ada Sales Order Ekspor dibuat</td></tr>
+                  <tr><td className="text-center p-7.5 text-fg-muted" colSpan="9">Belum ada Sales Order Ekspor dibuat</td></tr>
                 ) : (
                   filteredOrders.map(so => (
                     <tr key={so.id || so.soNumber}>
@@ -218,14 +223,13 @@ export default function ExportSalesOrderPage() {
                       <td>{so.date}</td>
                       <td><strong>{so.buyerName}</strong></td>
                       <td>{so.country}</td>
-                      <td style={{ fontWeight: 700 }}>{so.weightGrams} g</td>
-                      <td style={{ textAlign: 'right', color: '#fbbf24', fontWeight: 700 }}>$ {so.pricePerGramUSD} / g</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#38bdf8' }}>$ {(so.totalUSD || 0).toLocaleString()} USD</td>
+                      <td className="font-bold">{so.weightGrams} g</td>
+                      <td className="text-right text-gold-light font-bold">$ {so.pricePerGramUSD} / g</td>
+                      <td className="text-right font-extrabold text-sky-light">$ {(so.totalUSD || 0).toLocaleString()} USD</td>
                       <td><span className="badge badge-gold">{so.status || 'FIXED / IN PRODUCTION'}</span></td>
                       <td>
                         <button
-                          className="btn-primary"
-                          style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                          className="btn-primary py-1.5 px-2.5 text-xs"
                           onClick={() => showModal({
                             variant: 'info',
                             title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
@@ -246,8 +250,8 @@ export default function ExportSalesOrderPage() {
 
       {/* VIEW 2: FORM CREATE SALES ORDER */}
       {activeView === 'create' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#fbbf24' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-4 text-gold-light">
             ✍️ Form Input Export Sales Order (SO) & Fixing Harga USD
           </h3>
 
@@ -255,15 +259,17 @@ export default function ExportSalesOrderPage() {
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Pilih Buyer Overseas (Dari Master Customer)</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.selectedCustomerId}
                   onChange={handleCustomerSelect}
-                >
-                  {customers.map(c => (
-                    <option key={c.id || c.code} value={c.id || c.code}>{c.name} ({c.country || 'Overseas'})</option>
-                  ))}
-                </select>
+                  placeholder="-- (Pilih Buyer Overseas) --"
+                  searchPlaceholder="Cari nama buyer atau negara…"
+                  emptyText="Buyer tidak ditemukan di master customer."
+                  options={customers.map(c => ({
+                    value: c.id || c.code,
+                    label: `${c.name} (${c.country || 'Overseas'})`
+                  }))}
+                />
               </div>
 
               <div className="form-group">
@@ -295,23 +301,22 @@ export default function ExportSalesOrderPage() {
               </div>
 
               {/* Auto Select Item / Finished Goods */}
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <div className="form-group col-span-2">
                 <label className="form-label">Pilih Perhiasan Pesanan (Master Finished Goods)</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.selectedSKU}
                   onChange={handleSKUSelect}
-                >
-                  <option value="">-- (Pilih Item Perhiasan) --</option>
-                  {finishedGoods.map(fg => (
-                    <option key={fg.id || fg.sku} value={fg.sku}>
-                      [{fg.sku}] {fg.name} - Karat {fg.karat} ({fg.goldColor})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="-- (Pilih Item Perhiasan) --"
+                  searchPlaceholder="Cari SKU, nama, atau karat…"
+                  emptyText="Item perhiasan tidak ditemukan."
+                  options={finishedGoods.map(fg => ({
+                    value: fg.sku,
+                    label: `[${fg.sku}] ${fg.name} - Karat ${fg.karat} (${fg.goldColor})`
+                  }))}
+                />
               </div>
 
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <div className="form-group col-span-2">
                 <label className="form-label">Rincian Spesifikasi Perhiasan Pesanan</label>
                 <input
                   className="form-input"
@@ -322,33 +327,29 @@ export default function ExportSalesOrderPage() {
 
               <div className="form-group">
                 <label className="form-label">Berat Pesanan (Gross Weight Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={form.weightGrams}
-                  onChange={e => setForm({ ...form, weightGrams: Number(e.target.value) })}
+                  onChange={weightGrams => setForm({ ...form, weightGrams })}
                 />
               </div>
 
               <div className="form-group">
                 <label className="form-label">HARGA FIXING KONTRAK (USD / Gram)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-input"
-                  style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+                <NumberInput
+                  allowDecimal
+                  className="border border-gold text-gold-light font-bold"
                   value={form.pricePerGramUSD}
-                  onChange={e => setForm({ ...form, pricePerGramUSD: Number(e.target.value) })}
+                  onChange={pricePerGramUSD => setForm({ ...form, pricePerGramUSD })}
                 />
               </div>
 
               <div className="form-group">
                 <label className="form-label">Kurs BCA e-Rate USD/IDR (Acuan Kontrak)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={form.exchangeRate}
-                  onChange={e => setForm({ ...form, exchangeRate: Number(e.target.value) })}
+                  onChange={exchangeRate => setForm({ ...form, exchangeRate })}
                 />
               </div>
 
@@ -364,30 +365,30 @@ export default function ExportSalesOrderPage() {
             </div>
 
             {/* Calculations Summary Card */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid rgba(245,158,11,0.4)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] my-5 mx-0 border border-[rgba(245,158,11,0.4)]">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
                 <div>
                   <span className="stat-lbl">Total Nilai Kontrak SO (USD)</span>
-                  <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '1.4rem' }}>
+                  <div className="font-extrabold text-sky-light text-[1.4rem]">
                     $ {totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
                   </div>
                 </div>
                 <div>
                   <span className="stat-lbl">Nilai Kesetaraan Rupiah (IDR)</span>
-                  <div style={{ fontWeight: 800, color: '#34d399', fontSize: '1.3rem' }}>
+                  <div className="font-extrabold text-emerald-light text-[1.3rem]">
                     Rp {totalIDR.toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <span className="stat-lbl">Status Penguncian Harga</span>
-                  <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.1rem' }}>
+                  <div className="font-extrabold text-gold-light text-[1.1rem]">
                     GOLD PRICE FIXED
                   </div>
                 </div>
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+            <button type="submit" className="btn-primary bg-[linear-gradient(135deg,_#f59e0b,_#d97706)]">
               <CheckCircle2 size={18} /> Simpan Export Sales Order & Kunci Harga USD
             </button>
           </form>

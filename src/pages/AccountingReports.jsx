@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign, ArrowUpRight, ArrowDownRight, Scale, Clock, Award } from 'lucide-react';
 import { getCOA } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function AccountingReports() {
   const { modalProps, showModal } = useModal();
@@ -88,18 +89,18 @@ export default function AccountingReports() {
   return (
     <div>
       {/* Header Controls */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <BookOpen color="#f59e0b" size={24} /> Modul Laporan Keuangan Lengkap SAK EMKM PT TAN
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               8 Laporan Keuangan Resmi (Jurnal Umum, Buku Besar, Neraca Saldo, Laba Rugi, Neraca, Arus Kas, Aging AR/AP, & CALK)
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="flex gap-2.5">
             <button className="btn-primary" onClick={() => showModal({ variant: 'info', title: '🖨️ Cetak Laporan Keuangan PDF', message: 'Menyiapkan berkas PDF laporan keuangan PT TAN.' })}>
               <Printer size={16} /> Cetak Laporan PDF
             </button>
@@ -110,7 +111,7 @@ export default function AccountingReports() {
         </div>
 
         {/* Tab Navigation */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {[
             { id: 'journals', label: '📖 Mutasi Jurnal' },
             { id: 'gl', label: '📒 Buku Besar' },
@@ -124,17 +125,11 @@ export default function AccountingReports() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '9px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === tab.id ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)',
-                color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
-                fontWeight: activeTab === tab.id ? 700 : 500,
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                whiteSpace: 'nowrap'
-              }}
+              className={`cursor-pointer whitespace-nowrap rounded-sm border border-line px-3.5 py-[9px] text-[0.8rem] ${
+                activeTab === tab.id
+                  ? 'bg-linear-135 from-gold to-gold-dark font-bold text-white'
+                  : 'bg-[rgba(15,23,42,0.6)] font-medium text-fg-soft'
+              }`}
             >
               {tab.label}
             </button>
@@ -143,8 +138,8 @@ export default function AccountingReports() {
 
         {/* Form Add Manual Journal */}
         {showAddForm && (
-          <form onSubmit={handleCreateJournal} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Input Jurnal Manual</h4>
+          <form className="bg-[rgba(15,23,42,0.7)] p-5 rounded-[12px] mt-5 border border-gold" onSubmit={handleCreateJournal}>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Input Jurnal Manual</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Tanggal Jurnal</label>
@@ -181,14 +176,12 @@ export default function AccountingReports() {
               </div>
               <div className="form-group">
                 <label className="form-label">Nominal (IDR)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
                   value={newJournal.amount}
-                  onChange={e => setNewJournal({ ...newJournal, amount: Number(e.target.value) })}
+                  onChange={amount => setNewJournal({ ...newJournal, amount })}
                 />
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <div className="form-group col-span-2">
                 <label className="form-label">Deskripsi Keterangan Jurnal</label>
                 <input
                   className="form-input"
@@ -197,7 +190,7 @@ export default function AccountingReports() {
                 />
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
+            <button type="submit" className="btn-primary mt-3">
               Posting Jurnal Ke Ledger
             </button>
           </form>
@@ -206,8 +199,8 @@ export default function AccountingReports() {
 
       {/* Tab 1: Mutasi Jurnal Umum */}
       {activeTab === 'journals' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4">
             📖 Daftar Mutasi Jurnal Umum ({journals.length})
           </h3>
           <div className="table-container">
@@ -218,27 +211,27 @@ export default function AccountingReports() {
                   <th>Tanggal</th>
                   <th>Deskripsi Keterangan</th>
                   <th>Kode & Nama Akun</th>
-                  <th style={{ textAlign: 'right' }}>Debet (IDR)</th>
-                  <th style={{ textAlign: 'right' }}>Kredit (IDR)</th>
+                  <th className="text-right">Debet (IDR)</th>
+                  <th className="text-right">Kredit (IDR)</th>
                 </tr>
               </thead>
               <tbody>
                 {journals.map(j => (
                   <React.Fragment key={j.id || j.entryNumber}>
                     {j.lines?.map((line, idx) => (
-                      <tr key={idx} style={{ background: idx === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                      <tr key={idx} className={idx === 0 ? 'bg-white/[0.02]' : 'bg-transparent'}>
                         {idx === 0 && <td rowSpan={j.lines.length}><strong>{j.entryNumber}</strong></td>}
                         {idx === 0 && <td rowSpan={j.lines.length}>{j.date}</td>}
                         {idx === 0 && <td rowSpan={j.lines.length}>{j.description}</td>}
                         <td>
-                          <span style={{ paddingLeft: line.credit > 0 ? '20px' : '0' }}>
+                          <span className={line.credit > 0 ? 'pl-5' : 'pl-0'}>
                             <strong>{line.accountCode}</strong> - {line.accountName}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td className="text-right">
                           {line.debit > 0 ? `Rp ${line.debit.toLocaleString()}` : '-'}
                         </td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td className="text-right">
                           {line.credit > 0 ? `Rp ${line.credit.toLocaleString()}` : '-'}
                         </td>
                       </tr>
@@ -253,12 +246,11 @@ export default function AccountingReports() {
 
       {/* Tab 2: Buku Besar (General Ledger) */}
       {activeTab === 'gl' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
-            <label className="form-label" style={{ marginBottom: 0 }}>Pilih Akun Buku Besar:</label>
+        <div className="glass-panel p-6">
+          <div className="flex gap-4 items-center mb-5 flex-wrap">
+            <label className="form-label mb-0">Pilih Akun Buku Besar:</label>
             <select
-              className="form-select"
-              style={{ maxWidth: '360px' }}
+              className="form-select max-w-[360px]"
               value={selectedAccountCode}
               onChange={e => setSelectedAccountCode(e.target.value)}
             >
@@ -268,7 +260,7 @@ export default function AccountingReports() {
             </select>
           </div>
 
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+          <h3 className="font-heading text-[1.1rem] mb-4">
             📒 Buku Besar Akun {selectedAccountCode} ({glMutations.length} Mutasi)
           </h3>
 
@@ -279,23 +271,23 @@ export default function AccountingReports() {
                   <th>No. Jurnal</th>
                   <th>Tanggal</th>
                   <th>Keterangan</th>
-                  <th style={{ textAlign: 'right' }}>Debet (IDR)</th>
-                  <th style={{ textAlign: 'right' }}>Kredit (IDR)</th>
-                  <th style={{ textAlign: 'right' }}>Saldo Akhir (IDR)</th>
+                  <th className="text-right">Debet (IDR)</th>
+                  <th className="text-right">Kredit (IDR)</th>
+                  <th className="text-right">Saldo Akhir (IDR)</th>
                 </tr>
               </thead>
               <tbody>
                 {glMutations.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>Belum ada mutasi untuk akun ini</td></tr>
+                  <tr><td className="text-center p-7.5 text-fg-muted" colSpan="6">Belum ada mutasi untuk akun ini</td></tr>
                 ) : (
                   glMutations.map((m, i) => (
                     <tr key={i}>
                       <td><strong>{m.journalNo}</strong></td>
                       <td>{m.date}</td>
                       <td>{m.description}</td>
-                      <td style={{ textAlign: 'right', color: m.debit > 0 ? '#34d399' : 'inherit' }}>{m.debit > 0 ? `Rp ${m.debit.toLocaleString()}` : '-'}</td>
-                      <td style={{ textAlign: 'right', color: m.credit > 0 ? '#ef4444' : 'inherit' }}>{m.credit > 0 ? `Rp ${m.credit.toLocaleString()}` : '-'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#fbbf24' }}>Rp {m.balance.toLocaleString()}</td>
+                      <td className={`text-right ${m.debit > 0 ? 'text-emerald-light' : 'text-inherit'}`}>{m.debit > 0 ? `Rp ${m.debit.toLocaleString()}` : '-'}</td>
+                      <td className={`text-right ${m.credit > 0 ? 'text-danger' : 'text-inherit'}`}>{m.credit > 0 ? `Rp ${m.credit.toLocaleString()}` : '-'}</td>
+                      <td className="text-right font-bold text-gold-light">Rp {m.balance.toLocaleString()}</td>
                     </tr>
                   ))
                 )}
@@ -307,8 +299,8 @@ export default function AccountingReports() {
 
       {/* Tab 3: Neraca Saldo (Trial Balance) */}
       {activeTab === 'trial' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', color: '#fbbf24' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4 text-gold-light">
             ⚖️ Laporan Neraca Saldo (Trial Balance SAK EMKM)
           </h3>
           <div className="table-container">
@@ -317,9 +309,9 @@ export default function AccountingReports() {
                 <tr>
                   <th>Kode Akun</th>
                   <th>Nama Akun Keuangan</th>
-                  <th style={{ textAlign: 'right' }}>Total Debet (IDR)</th>
-                  <th style={{ textAlign: 'right' }}>Total Kredit (IDR)</th>
-                  <th style={{ textAlign: 'right' }}>Saldo Akhir</th>
+                  <th className="text-right">Total Debet (IDR)</th>
+                  <th className="text-right">Total Kredit (IDR)</th>
+                  <th className="text-right">Saldo Akhir</th>
                 </tr>
               </thead>
               <tbody>
@@ -327,9 +319,9 @@ export default function AccountingReports() {
                   <tr key={acc.code}>
                     <td><strong>{acc.code}</strong></td>
                     <td>{acc.name}</td>
-                    <td style={{ textAlign: 'right' }}>Rp {(acc.balance || 0).toLocaleString()}</td>
-                    <td style={{ textAlign: 'right' }}>Rp 0</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>Rp {(acc.balance || 0).toLocaleString()}</td>
+                    <td className="text-right">Rp {(acc.balance || 0).toLocaleString()}</td>
+                    <td className="text-right">Rp 0</td>
+                    <td className="text-right font-bold">Rp {(acc.balance || 0).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -340,44 +332,44 @@ export default function AccountingReports() {
 
       {/* Tab 4: Laporan Laba Rugi */}
       {activeTab === 'income' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#fbbf24' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-5 text-gold-light">
             📈 Laporan Laba Rugi SAK EMKM (Ekspor PPN 0%)
           </h3>
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
-            <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '12px' }}>
-              <strong style={{ color: '#34d399' }}>PENDAPATAN EKSPOR (PPN 0%)</strong>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
+            <div className="border-b border-line pb-3 mb-3">
+              <strong className="text-emerald-light">PENDAPATAN EKSPOR (PPN 0%)</strong>
+              <div className="flex justify-between my-2 mx-0">
                 <span>4110 - Pendapatan Ekspor Logam Mulia</span>
                 <span>Rp 1.500.000.000</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+              <div className="flex justify-between my-2 mx-0">
                 <span>4120 - Pendapatan Ekspor Perhiasan Emas</span>
                 <span>Rp 850.000.000</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#34d399', fontSize: '1.05rem', marginTop: '10px' }}>
+              <div className="flex justify-between font-bold text-emerald-light text-[1.05rem] mt-2.5">
                 <span>TOTAL PENDAPATAN EKSPOR</span>
                 <span>Rp 2.350.000.000</span>
               </div>
             </div>
 
-            <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '12px' }}>
-              <strong style={{ color: '#ef4444' }}>HARGA POKOK PENJUALAN (HPP)</strong>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+            <div className="border-b border-line pb-3 mb-3">
+              <strong className="text-danger">HARGA POKOK PENJUALAN (HPP)</strong>
+              <div className="flex justify-between my-2 mx-0">
                 <span>5114 - HPP Ekspor LM Lokal</span>
                 <span>(Rp 1.200.000.000)</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+              <div className="flex justify-between my-2 mx-0">
                 <span>5115 - HPP Ekspor LM Import (Landed Cost)</span>
                 <span>(Rp 650.000.000)</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#ef4444', fontSize: '1.05rem', marginTop: '10px' }}>
+              <div className="flex justify-between font-bold text-danger text-[1.05rem] mt-2.5">
                 <span>TOTAL HPP PENJUALAN</span>
                 <span>(Rp 1.850.000.000)</span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.2rem', color: '#fbbf24', background: 'rgba(245,158,11,0.1)', padding: '14px', borderRadius: '10px' }}>
+            <div className="flex justify-between font-extrabold text-[1.2rem] text-gold-light bg-[rgba(245,158,11,0.1)] p-3.5 rounded-[10px]">
               <span>LABA BERSIH USAHA EKSPOR PT TAN</span>
               <span>Rp 500.000.000</span>
             </div>
@@ -387,28 +379,28 @@ export default function AccountingReports() {
 
       {/* Tab 5: Laporan Posisi Keuangan */}
       {activeTab === 'balance' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#38bdf8' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-5 text-sky-light">
             🏛️ Laporan Posisi Keuangan (Neraca SAK EMKM)
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
-              <h4 style={{ color: '#34d399', marginBottom: '12px' }}>ASET (ASSETS)</h4>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1125 - Bank Valas USD</span><span>Rp 850.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1157 - Persediaan LM Lokal</span><span>Rp 1.250.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1158 - Persediaan LM Import</span><span>Rp 2.100.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>1160 - Persediaan Perhiasan Ekspor</span><span>Rp 1.300.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#34d399', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-5">
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
+              <h4 className="text-emerald-light mb-3">ASET (ASSETS)</h4>
+              <div className="flex justify-between my-1.5 mx-0"><span>1125 - Bank Valas USD</span><span>Rp 850.000.000</span></div>
+              <div className="flex justify-between my-1.5 mx-0"><span>1157 - Persediaan LM Lokal</span><span>Rp 1.250.000.000</span></div>
+              <div className="flex justify-between my-1.5 mx-0"><span>1158 - Persediaan LM Import</span><span>Rp 2.100.000.000</span></div>
+              <div className="flex justify-between my-1.5 mx-0"><span>1160 - Persediaan Perhiasan Ekspor</span><span>Rp 1.300.000.000</span></div>
+              <div className="flex justify-between font-extrabold text-emerald-light mt-4 border-t border-line pt-2.5">
                 <span>TOTAL ASET</span><span>Rp 5.500.000.000</span>
               </div>
             </div>
 
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
-              <h4 style={{ color: '#38bdf8', marginBottom: '12px' }}>KEWAJIBAN & EKUITAS</h4>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>2110 - Utang Usaha</span><span>Rp 1.500.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>3110 - Modal Disetor</span><span>Rp 3.500.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0' }}><span>3210 - Saldo Laba Bersih</span><span>Rp 500.000.000</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#38bdf8', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
+              <h4 className="text-sky-light mb-3">KEWAJIBAN & EKUITAS</h4>
+              <div className="flex justify-between my-1.5 mx-0"><span>2110 - Utang Usaha</span><span>Rp 1.500.000.000</span></div>
+              <div className="flex justify-between my-1.5 mx-0"><span>3110 - Modal Disetor</span><span>Rp 3.500.000.000</span></div>
+              <div className="flex justify-between my-1.5 mx-0"><span>3210 - Saldo Laba Bersih</span><span>Rp 500.000.000</span></div>
+              <div className="flex justify-between font-extrabold text-sky-light mt-4 border-t border-line pt-2.5">
                 <span>TOTAL KEWAJIBAN & EKUITAS</span><span>Rp 5.500.000.000</span>
               </div>
             </div>
@@ -418,20 +410,20 @@ export default function AccountingReports() {
 
       {/* Tab 6: Laporan Arus Kas */}
       {activeTab === 'cashflow' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '20px', color: '#34d399' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-5 text-emerald-light">
             💵 Laporan Arus Kas (Direct Cash Flow Method)
           </h3>
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px' }}>
-            <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'space-between' }}>
+          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
+            <div className="my-2 mx-0 flex justify-between">
               <span>Arus Kas Dari Aktivitas Operasional (Penerimaan Ekspor & Pembelian LM)</span>
-              <strong style={{ color: '#34d399' }}>+ Rp 450.000.000</strong>
+              <strong className="text-emerald-light">+ Rp 450.000.000</strong>
             </div>
-            <div style={{ margin: '8px 0', display: 'flex', justifyContent: 'space-between' }}>
+            <div className="my-2 mx-0 flex justify-between">
               <span>Arus Kas Dari Aktivitas Investasi (Peralatan & Brankas Vault)</span>
-              <strong style={{ color: '#ef4444' }}>- Rp 50.000.000</strong>
+              <strong className="text-danger">- Rp 50.000.000</strong>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '1.1rem', color: '#fbbf24', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+            <div className="flex justify-between font-extrabold text-[1.1rem] text-gold-light mt-4 border-t border-line pt-3">
               <span>KENAIKAN BERSIH KAS & BANK VALAS</span>
               <span>+ Rp 400.000.000</span>
             </div>
@@ -441,8 +433,8 @@ export default function AccountingReports() {
 
       {/* Tab 7: Aging AR/AP */}
       {activeTab === 'aging' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#38bdf8' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-4 text-sky-light">
             ⏱️ Laporan Umur Piutang & Utang (AR/AP Aging Report)
           </h3>
           <div className="table-container">
@@ -455,18 +447,18 @@ export default function AccountingReports() {
                   <th>31-60 Hari</th>
                   <th>61-90 Hari</th>
                   <th>&gt; 90 Hari</th>
-                  <th style={{ textAlign: 'right' }}>Total Saldo</th>
+                  <th className="text-right">Total Saldo</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td><strong>Dubai Gold & Jewelry DMCC</strong></td>
                   <td><span className="badge badge-emerald">Piutang Ekspor</span></td>
-                  <td style={{ color: '#34d399' }}>$ 50,000.00</td>
+                  <td className="text-emerald-light">$ 50,000.00</td>
                   <td>-</td>
                   <td>-</td>
                   <td>-</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>$ 50,000.00</td>
+                  <td className="text-right font-bold">$ 50,000.00</td>
                 </tr>
                 <tr>
                   <td><strong>Valcambi SA Switzerland</strong></td>
@@ -475,7 +467,7 @@ export default function AccountingReports() {
                   <td>-</td>
                   <td>-</td>
                   <td>-</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>$ 75,000.00</td>
+                  <td className="text-right font-bold">$ 75,000.00</td>
                 </tr>
               </tbody>
             </table>
@@ -485,22 +477,22 @@ export default function AccountingReports() {
 
       {/* Tab 8: CALK SAK EMKM */}
       {activeTab === 'calk' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#fbbf24' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-4 text-gold-light">
             📜 Catatan Atas Laporan Keuangan (CALK SAK EMKM)
           </h3>
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', fontSize: '0.85rem', lineHeight: '1.7' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '8px' }}>1. Umum & Dasar Penyusunan Laporan Keuangan</h4>
+          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] text-[0.85rem] leading-[1.7]">
+            <h4 className="text-gold-light mb-2">1. Umum & Dasar Penyusunan Laporan Keuangan</h4>
             <p>
               PT TAN didirikan di Indonesia dengan kegiatan usaha utama Trading Logam Mulia dan Produksi Perhiasan Emas Khusus Ekspor (PPN 0%). Laporan keuangan disusun berdasarkan Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).
             </p>
 
-            <h4 style={{ color: '#fbbf24', marginTop: '16px', marginBottom: '8px' }}>2. Kebijakan Akuntansi Persediaan & Landed Cost</h4>
+            <h4 className="text-gold-light mt-4 mb-2">2. Kebijakan Akuntansi Persediaan & Landed Cost</h4>
             <p>
               Persediaan emas murni impor dinilai berdasarkan Biaya Perolehan Landed Cost (Biaya Pembelian FOB + Bea Masuk + Freight & Asuransi Impor). PPh 22 Impor diakui sebagai Pajak Dibayar Di Muka (Aset Lancar) dan tidak dikapitalisasi ke nilai barang.
             </p>
 
-            <h4 style={{ color: '#fbbf24', marginTop: '16px', marginBottom: '8px' }}>3. Transaksi Mata Uang Asing (Valas)</h4>
+            <h4 className="text-gold-light mt-4 mb-2">3. Transaksi Mata Uang Asing (Valas)</h4>
             <p>
               Transaksi ekspor dan impor dalam mata uang USD dikonversi ke mata uang fungsional Rupiah menggunakan Kurs BCA e-Rate pada tanggal transaksi. Selisih kurs diakui pada Laporan Laba Rugi (Akun `6110`).
             </p>

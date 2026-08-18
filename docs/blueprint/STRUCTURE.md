@@ -44,7 +44,11 @@
 | [src/pages/](../../src/pages/) | 18 halaman | Satu file = satu layar. Lihat tabel di bawah |
 | [src/services/storageService.js](../../src/services/storageService.js) | 13 fungsi | Pembungkus `window.Storage` & `window.PurchaseOrder` |
 | [src/services/currencyService.js](../../src/services/currencyService.js) | `fetchBcaERateUSD`, `getStoredUsdRate`, `setCustomUsdRate` | Kurs USD/IDR live + fallback benchmark 16.250 |
+| [src/components/ui/Combobox.jsx](../../src/components/ui/Combobox.jsx) | `Combobox` (default) | **Pengganti `<select className="form-select">` untuk daftar panjang.** Dropdown + search, pola Combobox shadcn/ui. Dipakai 22 kali di 12 halaman |
+| [src/components/ui/Popover.jsx](../../src/components/ui/Popover.jsx) | `Popover`, `PopoverTrigger`, `PopoverAnchor`, `PopoverContent` | Popover shadcn/ui di atas `@radix-ui/react-popover`. Dipakai `Combobox`; `z-index: 1100` agar di atas sidebar & modal |
+| [src/components/ui/Command.jsx](../../src/components/ui/Command.jsx) | `Command`, `CommandInput`, `CommandList`, `CommandEmpty`, `CommandGroup`, `CommandItem`, `CommandSeparator` | Daftar ber-search (`cmdk`) versi shadcn/ui. `CommandDialog` sengaja tidak disertakan |
 | [src/utils/format.js](../../src/utils/format.js) | `formatIDR` | Formatter tampilan. Baru dipakai `Navbar`; halaman masih memformat sendiri (44 `toLocaleString` tersebar) |
+| [src/utils/cn.js](../../src/utils/cn.js) | `cn` | Helper `clsx` + `tailwind-merge` milik shadcn/ui (aslinya `lib/utils`). Hanya dipakai komponen di `components/ui/` |
 
 ### src/pages/
 

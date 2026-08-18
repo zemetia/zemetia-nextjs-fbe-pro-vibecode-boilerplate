@@ -83,32 +83,31 @@ export default function ChartOfAccounts() {
   return (
     <div>
       {/* Header & Control Bar */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <BookOpen color="#f59e0b" size={24} /> Setting Chart of Accounts (COA Resmi PT TAN)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Struktur Kode Akun Resmi PT TAN (Sesuai File Excel "chart of account PT TAN.xlsx")
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="flex gap-3 flex-wrap">
             <button
-              className="btn-primary"
-              style={{ background: 'linear-gradient(135deg, #0284c7, #0369a1)', color: '#fff' }}
+              className="btn-primary bg-[linear-gradient(135deg,_#0284c7,_#0369a1)] text-white"
               onClick={handleReplaceWithExcelCOA}
             >
               <FileSpreadsheet size={18} /> Replace COA Dari Excel PT TAN
             </button>
 
             <button
-              className="btn-primary"
-              style={{
-                background: showExportOnly ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.08)',
-                color: '#fff'
-              }}
+              className={`btn-primary text-white ${
+                showExportOnly
+                  ? 'bg-linear-135 from-emerald to-emerald-dark'
+                  : 'bg-none bg-white/[0.08]'
+              }`}
               onClick={() => setShowExportOnly(!showExportOnly)}
             >
               <ShieldCheck size={18} />
@@ -123,8 +122,8 @@ export default function ChartOfAccounts() {
 
         {/* Add Form Collapsible */}
         {showAddForm && (
-          <form onSubmit={handleAddAccount} style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Tambah Akun COA Baru</h4>
+          <form className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] mb-5 border border-gold" onSubmit={handleAddAccount}>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Tambah Akun COA Baru</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Kode Akun (misal 1113-3)</label>
@@ -171,26 +170,25 @@ export default function ChartOfAccounts() {
                 </select>
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
+            <button type="submit" className="btn-primary mt-3">
               <CheckCircle2 size={16} /> Simpan Akun Ke COA
             </button>
           </form>
         )}
 
         {/* Search & Category Filter Tabs */}
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: '1', minWidth: '240px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <div className="flex gap-4 flex-wrap items-center">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
             <input
-              className="form-input"
-              style={{ paddingLeft: '38px', width: '100%' }}
+              className="form-input pl-9.5 w-full"
               placeholder="Cari kode atau nama akun..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {[
               { id: 'all', label: 'Semua' },
               { id: 'aset', label: '1 - Aktiva' },
@@ -202,17 +200,11 @@ export default function ChartOfAccounts() {
               <button
                 key={tab.id}
                 onClick={() => setSelectedCategory(tab.id)}
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)',
-                  background: selectedCategory === tab.id ? 'rgba(245,158,11,0.2)' : 'transparent',
-                  color: selectedCategory === tab.id ? '#fbbf24' : 'var(--text-secondary)',
-                  fontWeight: selectedCategory === tab.id ? 600 : 400,
-                  cursor: 'pointer',
-                  fontSize: '0.8rem',
-                  whiteSpace: 'nowrap'
-                }}
+                className={`cursor-pointer whitespace-nowrap rounded-sm border border-line px-3.5 py-2 text-[0.8rem] ${
+                  selectedCategory === tab.id
+                    ? 'bg-gold/20 font-semibold text-gold-light'
+                    : 'bg-transparent font-normal text-fg-soft'
+                }`}
               >
                 {tab.label}
               </button>
@@ -222,9 +214,9 @@ export default function ChartOfAccounts() {
       </div>
 
       {/* COA Table */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem' }}>
+      <div className="glass-panel p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-heading text-[1.1rem]">
             📋 Daftar Kode Akun Keuangan ({filteredAccounts.length})
           </h3>
           {showExportOnly && (
@@ -242,14 +234,14 @@ export default function ChartOfAccounts() {
                 <th>Nama Akun Keuangan</th>
                 <th>Kategori SAK</th>
                 <th>Tipe</th>
-                <th style={{ textAlign: 'right' }}>Saldo Terkini (IDR)</th>
+                <th className="text-right">Saldo Terkini (IDR)</th>
                 <th>Penanda PT TAN</th>
               </tr>
             </thead>
             <tbody>
               {filteredAccounts.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                  <td className="text-center text-fg-muted p-7.5" colSpan="6">
                     Tidak ada akun yang sesuai dengan pencarian
                   </td>
                 </tr>
@@ -260,37 +252,34 @@ export default function ChartOfAccounts() {
                   return (
                     <tr
                       key={acc.code}
-                      style={{
-                        background: isHeader ? 'rgba(255,255,255,0.03)' : 'transparent',
-                        fontWeight: isHeader ? 700 : 400
-                      }}
+                      className={isHeader ? 'bg-white/[0.03] font-bold' : 'bg-transparent font-normal'}
                     >
                       <td>
-                        <strong style={{ color: isHeader ? '#f59e0b' : 'inherit' }}>
+                        <strong className={isHeader ? 'text-gold' : 'text-inherit'}>
                           {acc.code}
                         </strong>
                       </td>
                       <td>
-                        <span style={{ paddingLeft: isHeader ? '0' : '16px' }}>
+                        <span className={isHeader ? 'pl-0' : 'pl-4'}>
                           {acc.name}
                         </span>
                       </td>
-                      <td style={{ textTransform: 'capitalize' }}>{acc.category}</td>
+                      <td className="capitalize">{acc.category}</td>
                       <td>
-                        <span className={`badge ${isHeader ? 'badge-gold' : ''}`} style={{ fontSize: '0.7rem' }}>
+                        <span className={`badge text-[0.7rem] ${isHeader ? 'badge-gold' : ''}`}>
                           {acc.type}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                      <td className="text-right font-semibold">
                         Rp {(acc.balance || 0).toLocaleString()}
                       </td>
                       <td>
                         {isExportAccount ? (
-                          <span className="badge badge-emerald" style={{ fontSize: '0.75rem' }}>
+                          <span className="badge badge-emerald text-xs">
                             <ShieldCheck size={12} /> PT TAN Dedicated
                           </span>
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>PT TAN Excel</span>
+                          <span className="text-fg-muted text-xs">PT TAN Excel</span>
                         )}
                       </td>
                     </tr>

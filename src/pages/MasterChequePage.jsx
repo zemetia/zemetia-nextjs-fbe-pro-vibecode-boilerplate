@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, CheckCircle, AlertTriangle, ShieldCheck, Filter, Search, Ban, Clock, CheckSquare, Layers, Lock, BookOpen } from 'lucide-react';
 import Modal, { useModal } from '../components/ui/Modal';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function MasterChequePage() {
   const { modalProps, showModal } = useModal();
@@ -182,18 +183,18 @@ export default function MasterChequePage() {
   return (
     <div>
       {/* Header Panel */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <BookOpen color="#f59e0b" size={24} /> Master Buku Cek / Bilyet Giro & Kontrol Plafon Bank
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Registrasi Buku Cek/BG Bank, Pembatasan Plafon Maksimal per Lembar Cek, & Pelacakan Lembar Siap Pakai
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="flex gap-2.5">
             <button className="btn-primary" onClick={() => setShowAddBookModal(!showAddBookModal)}>
               <Plus size={16} /> Daftarkan Buku Cek / BG Baru
             </button>
@@ -201,12 +202,11 @@ export default function MasterChequePage() {
         </div>
 
         {/* Filter Controls */}
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Filter size={16} color="var(--text-muted)" />
+        <div className="flex gap-3 flex-wrap items-center">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-fg-muted" />
             <select
-              className="form-select"
-              style={{ maxWidth: '240px' }}
+              className="form-select max-w-[240px]"
               value={selectedBankFilter}
               onChange={e => setSelectedBankFilter(e.target.value)}
             >
@@ -217,7 +217,7 @@ export default function MasterChequePage() {
             </select>
           </div>
 
-          <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+          <div className="flex-1 min-w-[220px] relative">
             <input
               className="form-input"
               placeholder="Cari nomor buku / bank..."
@@ -229,14 +229,13 @@ export default function MasterChequePage() {
 
         {/* Modal Form Tambah Buku Cek */}
         {showAddBookModal && (
-          <form onSubmit={handleCreateBook} style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '1px solid var(--accent-gold)' }}>
-            <h4 style={{ color: '#fbbf24', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Daftarkan Buku Cek / Bilyet Giro Baru dari Bank</h4>
+          <form className="bg-[rgba(15,23,42,0.8)] p-5 rounded-[12px] mt-5 border border-gold" onSubmit={handleCreateBook}>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Daftarkan Buku Cek / Bilyet Giro Baru dari Bank</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">No. Registrasi Buku</label>
                 <input
-                  className="form-input"
-                  style={{ fontWeight: 700, color: '#fbbf24' }}
+                  className="form-input font-bold text-gold-light"
                   value={newBookForm.bookNumber}
                   onChange={e => setNewBookForm({ ...newBookForm, bookNumber: e.target.value })}
                 />
@@ -286,22 +285,20 @@ export default function MasterChequePage() {
               </div>
 
               {/* BATAS PLAFON MAKSIMAL PER LEMBAR */}
-              <div className="form-group" style={{ background: 'rgba(245,158,11,0.1)', padding: '10px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
-                <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="form-group bg-[rgba(245,158,11,0.1)] p-2.5 rounded-sm border border-gold">
+                <label className="form-label text-gold-light font-bold flex items-center gap-1.5">
                   <Lock size={15} /> Batas Plafon Maksimal per Lembar Cek (IDR)
                 </label>
-                <input
-                  type="number"
-                  className="form-input"
-                  style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 800, fontSize: '1.05rem' }}
+                <NumberInput
+                  className="border border-gold text-gold-light font-extrabold text-[1.05rem]"
                   value={newBookForm.maxLimitPerCheque}
-                  onChange={e => setNewBookForm({ ...newBookForm, maxLimitPerCheque: Number(e.target.value) })}
+                  onChange={maxLimitPerCheque => setNewBookForm({ ...newBookForm, maxLimitPerCheque })}
                 />
-                <small style={{ color: 'var(--text-muted)' }}>User tidak dapat menginput nominal melebihi batas ini saat menerbitkan voucher.</small>
+                <small className="text-fg-muted">User tidak dapat menginput nominal melebihi batas ini saat menerbitkan voucher.</small>
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px' }}>
+            <button type="submit" className="btn-primary mt-3">
               <CheckCircle size={16} /> Simpan & Generate Seluruh Lembar Cek
             </button>
           </form>
@@ -315,30 +312,30 @@ export default function MasterChequePage() {
         const voidLeaves = (book.leaves || []).filter(l => l.status === 'VOID');
 
         return (
-          <div key={book.id || book.bookNumber} className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '18px', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px' }}>
+          <div key={book.id || book.bookNumber} className="glass-panel p-6 mb-6">
+            <div className="flex justify-between items-center flex-wrap gap-3.5 mb-4.5 border-b border-line pb-3.5">
               <div>
-                <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.15rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 className="font-heading text-[1.15rem] text-gold-light flex items-center gap-2">
                   <CreditCard size={20} /> {book.bookNumber} — {book.bankName}
                 </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <p className="text-[0.8rem] text-fg-soft">
                   Rekening: <strong>{book.accountNumber || '889-012-3456'}</strong> | Seri: <code>{book.seriesPrefix}{book.startNumber} s/d {book.seriesPrefix}{book.endNumber}</code>
                 </p>
               </div>
 
               {/* Status Chips */}
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <span className="badge badge-emerald" style={{ fontSize: '0.8rem' }}>
+              <div className="flex gap-2.5 flex-wrap">
+                <span className="badge badge-emerald text-[0.8rem]">
                   🟢 Tersedia: {availableLeaves.length} Lembar
                 </span>
-                <span className="badge badge-gold" style={{ fontSize: '0.8rem' }}>
+                <span className="badge badge-gold text-[0.8rem]">
                   ⏳ Terpakai: {usedLeaves.length} Lembar
                 </span>
-                <span className="badge badge-rose" style={{ fontSize: '0.8rem' }}>
+                <span className="badge badge-rose text-[0.8rem]">
                   🚫 Batal (Void): {voidLeaves.length} Lembar
                 </span>
-                <span className="badge badge-blue" style={{ fontSize: '0.8rem', background: 'rgba(56,189,248,0.15)', border: '1px solid #38bdf8', color: '#38bdf8' }}>
-                  <Lock size={12} style={{ display: 'inline', marginRight: '4px' }} /> Maks / Lembar: Rp {Number(book.maxLimitPerCheque || 500000000).toLocaleString()}
+                <span className="badge badge-blue text-[0.8rem] bg-[rgba(56,189,248,0.15)] border border-sky-light text-sky-light">
+                  <Lock className="inline mr-1" size={12} /> Maks / Lembar: Rp {Number(book.maxLimitPerCheque || 500000000).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -352,7 +349,7 @@ export default function MasterChequePage() {
                     <th>Status Lembar</th>
                     <th>No. Voucher Terkait</th>
                     <th>Penerima (Payee)</th>
-                    <th style={{ textAlign: 'right' }}>Nominal Digunakan</th>
+                    <th className="text-right">Nominal Digunakan</th>
                     <th>Jatuh Tempo Kliring</th>
                     <th>Status Pencairan</th>
                     <th>Aksi</th>
@@ -362,7 +359,7 @@ export default function MasterChequePage() {
                   {(book.leaves || []).map((leaf, idx) => (
                     <tr key={idx}>
                       <td>
-                        <strong style={{ color: leaf.status === 'AVAILABLE' ? '#34d399' : leaf.status === 'VOID' ? '#ef4444' : '#fbbf24' }}>
+                        <strong className={leaf.status === 'AVAILABLE' ? 'text-emerald-light' : leaf.status === 'VOID' ? 'text-danger' : 'text-gold-light'}>
                           {leaf.checkNumber}
                         </strong>
                       </td>
@@ -373,7 +370,7 @@ export default function MasterChequePage() {
                       </td>
                       <td>{leaf.voucherNo || '-'}</td>
                       <td>{leaf.payee || '-'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: leaf.amount > 0 ? '#34d399' : 'var(--text-muted)' }}>
+                      <td className={`text-right font-bold ${leaf.amount > 0 ? 'text-emerald-light' : 'text-fg-muted'}`}>
                         {leaf.amount > 0 ? `Rp ${leaf.amount.toLocaleString()}` : '-'}
                       </td>
                       <td>{leaf.dueDate || '-'}</td>
@@ -385,8 +382,7 @@ export default function MasterChequePage() {
                       <td>
                         {leaf.status === 'AVAILABLE' && (
                           <button
-                            className="btn-primary"
-                            style={{ padding: '4px 8px', fontSize: '0.7rem', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', color: '#ef4444' }}
+                            className="btn-primary py-1 px-2 text-[0.7rem] bg-[rgba(239,68,68,0.2)] border border-danger text-danger"
                             onClick={() => handleVoidLeaf(book.id || book.bookNumber, leaf.checkNumber)}
                           >
                             <Ban size={12} /> Batalkan (Void)

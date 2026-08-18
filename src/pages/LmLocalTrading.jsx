@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Plus, Printer, CheckCircle, Package, DollarSign, Wallet, ShieldCheck, FileText, Layers, CheckSquare, UserCheck, Truck, MapPin, Send, Share2, Box, ArrowRightLeft } from 'lucide-react';
 import { getMasterItems } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function LmLocalTrading() {
   const { modalProps, showModal } = useModal();
@@ -11,7 +13,7 @@ export default function LmLocalTrading() {
 
   const [formData, setFormData] = useState({
     receiptNo: 'KW-PEG-2026-001',
-    supplierName: 'PT Pegadaian (Persero)',
+    supplierName: 'PT Pegadaian (Persero) Jakarta',
     orderDate: new Date().toISOString().split('T')[0],
     itemCode: 'LM-PEGADAIAN-1KG',
     itemName: 'Emas Batangan Pegadaian 1kg (999.9)',
@@ -61,7 +63,7 @@ export default function LmLocalTrading() {
           receiptNo: 'KW-PEG-2026-001',
           poNumber: 'CASH-BUY-PEGADAIN',
           ttbNumber: 'TTB-PEG-2026-001',
-          supplierName: 'PT Pegadaian (Persero)',
+          supplierName: 'PT Pegadaian (Persero) Jakarta',
           orderDate: new Date().toISOString().split('T')[0],
           itemCode: 'LM-PEGADAIAN-1KG',
           itemName: 'Emas Batangan Pegadaian 1kg (999.9)',
@@ -99,8 +101,7 @@ export default function LmLocalTrading() {
   const detectedBarCount = getDetectedBarCount(formData.barCertificateNo);
 
   // Handler Pilihan Barang Master
-  const handleItemSelect = (e) => {
-    const selectedCode = e.target.value;
+  const handleItemSelect = (selectedCode) => {
     const foundItem = masterItemsList.find(i => i.code === selectedCode || i.id === selectedCode);
     if (foundItem) {
       setFormData({
@@ -272,37 +273,35 @@ export default function LmLocalTrading() {
 
   return (
     <div>
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <ShoppingCart color="#f59e0b" size={24} /> Pembelian Emas Lokal (Direct Cash Pegadaian Jakarta)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Alur 2 Tahap Akuntansi SAK EMKM: Transit Kurir (Akun 1159) ➔ Penerimaan Fisik Vault Utama (Akun 1157)
             </p>
           </div>
 
           {/* Mode Transaksi Selector */}
-          <div style={{ display: 'flex', gap: '8px', background: 'rgba(15,23,42,0.8)', padding: '6px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+          <div className="flex gap-2 bg-[rgba(15,23,42,0.8)] p-1.5 rounded-[10px] border border-line">
             <button
-              className="btn-primary"
-              style={{
-                background: paymentMode === 'cash' ? 'linear-gradient(135deg, #10b981, #059669)' : 'transparent',
-                color: paymentMode === 'cash' ? '#fff' : 'var(--text-secondary)',
-                fontSize: '0.85rem'
-              }}
+              className={`btn-primary text-[0.85rem] ${
+                paymentMode === 'cash'
+                  ? 'bg-linear-135 from-emerald to-emerald-dark text-white'
+                  : 'bg-none bg-transparent text-fg-soft'
+              }`}
               onClick={() => setPaymentMode('cash')}
             >
               <Wallet size={16} /> 💵 Tunai Direct (Alur 2-Tahap Transit 1159 ➔ Vault 1157)
             </button>
             <button
-              className="btn-primary"
-              style={{
-                background: paymentMode === 'credit' ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'transparent',
-                color: paymentMode === 'credit' ? '#fff' : 'var(--text-secondary)',
-                fontSize: '0.85rem'
-              }}
+              className={`btn-primary text-[0.85rem] ${
+                paymentMode === 'credit'
+                  ? 'bg-linear-135 from-sky to-sky-dark text-white'
+                  : 'bg-none bg-transparent text-fg-soft'
+              }`}
               onClick={() => setPaymentMode('credit')}
             >
               <FileText size={16} /> 📝 Pembelian Tempo (Memakai PO)
@@ -314,23 +313,18 @@ export default function LmLocalTrading() {
           <div className="form-grid">
             {/* Mode Indicator Banner */}
             <div
-              style={{
-                gridColumn: 'span 2',
-                background: paymentMode === 'cash' ? 'rgba(16,185,129,0.1)' : 'rgba(2,132,199,0.1)',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: paymentMode === 'cash' ? '1px solid #10b981' : '1px solid #0284c7',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
+              className={`col-span-2 flex items-center gap-3 rounded-sm border px-4 py-3 ${
+                paymentMode === 'cash'
+                  ? 'border-emerald bg-emerald/10'
+                  : 'border-sky bg-sky/10'
+              }`}
             >
               {paymentMode === 'cash' ? (
                 <>
                   <ArrowRightLeft color="#10b981" size={26} />
                   <div>
-                    <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>Alur 2-Tahap Akuntansi & Kontrol Fisik Brankas PT TAN</strong>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    <strong className="text-emerald-light text-[0.95rem]">Alur 2-Tahap Akuntansi & Kontrol Fisik Brankas PT TAN</strong>
+                    <p className="text-[0.8rem] text-fg-soft m-0">
                       <strong>• Tahap 1 (Saat Transfer Bayar)</strong>: Debet `1159` (Emas Dalam Perjalanan Kurir) vs Kredit Kas/Bank (`1111`).<br/>
                       <strong>• Tahap 2 (Saat Emas Tiba di Brankas)</strong>: Klik Konfirmasi Vault ➔ Debet `1157` (Vault Utama) vs Kredit `1159` (Transit Kurir).
                     </p>
@@ -340,8 +334,8 @@ export default function LmLocalTrading() {
                 <>
                   <FileText color="#0284c7" size={24} />
                   <div>
-                    <strong style={{ color: '#38bdf8', fontSize: '0.95rem' }}>Mode Pembelian Kredit Supplier (Purchase Order PO)</strong>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    <strong className="text-sky-light text-[0.95rem]">Mode Pembelian Kredit Supplier (Purchase Order PO)</strong>
+                    <p className="text-[0.8rem] text-fg-soft m-0">
                       Untuk transaksi pembelian dengan perjanjian tempo/kredit. Meng-generate PO dan mencatat ke Hutang Usaha (Akun 2110).
                     </p>
                   </div>
@@ -352,8 +346,7 @@ export default function LmLocalTrading() {
             <div className="form-group">
               <label className="form-label">{paymentMode === 'cash' ? 'No. Nota / Kuitansi Pegadaian (Kwitansi)' : 'No. PO Pembelian'}</label>
               <input
-                className="form-input"
-                style={{ fontWeight: 700, color: '#fbbf24' }}
+                className="form-input font-bold text-gold-light"
                 value={formData.receiptNo}
                 onChange={e => setFormData({ ...formData, receiptNo: e.target.value })}
               />
@@ -371,44 +364,43 @@ export default function LmLocalTrading() {
 
             <div className="form-group">
               <label className="form-label">Supplier / Tempat Beli Emas</label>
-              <select
-                className="form-select"
+              <Combobox
                 value={formData.supplierName}
-                onChange={e => setFormData({ ...formData, supplierName: e.target.value })}
-              >
-                <option value="PT Pegadaian (Persero) Jakarta">PT Pegadaian (Persero) Jakarta</option>
-                <option value="PT Antam Tbk (UBPP LM Jakarta)">PT Antam Tbk (UBPP LM Jakarta)</option>
-                <option value="PT UBS Fine Gold (Surabaya)">PT UBS Fine Gold</option>
-                <option value="Toko Emas & Bullion Dealer Jakarta">Toko Emas & Bullion Dealer Jakarta</option>
-              </select>
+                onChange={supplierName => setFormData({ ...formData, supplierName })}
+                searchPlaceholder="Cari nama supplier…"
+                emptyText="Supplier tidak ditemukan."
+                options={[
+                  { value: 'PT Pegadaian (Persero) Jakarta', label: 'PT Pegadaian (Persero) Jakarta' },
+                  { value: 'PT Antam Tbk (UBPP LM Jakarta)', label: 'PT Antam Tbk (UBPP LM Jakarta)' },
+                  { value: 'PT UBS Fine Gold (Surabaya)', label: 'PT UBS Fine Gold' },
+                  { value: 'Toko Emas & Bullion Dealer Jakarta', label: 'Toko Emas & Bullion Dealer Jakarta' }
+                ]}
+              />
             </div>
 
             {/* SELEKSI BARANG DARI MASTER DATA BARANG */}
-            <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(245,158,11,0.1)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
-              <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="form-group col-span-2 bg-[rgba(245,158,11,0.1)] py-2.5 px-3.5 rounded-sm border border-gold">
+              <label className="form-label text-gold-light font-bold flex items-center gap-2">
                 <Box size={18} /> Pilih Produk Dari Master Kode Barang Emas:
               </label>
-              <select
-                className="form-select"
-                style={{ background: '#0f172a', color: '#fbbf24', fontWeight: 700, fontSize: '0.95rem' }}
+              <Combobox className="bg-ink text-gold-light font-bold text-[0.95rem]"
                 value={formData.itemCode}
                 onChange={handleItemSelect}
-              >
-                <option value="">-- (Pilih Barang Emas Dari Master Katalog PT TAN) --</option>
-                {masterItemsList.map(item => (
-                  <option key={item.code || item.id} value={item.code || item.id}>
-                    [{item.code}] {item.name} ({item.category || 'Emas Murni'} - {item.purity || 99.99}%)
-                  </option>
-                ))}
-              </select>
+                placeholder="-- (Pilih Barang Emas Dari Master Katalog PT TAN) --"
+                searchPlaceholder="Cari kode atau nama barang…"
+                emptyText="Barang tidak ditemukan di master katalog."
+                options={masterItemsList.map(item => ({
+                  value: item.code || item.id,
+                  label: `[${item.code}] ${item.name} (${item.category || 'Emas Murni'} - ${item.purity || 99.99}%)`
+                }))}
+              />
             </div>
 
             {/* INFORMASI KURIR PENGAMBIL EMAS */}
             <div className="form-group">
-              <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700 }}>Nama Kurir / Petugas Pengambil Emas</label>
+              <label className="form-label text-sky-light font-bold">Nama Kurir / Petugas Pengambil Emas</label>
               <input
-                className="form-input"
-                style={{ border: '1px solid #38bdf8', color: '#38bdf8', fontWeight: 700 }}
+                className="form-input border border-sky-light text-sky-light font-bold"
                 placeholder="Misal: Bpk. Budi (Kurir Khusus)"
                 value={formData.courierName}
                 onChange={e => setFormData({ ...formData, courierName: e.target.value })}
@@ -438,10 +430,9 @@ export default function LmLocalTrading() {
             {/* Sumber Pembayaran Kas / Bank jika Mode Tunai */}
             {paymentMode === 'cash' ? (
               <div className="form-group">
-                <label className="form-label" style={{ color: '#34d399', fontWeight: 700 }}>Sumber Pembayaran Tunai (Kas / Bank)</label>
+                <label className="form-label text-emerald-light font-bold">Sumber Pembayaran Tunai (Kas / Bank)</label>
                 <select
-                  className="form-select"
-                  style={{ border: '1px solid #10b981', color: '#34d399', fontWeight: 700 }}
+                  className="form-select border border-emerald text-emerald-light font-bold"
                   value={formData.paymentSourceAccount}
                   onChange={e => {
                     const acc = e.target.value;
@@ -463,10 +454,9 @@ export default function LmLocalTrading() {
 
             {/* OTORISASI & NAMA PEMILIK / DIREKTUR */}
             <div className="form-group">
-              <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700 }}>Otorisasi TTD Pemilik / Direktur Utama</label>
+              <label className="form-label text-gold-light font-bold">Otorisasi TTD Pemilik / Direktur Utama</label>
               <input
-                className="form-input"
-                style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+                className="form-input border border-gold text-gold-light font-bold"
                 placeholder="Nama Pemilik / Direktur Utama..."
                 value={formData.ownerApprovedBy}
                 onChange={e => setFormData({ ...formData, ownerApprovedBy: e.target.value })}
@@ -474,13 +464,13 @@ export default function LmLocalTrading() {
             </div>
 
             {/* INPUT BANYAK NOMOR SERTIFIKAT / MULTI BAR SERIALS */}
-            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label className="form-label" style={{ color: '#38bdf8', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div className="form-group col-span-2">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="form-label text-sky-light font-bold m-0 flex items-center gap-1.5">
                   <Layers size={16} /> Multi No. Sertifikat / Nomor Seri Batangan (Pisahkan Dengan Koma / Enter):
                 </label>
                 {detectedBarCount > 0 && (
-                  <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                  <span className="badge badge-emerald text-xs font-bold">
                     📦 {detectedBarCount} Batang Bar Terdeteksi
                   </span>
                 )}
@@ -488,7 +478,7 @@ export default function LmLocalTrading() {
               <textarea
                 className="form-input"
                 rows={2}
-                style={{ border: '1px solid #38bdf8', color: '#fff', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                className="form-input border border-sky-light font-mono text-[0.85rem] text-white"
                 placeholder="Contoh: CERT-PEG-001, CERT-PEG-002, CERT-PEG-003, CERT-PEG-004..."
                 value={formData.barCertificateNo}
                 onChange={e => setFormData({ ...formData, barCertificateNo: e.target.value })}
@@ -497,31 +487,27 @@ export default function LmLocalTrading() {
 
             <div className="form-group">
               <label className="form-label">Total Berat Fisik Emas (Gram)</label>
-              <input
-                type="number"
-                className="form-input"
-                style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+              <NumberInput
+                allowDecimal
+                className="border border-gold text-gold-light font-bold"
                 value={formData.quantityGrams}
-                onChange={e => setFormData({ ...formData, quantityGrams: Number(e.target.value) })}
+                onChange={quantityGrams => setFormData({ ...formData, quantityGrams })}
               />
             </div>
 
             <div className="form-group">
               <label className="form-label">Harga Beli Tunai IDR / Gram</label>
-              <input
-                type="number"
-                className="form-input"
+              <NumberInput
                 value={formData.unitPriceIDR}
-                onChange={e => setFormData({ ...formData, unitPriceIDR: Number(e.target.value) })}
+                onChange={unitPriceIDR => setFormData({ ...formData, unitPriceIDR })}
               />
             </div>
 
             {/* CHECKBOX OTORISASI PEMILIK */}
-            <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(245,158,11,0.1)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#fbbf24', fontWeight: 700, cursor: 'pointer' }}>
-                <input
+            <div className="form-group col-span-2 bg-[rgba(245,158,11,0.1)] py-2.5 px-3.5 rounded-sm border border-gold">
+              <label className="flex items-center gap-2.5 text-gold-light font-bold cursor-pointer">
+                <input className="w-4.5 h-4.5 accent-gold"
                   type="checkbox"
-                  style={{ width: '18px', height: '18px', accentColor: '#f59e0b' }}
                   checked={formData.ownerApproved}
                   onChange={e => setFormData({ ...formData, ownerApproved: e.target.checked })}
                 />
@@ -530,22 +516,22 @@ export default function LmLocalTrading() {
             </div>
           </div>
 
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '10px', margin: '16px 0', border: '1px solid rgba(245,158,11,0.2)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+          <div className="bg-[rgba(15,23,42,0.6)] p-4 rounded-[10px] my-4 mx-0 border border-[rgba(245,158,11,0.2)]">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
               <div>
                 <span className="stat-lbl">Total Pembelian IDR</span>
-                <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.3rem' }}>Rp {totalAmount.toLocaleString()}</div>
+                <div className="font-extrabold text-gold-light text-[1.3rem]">Rp {totalAmount.toLocaleString()}</div>
               </div>
               <div>
                 <span className="stat-lbl">Jurnal Tahap 1 (Transfer Bayar)</span>
-                <div style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>
+                <div className="font-bold text-sky-light text-[0.85rem]">
                   Debet: Akun 1159 (Transit Kurir {formData.courierName})<br/>
                   Kredit: {paymentMode === 'cash' ? formData.paymentSourceAccountName : 'Akun 2110 (Utang)'}
                 </div>
               </div>
               <div>
                 <span className="stat-lbl">Jurnal Tahap 2 (Tiba Di Brankas)</span>
-                <div style={{ fontWeight: 700, color: '#34d399', fontSize: '0.85rem' }}>
+                <div className="font-bold text-emerald-light text-[0.85rem]">
                   Debet: Akun 1157 (Vault Utama PT TAN)<br/>
                   Kredit: Akun 1159 (Transit Kurir Closed)
                 </div>
@@ -555,13 +541,11 @@ export default function LmLocalTrading() {
 
           <button
             type="submit"
-            className="btn-primary"
-            style={{
-              background: paymentMode === 'cash' ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #0284c7, #0369a1)',
-              width: '100%',
-              justifyContent: 'center',
-              padding: '12px'
-            }}
+            className={`btn-primary w-full justify-center p-3 bg-linear-135 ${
+              paymentMode === 'cash'
+                ? 'from-emerald to-emerald-dark'
+                : 'from-sky to-sky-dark'
+            }`}
           >
             {paymentMode === 'cash' ? (
               <>
@@ -577,8 +561,8 @@ export default function LmLocalTrading() {
       </div>
 
       {/* History Table */}
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+      <div className="glass-panel p-6">
+        <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Riwayat Pembelian Emas Lokal ({purchases.length})
         </h3>
         <div className="table-container">
@@ -591,7 +575,7 @@ export default function LmLocalTrading() {
                 <th>Kurir Pengambil</th>
                 <th>Barang Master & Multi-No Seri Bar</th>
                 <th>Berat Gram</th>
-                <th style={{ textAlign: 'right' }}>Total Valuasi (IDR)</th>
+                <th className="text-right">Total Valuasi (IDR)</th>
                 <th>Otorisasi Pemilik</th>
                 <th>Aksi Verifikasi & Dokumen</th>
               </tr>
@@ -599,7 +583,7 @@ export default function LmLocalTrading() {
             <tbody>
               {purchases.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                  <td className="text-center text-fg-muted p-7.5" colSpan="9">
                     Belum ada riwayat pembelian Emas Lokal.
                   </td>
                 </tr>
@@ -614,59 +598,57 @@ export default function LmLocalTrading() {
                       </td>
                       <td>
                         {isReceived ? (
-                          <span className="badge badge-emerald" style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                          <span className="badge badge-emerald text-xs font-bold">
                             ✅ VAULT STOCKED (1157)
                           </span>
                         ) : (
-                          <span className="badge badge-gold" style={{ fontSize: '0.75rem', fontWeight: 700, background: 'rgba(245,158,11,0.2)', border: '1px solid #f59e0b' }}>
+                          <span className="badge badge-gold text-xs font-bold bg-[rgba(245,158,11,0.2)] border border-gold">
                             🚚 IN TRANSIT KURIR (1159)
                           </span>
                         )}
                       </td>
                       <td>
                         <strong>{p.supplierName}</strong><br/>
-                        <small style={{ color: 'var(--text-muted)' }}><MapPin size={10} style={{ display: 'inline' }} /> {p.pickupLocation || 'Jakarta'}</small>
+                        <small className="text-fg-muted"><MapPin className="inline" size={10} /> {p.pickupLocation || 'Jakarta'}</small>
                       </td>
                       <td>
-                        <span className="badge badge-emerald" style={{ fontSize: '0.75rem' }}>
-                          <Truck size={12} style={{ display: 'inline', marginRight: '4px' }} />
+                        <span className="badge badge-emerald text-xs">
+                          <Truck className="inline mr-1" size={12} />
                           {p.courierName || 'Kurir Internal'}
                         </span>
                       </td>
                       <td>
                         <strong>{p.itemName}</strong><br/>
-                        <small style={{ color: '#fbbf24' }}>Kode: {p.itemCode}</small>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                        <small className="text-gold-light">Kode: {p.itemCode}</small>
+                        <div className="flex gap-1 flex-wrap mt-1">
                           {certList.map((cert, idx) => (
-                            <span key={idx} className="badge badge-emerald" style={{ fontSize: '0.7rem' }}>
+                            <span key={idx} className="badge badge-emerald text-[0.7rem]">
                               #{idx + 1}: {cert}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td style={{ fontWeight: 800, color: '#fbbf24' }}>{p.quantityGrams} g</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>Rp {(p.totalAmount || 0).toLocaleString()}</td>
+                      <td className="font-extrabold text-gold-light">{p.quantityGrams} g</td>
+                      <td className="text-right font-bold text-emerald-light">Rp {(p.totalAmount || 0).toLocaleString()}</td>
                       <td>
-                        <span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>
-                          <UserCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />
+                        <span className="badge badge-gold text-xs">
+                          <UserCheck className="inline mr-1" size={12} />
                           {p.ownerApprovedBy || 'Pemilik PT TAN'}
                         </span>
                       </td>
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div className="flex flex-col gap-1.5">
                           {!isReceived && (
                             <button
-                              className="btn-primary"
-                              style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981, #059669)', border: '1px solid #34d399' }}
+                              className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#10b981,_#059669)] border border-emerald-light"
                               onClick={() => handleConfirmVaultArrival(p)}
                             >
                               <Box size={13} /> 📦 Konfirmasi Tiba Di Vault (Debet 1157)
                             </button>
                           )}
-                          <div style={{ display: 'flex', gap: '6px' }}>
+                          <div className="flex gap-1.5">
                             <button
-                              className="btn-primary"
-                              style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #0284c7, #0369a1)' }}
+                              className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#0284c7,_#0369a1)]"
                               onClick={() => showModal({
                                 variant: 'info',
                                 title: `📱 Dispatch WhatsApp PDF (${p.receiptNo})`,
@@ -676,8 +658,7 @@ export default function LmLocalTrading() {
                               <Share2 size={13} /> WA PDF
                             </button>
                             <button
-                              className="btn-primary"
-                              style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                              className="btn-primary py-1.5 px-2.5 text-xs"
                               onClick={() => showModal({
                                 variant: 'info',
                                 title: `🖨️ Cetak Bukti Serah Terima Vault (${p.receiptNo || p.poNumber})`,

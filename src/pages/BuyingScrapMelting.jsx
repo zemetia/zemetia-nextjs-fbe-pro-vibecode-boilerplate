@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Flame, Scale, Activity, Plus } from 'lucide-react';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function BuyingScrapMelting() {
   const [scrapItem, setScrapItem] = useState({
@@ -14,8 +15,8 @@ export default function BuyingScrapMelting() {
 
   return (
     <div>
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <h2 className="font-heading text-[1.2rem] mb-4 flex items-center gap-2.5">
           <Flame color="#ef4444" size={22} /> Pembelian Pecahan Perhiasan (Scrap) & SPK Lebur
         </h2>
 
@@ -30,53 +31,43 @@ export default function BuyingScrapMelting() {
           </div>
           <div className="form-group">
             <label className="form-label">Berat Kotor Scrap (Gram)</label>
-            <input
-              type="number"
-              className="form-input"
+            <NumberInput
+              allowDecimal
               value={scrapItem.grossWeight}
-              onChange={e => {
-                const w = Number(e.target.value);
-                setScrapItem({ ...scrapItem, grossWeight: w, estimatedFineGold: w * (scrapItem.xrfPurity / 100) });
-              }}
+              onChange={w => setScrapItem({ ...scrapItem, grossWeight: w, estimatedFineGold: w * (scrapItem.xrfPurity / 100) })}
             />
           </div>
           <div className="form-group">
             <label className="form-label">Kadar XRF Spectrometer (%)</label>
-            <input
-              type="number"
-              className="form-input"
+            <NumberInput
+              allowDecimal
               value={scrapItem.xrfPurity}
-              onChange={e => {
-                const p = Number(e.target.value);
-                setScrapItem({ ...scrapItem, xrfPurity: p, estimatedFineGold: scrapItem.grossWeight * (p / 100) });
-              }}
+              onChange={p => setScrapItem({ ...scrapItem, xrfPurity: p, estimatedFineGold: scrapItem.grossWeight * (p / 100) })}
             />
           </div>
           <div className="form-group">
             <label className="form-label">Harga Beli Fine Gold / Gram (IDR)</label>
-            <input
-              type="number"
-              className="form-input"
+            <NumberInput
               value={scrapItem.pricePerFineGram}
-              onChange={e => setScrapItem({ ...scrapItem, pricePerFineGram: Number(e.target.value) })}
+              onChange={pricePerFineGram => setScrapItem({ ...scrapItem, pricePerFineGram })}
             />
           </div>
         </div>
 
-        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '10px', margin: '16px 0', border: '1px solid rgba(239,68,68,0.2)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+        <div className="bg-[rgba(15,23,42,0.6)] p-4 rounded-[10px] my-4 mx-0 border border-[rgba(239,68,68,0.2)]">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
             <div>
               <span className="stat-lbl">Estimasi Emas Murni (Fine Wt)</span>
-              <div style={{ fontWeight: 700, color: '#fbbf24', fontSize: '1.1rem' }}>{scrapItem.estimatedFineGold.toFixed(2)} Gram</div>
+              <div className="font-bold text-gold-light text-[1.1rem]">{scrapItem.estimatedFineGold.toFixed(2)} Gram</div>
             </div>
             <div>
               <span className="stat-lbl">Total Pembelian Scrap</span>
-              <div style={{ fontWeight: 800, color: '#34d399', fontSize: '1.1rem' }}>Rp {estimatedTotal.toLocaleString()}</div>
+              <div className="font-extrabold text-emerald-light text-[1.1rem]">Rp {estimatedTotal.toLocaleString()}</div>
             </div>
           </div>
         </div>
 
-        <button className="btn-primary" style={{ background: 'linear-gradient(135deg, #ef4444, #b91c1c)' }}>
+        <button className="btn-primary bg-[linear-gradient(135deg,_#ef4444,_#b91c1c)]">
           <Plus size={18} /> Buat Nota Pembelian Scrap & Masuk SPK Lebur
         </button>
       </div>

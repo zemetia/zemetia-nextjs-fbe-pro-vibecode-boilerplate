@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Truck, Plus, Search, Globe, CheckCircle } from 'lucide-react';
 import { getSuppliers, saveSupplier } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
 
 export default function MasterSupplier() {
   const { modalProps, showModal } = useModal();
@@ -55,13 +56,13 @@ export default function MasterSupplier() {
 
   return (
     <div>
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <Truck color="#38bdf8" size={24} /> Master Supplier Emas (Impor & Lokal)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Kelola Data Supplier Emas Batangan Impor Overseas (Valcambi, PAMP, Heraeus) & Supplier Emas Lokal (Antam, UBS)
             </p>
           </div>
@@ -72,8 +73,8 @@ export default function MasterSupplier() {
         </div>
 
         {showForm && (
-          <form onSubmit={handleSubmit} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #38bdf8' }}>
-            <h4 style={{ color: '#38bdf8', marginBottom: '14px', fontSize: '0.95rem' }}>➕ Form Tambah Supplier Emas</h4>
+          <form className="bg-[rgba(15,23,42,0.7)] p-5 rounded-[12px] mb-5 border border-sky-light" onSubmit={handleSubmit}>
+            <h4 className="text-sky-light mb-3.5 text-[0.95rem]">➕ Form Tambah Supplier Emas</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Kode Supplier</label>
@@ -93,16 +94,18 @@ export default function MasterSupplier() {
               </div>
               <div className="form-group">
                 <label className="form-label">Kategori Supplier</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.category}
-                  onChange={e => setForm({ ...form, category: e.target.value })}
-                >
-                  <option value="Overseas Refiner">Overseas Refiner (Impor USD)</option>
-                  <option value="Lokal Producer">Produsen Emas Lokal (IDR)</option>
-                  <option value="Scrap Trader">Pengepul Scrap / Toko Emas</option>
-                  <option value="Consumables Supplier">Supplier Bahan Kimia / Alloy</option>
-                </select>
+                  onChange={category => setForm({ ...form, category })}
+                  searchPlaceholder="Cari kategori supplier…"
+                  emptyText="Kategori tidak ditemukan."
+                  options={[
+                    { value: 'Overseas Refiner', label: 'Overseas Refiner (Impor USD)' },
+                    { value: 'Lokal Producer', label: 'Produsen Emas Lokal (IDR)' },
+                    { value: 'Scrap Trader', label: 'Pengepul Scrap / Toko Emas' },
+                    { value: 'Consumables Supplier', label: 'Supplier Bahan Kimia / Alloy' }
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Negara / Lokasi</label>
@@ -114,16 +117,18 @@ export default function MasterSupplier() {
               </div>
               <div className="form-group">
                 <label className="form-label">Mata Uang Transaksi</label>
-                <select
-                  className="form-select"
+                <Combobox
                   value={form.currency}
-                  onChange={e => setForm({ ...form, currency: e.target.value })}
-                >
-                  <option value="USD">USD (Dollar AS)</option>
-                  <option value="IDR">IDR (Rupiah)</option>
-                  <option value="SGD">SGD (Singapore Dollar)</option>
-                  <option value="EUR">EUR (Euro)</option>
-                </select>
+                  onChange={currency => setForm({ ...form, currency })}
+                  searchPlaceholder="Cari mata uang…"
+                  emptyText="Mata uang tidak ditemukan."
+                  options={[
+                    { value: 'USD', label: 'USD (Dollar AS)' },
+                    { value: 'IDR', label: 'IDR (Rupiah)' },
+                    { value: 'SGD', label: 'SGD (Singapore Dollar)' },
+                    { value: 'EUR', label: 'EUR (Euro)' }
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Email Operasional</label>
@@ -134,17 +139,16 @@ export default function MasterSupplier() {
                 />
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '12px', background: 'linear-gradient(135deg, #0284c7, #0369a1)' }}>
+            <button type="submit" className="btn-primary mt-3 bg-[linear-gradient(135deg,_#0284c7,_#0369a1)]">
               <CheckCircle size={16} /> Simpan Supplier Emas
             </button>
           </form>
         )}
 
-        <div style={{ position: 'relative', maxWidth: '400px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <div className="relative max-w-[400px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
           <input
-            className="form-input"
-            style={{ paddingLeft: '38px', width: '100%' }}
+            className="form-input pl-9.5 w-full"
             placeholder="Cari kode, nama supplier, atau negara..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -152,8 +156,8 @@ export default function MasterSupplier() {
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '24px' }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px' }}>
+      <div className="glass-panel p-6">
+        <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Supplier Emas ({filteredSupp.length})
         </h3>
         <div className="table-container">
@@ -173,9 +177,9 @@ export default function MasterSupplier() {
                 <tr key={s.id || s.code}>
                   <td><strong>{s.code}</strong></td>
                   <td>{s.name}</td>
-                  <td><span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>{s.category}</span></td>
+                  <td><span className="badge badge-gold text-xs">{s.category}</span></td>
                   <td>{s.country || 'Indonesia'}</td>
-                  <td><strong style={{ color: '#38bdf8' }}>{s.currency || 'USD'}</strong></td>
+                  <td><strong className="text-sky-light">{s.currency || 'USD'}</strong></td>
                   <td>{s.email || '-'}</td>
                 </tr>
               ))}

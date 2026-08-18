@@ -136,100 +136,99 @@ export default function SystemSettingsPage() {
   return (
     <div>
       {/* Header */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
           <Settings color="#f59e0b" size={24} /> Setting Perusahaan, Logo, Backup & Restore System
         </h2>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+        <p className="text-[0.8rem] text-fg-soft">
           Manajemen Branding PT TAN, Header Cetakan Kop Surat/Invoice, Backup File JSON, & Safeguard Restore Data
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-6">
         {/* Company Profile & Logo Setting */}
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', color: '#fbbf24' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4 flex items-center gap-2.5 text-gold-light">
             <Building2 size={20} /> Setting Profil & Logo Perusahaan (Kop Dokumen)
           </h3>
 
           <form onSubmit={handleSaveProfile}>
-            <div style={{ marginBottom: '16px', textAlign: 'center', background: 'rgba(15,23,42,0.6)', padding: '16px', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
+            <div className="mb-4 rounded-[12px] border border-dashed border-line bg-[rgba(15,23,42,0.6)] p-4 text-center">
               {profile.logoUrl ? (
-                <img src={profile.logoUrl} alt="Logo PT TAN" style={{ maxHeight: '80px', marginBottom: '10px' }} />
+                <img className="max-h-[80px] mb-2.5" src={profile.logoUrl} alt="Logo PT TAN" />
               ) : (
-                <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Belum ada logo terpasang</div>
+                <div className="p-5 text-fg-muted">Belum ada logo terpasang</div>
               )}
               <div>
-                <label htmlFor="logo-input" className="btn-primary" style={{ padding: '6px 14px', fontSize: '0.75rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <label htmlFor="logo-input" className="btn-primary py-1.5 px-3.5 text-xs cursor-pointer inline-flex items-center gap-1.5">
                   <Image size={14} /> Unggah Logo PT TAN Baru
                 </label>
-                <input id="logo-input" type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
+                <input className="hidden" id="logo-input" type="file" accept="image/*" onChange={handleLogoUpload} />
               </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: '12px' }}>
+            <div className="form-group mb-3">
               <label className="form-label">Nama Perusahaan Resmi</label>
               <input className="form-input" value={profile.companyName} onChange={e => setProfile({ ...profile, companyName: e.target.value })} />
             </div>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
+            <div className="form-group mb-3">
               <label className="form-label">Alamat Kantor & Pabrik</label>
               <input className="form-input" value={profile.address} onChange={e => setProfile({ ...profile, address: e.target.value })} />
             </div>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
+            <div className="form-group mb-3">
               <label className="form-label">Telepon / Fax</label>
               <input className="form-input" value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} />
             </div>
-            <div className="form-group" style={{ marginBottom: '12px' }}>
+            <div className="form-group mb-3">
               <label className="form-label">NPWP Perusahaan</label>
               <input className="form-input" value={profile.npwp} onChange={e => setProfile({ ...profile, npwp: e.target.value })} />
             </div>
-            <div className="form-group" style={{ marginBottom: '16px' }}>
+            <div className="form-group mb-4">
               <label className="form-label">NIB & Registrasi Ekspor Bea Cukai</label>
               <input className="form-input" value={profile.nibPeb} onChange={e => setProfile({ ...profile, nibPeb: e.target.value })} />
             </div>
 
-            <button type="submit" className="btn-primary" style={{ width: '100%' }}>
+            <button type="submit" className="btn-primary w-full">
               <CheckCircle2 size={16} /> Simpan Setting Profil & Logo
             </button>
           </form>
         </div>
 
         {/* Backup & Restore Data Management */}
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', color: '#38bdf8' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.1rem] mb-4 flex items-center gap-2.5 text-sky-light">
             <Database size={20} /> Backup & Restore Database Sistem
           </h3>
 
           {/* Backup Section */}
-          <div style={{ background: 'rgba(15,23,42,0.6)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(56,189,248,0.2)' }}>
-            <h4 style={{ color: '#38bdf8', fontSize: '0.95rem', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] mb-5 border border-[rgba(56,189,248,0.2)]">
+            <h4 className="text-sky-light text-[0.95rem] mb-2 flex items-center gap-1.5">
               <Download size={16} /> Export Backup Data (.json)
             </h4>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+            <p className="text-[0.78rem] text-fg-soft mb-3.5">
               Unduh seluruh database sistem (COA, PO Impor/Lokal, Faktur Ekspor, Voucher, Kartu Stok Vault, & Master Data) ke file backup `.json`.
             </p>
-            <button className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, #0284c7, #0369a1)' }} onClick={handleBackupExport}>
+            <button className="btn-primary w-full bg-[linear-gradient(135deg,_#0284c7,_#0369a1)]" onClick={handleBackupExport}>
               <Download size={16} /> Unduh Backup Database JSON
             </button>
           </div>
 
           {/* Restore Section */}
-          <div style={{ background: 'rgba(15,23,42,0.6)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(245,158,11,0.2)' }}>
-            <h4 style={{ color: '#fbbf24', fontSize: '0.95rem', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] border border-[rgba(245,158,11,0.2)]">
+            <h4 className="text-gold-light text-[0.95rem] mb-2 flex items-center gap-1.5">
               <Upload size={16} /> Import Restore Data (.json)
             </h4>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+            <p className="text-[0.78rem] text-fg-soft mb-3.5">
               Pulihkan database sistem dari file cadangan `.json` sebelumnya.
             </p>
             
-            <input
+            <input className="w-full mb-3 text-[0.8rem] text-fg-soft"
               type="file"
               accept=".json"
               onChange={e => setRestoreFile(e.target.files[0])}
-              style={{ width: '100%', marginBottom: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}
             />
 
-            <button className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, #d97706, #b45309)' }} onClick={handleRestoreImport}>
+            <button className="btn-primary w-full bg-[linear-gradient(135deg,_#d97706,_#b45309)]" onClick={handleRestoreImport}>
               <Upload size={16} /> Restore Data System Now
             </button>
           </div>

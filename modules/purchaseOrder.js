@@ -201,22 +201,32 @@ const PurchaseOrder = {
                 const masterItems = Storage.getItems ? Storage.getItems() : (Storage.get(Storage.KEYS.ITEMS) || []);
                 const masterItem = masterItems.find(mi => mi.id === item.itemId || mi.code === item.itemCode);
                 const inventoryAccount = masterItem?.inventoryAccount || '';
+                const uPrice = parseFloat(item.unitPrice ?? item.unitPriceUSD ?? item.unitPriceIDR ?? 0);
 
                 return {
                     itemId: item.itemId,
                     itemCode: item.itemCode,
                     itemName: item.itemName,
-                    quantity: parseFloat(item.quantity),
-                    unit: item.unit,
-                    unitPrice: parseFloat(item.unitPrice),
-                    subtotal: parseFloat(item.quantity) * parseFloat(item.unitPrice),
+                    quantity: parseFloat(item.quantity || 0),
+                    unit: item.unit || 'gram',
+                    unitPrice: uPrice,
+                    unitPriceUSD: parseFloat(item.unitPriceUSD ?? uPrice),
+                    unitPriceIDR: parseFloat(item.unitPriceIDR ?? 0),
+                    subtotal: parseFloat(item.quantity || 0) * uPrice,
                     notes: item.notes || '',
                     inventoryAccount: inventoryAccount  // GL account for journal
                 };
             }),
-            subtotal: orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity) * parseFloat(item.unitPrice)), 0),
+            subtotal: orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item.unitPrice ?? item.unitPriceUSD ?? item.unitPriceIDR ?? 0)), 0),
             currency: orderData.currency || 'IDR',
             exchangeRate: parseFloat(orderData.exchangeRate || 1),
+            paymentTerms: orderData.paymentTerms || '',
+            unitMode: orderData.unitMode || 'gram',
+            quantityUnits: parseFloat(orderData.quantityUnits || 0),
+            weightGrams: parseFloat(orderData.weightGrams || 0),
+            weightOz: parseFloat(orderData.weightOz || 0),
+            baseAmountUSD: parseFloat(orderData.baseAmountUSD || 0),
+            totalAmountUSD: parseFloat(orderData.totalAmountUSD || orderData.baseAmountUSD || 0),
             importDuty: parseFloat(orderData.importDuty || 0),
             pph22Import: parseFloat(orderData.pph22Import || 0),
             freightAndInsurance: parseFloat(orderData.freightAndInsurance || 0),
@@ -238,10 +248,13 @@ const PurchaseOrder = {
 
         order.taxAmount = order.subtotal * (order.taxRate / 100);
         order.total = order.subtotal + order.taxAmount;
+        if (order.currency === 'USD' && !order.totalAmountUSD) {
+            order.totalAmountUSD = order.total;
+        }
 
         // Multi-Currency & Landed Cost Calculation for LM Import
-        const totalQuantityGrams = order.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0);
-        const subtotalIDR = order.currency === 'USD' ? (order.subtotal * order.exchangeRate) : order.subtotal;
+        const totalQuantityGrams = order.weightGrams || order.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0);
+        const subtotalIDR = order.currency === 'USD' ? ((order.totalAmountUSD || order.subtotal) * order.exchangeRate) : order.subtotal;
         const totalLandedCostIDR = subtotalIDR + order.importDuty + order.freightAndInsurance;
         const unitLandedCostIDRPerGram = totalQuantityGrams > 0 ? (totalLandedCostIDR / totalQuantityGrams) : 0;
 

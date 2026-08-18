@@ -3,6 +3,8 @@ import { FileText, Globe, DollarSign, Download, Plus, Search, Filter, Printer, C
 import { getCustomers, getFinishedGoods } from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
 import Modal, { useModal } from '../components/ui/Modal';
+import Combobox from '../components/ui/Combobox';
+import NumberInput from '../components/ui/NumberInput';
 
 export default function ExportInvoicing() {
   const { modalProps, showModal } = useModal();
@@ -74,8 +76,7 @@ export default function ExportInvoicing() {
   };
 
   // Handler Pull From Sales Order (SO)
-  const handleSOSelect = (e) => {
-    const soId = e.target.value;
+  const handleSOSelect = (soId) => {
     const foundSO = salesOrders.find(so => (so.id === soId || so.soNumber === soId));
     if (foundSO) {
       setForm({
@@ -156,28 +157,34 @@ export default function ExportInvoicing() {
   return (
     <div>
       {/* Top Bar Header & Action Controls */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="glass-panel p-6 mb-6">
+        <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
               <FileText color="#34d399" size={24} /> Modul Penjualan Ekspor USD (Faktur Ekspor PPN 0% & PEB)
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <p className="text-[0.8rem] text-fg-soft">
               Penerbitan Faktur Ekspor Ditarik Otomatis Dari Export Sales Order (SO) & Fixing Harga USD
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="flex gap-3">
             <button
-              className="btn-primary"
-              style={{ background: activeView === 'list' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(15,23,42,0.6)' }}
+              className={`btn-primary ${
+                activeView === 'list'
+                  ? 'bg-linear-135 from-emerald to-emerald-dark'
+                  : 'bg-none bg-[rgba(15,23,42,0.6)]'
+              }`}
               onClick={() => setActiveView('list')}
             >
               <FileText size={18} /> Register Faktur Ekspor
             </button>
             <button
-              className="btn-primary"
-              style={{ background: activeView === 'create' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(15,23,42,0.6)' }}
+              className={`btn-primary ${
+                activeView === 'create'
+                  ? 'bg-linear-135 from-gold to-gold-dark'
+                  : 'bg-none bg-[rgba(15,23,42,0.6)]'
+              }`}
               onClick={() => setActiveView('create')}
             >
               <Plus size={18} /> Buat Faktur Ekspor Dari SO
@@ -188,17 +195,16 @@ export default function ExportInvoicing() {
 
       {/* VIEW 1: TABLE REGISTER FAKTUR EKSPOR */}
       {activeView === 'list' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem' }}>
+        <div className="glass-panel p-6">
+          <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
+            <h3 className="font-heading text-[1.1rem]">
               📋 Daftar Faktur Ekspor Diterbitkan ({filteredInvoices.length})
             </h3>
 
-            <div style={{ position: 'relative', width: '300px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <div className="relative w-75">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
               <input
-                className="form-input"
-                style={{ paddingLeft: '38px', width: '100%' }}
+                className="form-input pl-9.5 w-full"
                 placeholder="Cari Invoice, Buyer, atau PEB..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -216,8 +222,8 @@ export default function ExportInvoicing() {
                   <th>Buyer Ekspor</th>
                   <th>Dokumen PEB</th>
                   <th>Berat Gram</th>
-                  <th style={{ textAlign: 'right' }}>Total Nilai USD</th>
-                  <th style={{ textAlign: 'right' }}>Equivalent IDR</th>
+                  <th className="text-right">Total Nilai USD</th>
+                  <th className="text-right">Equivalent IDR</th>
                   <th>Status PPN 0%</th>
                   <th>Aksi</th>
                 </tr>
@@ -226,18 +232,17 @@ export default function ExportInvoicing() {
                 {filteredInvoices.map(inv => (
                   <tr key={inv.id || inv.invoiceNo}>
                     <td><strong>{inv.invoiceNo}</strong></td>
-                    <td><small style={{ color: '#fbbf24' }}>{inv.soNumber || 'SO-EXP-2026-001'}</small></td>
+                    <td><small className="text-gold-light">{inv.soNumber || 'SO-EXP-2026-001'}</small></td>
                     <td>{inv.date}</td>
                     <td><strong>{inv.buyerName}</strong></td>
-                    <td><small style={{ color: '#38bdf8' }}>{inv.pebNumber}</small></td>
-                    <td style={{ fontWeight: 700 }}>{inv.weightGrams} g</td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#38bdf8' }}>$ {(inv.totalUSD || 0).toLocaleString()} USD</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>Rp {(inv.totalIDR || 0).toLocaleString()}</td>
-                    <td><span className="badge badge-emerald"><ShieldCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />{inv.status || 'PPN 0% APPROVED'}</span></td>
+                    <td><small className="text-sky-light">{inv.pebNumber}</small></td>
+                    <td className="font-bold">{inv.weightGrams} g</td>
+                    <td className="text-right font-extrabold text-sky-light">$ {(inv.totalUSD || 0).toLocaleString()} USD</td>
+                    <td className="text-right font-bold text-emerald-light">Rp {(inv.totalIDR || 0).toLocaleString()}</td>
+                    <td><span className="badge badge-emerald"><ShieldCheck className="inline mr-1" size={12} />{inv.status || 'PPN 0% APPROVED'}</span></td>
                     <td>
                       <button
-                        className="btn-primary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        className="btn-primary py-1.5 px-2.5 text-xs"
                         onClick={() => showModal({
                           variant: 'info',
                           title: `🖨️ Cetak Commercial Export Invoice ${inv.invoiceNo}`,
@@ -257,31 +262,29 @@ export default function ExportInvoicing() {
 
       {/* VIEW 2: FORM CREATE FAKTUR EKSPOR (PULL FROM SO) */}
       {activeView === 'create' && (
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', marginBottom: '16px', color: '#fbbf24' }}>
+        <div className="glass-panel p-6">
+          <h3 className="font-heading text-[1.2rem] mb-4 text-gold-light">
             ✍️ Form Pembuatan Faktur Ekspor (Penarikan Otomatis Dari Export Sales Order)
           </h3>
 
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
               {/* PULL FROM SALES ORDER (SO) DROPDOWN */}
-              <div className="form-group" style={{ gridColumn: 'span 2', background: 'rgba(245,158,11,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
-                <label className="form-label" style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="form-group col-span-2 bg-[rgba(245,158,11,0.1)] p-3 rounded-sm border border-gold">
+                <label className="form-label text-gold-light font-bold flex items-center gap-2">
                   <ShoppingBag size={18} /> Tarik Otomatis Dari Export Sales Order (SO) & Price Fixing:
                 </label>
-                <select
-                  className="form-select"
+                <Combobox className="bg-ink text-white font-semibold"
                   value={form.selectedSOId}
                   onChange={handleSOSelect}
-                  style={{ background: '#0f172a', color: '#fff', fontWeight: 600 }}
-                >
-                  <option value="">-- (Pilih No. Sales Order SO Ekspor Untuk Tarik Harga & Spesifikasi) --</option>
-                  {salesOrders.map(so => (
-                    <option key={so.id || so.soNumber} value={so.soNumber}>
-                      [{so.soNumber}] {so.buyerName} - {so.itemDescription} ({so.weightGrams}g @ ${so.pricePerGramUSD}/g = ${so.totalUSD.toLocaleString()} USD)
-                    </option>
-                  ))}
-                </select>
+                  placeholder="-- (Pilih No. Sales Order SO Ekspor Untuk Tarik Harga & Spesifikasi) --"
+                  searchPlaceholder="Cari nomor SO, buyer, atau barang…"
+                  emptyText="Sales Order ekspor tidak ditemukan."
+                  options={salesOrders.map(so => ({
+                    value: so.soNumber,
+                    label: `[${so.soNumber}] ${so.buyerName} - ${so.itemDescription} (${so.weightGrams}g @ $${so.pricePerGramUSD}/g = $${so.totalUSD.toLocaleString()} USD)`
+                  }))}
+                />
               </div>
 
               <div className="form-group">
@@ -339,7 +342,7 @@ export default function ExportInvoicing() {
                 />
               </div>
 
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <div className="form-group col-span-2">
                 <label className="form-label">Rincian Deskripsi Barang Ekspor (Dari SO)</label>
                 <input
                   className="form-input"
@@ -359,62 +362,58 @@ export default function ExportInvoicing() {
 
               <div className="form-group">
                 <label className="form-label">Berat Perhiasan Ekspor (Net Weight Gram)</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={form.weightGrams}
-                  onChange={e => setForm({ ...form, weightGrams: Number(e.target.value) })}
+                  onChange={weightGrams => setForm({ ...form, weightGrams })}
                 />
               </div>
 
               <div className="form-group">
                 <label className="form-label">Harga USD / Gram (Terunci Dari SO)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="form-input"
-                  style={{ border: '1px solid #f59e0b', color: '#fbbf24', fontWeight: 700 }}
+                <NumberInput
+                  allowDecimal
+                  className="border border-gold text-gold-light font-bold"
                   value={form.pricePerGramUSD}
-                  onChange={e => setForm({ ...form, pricePerGramUSD: Number(e.target.value) })}
+                  onChange={pricePerGramUSD => setForm({ ...form, pricePerGramUSD })}
                 />
               </div>
 
               <div className="form-group">
                 <label className="form-label">Kurs BCA e-Rate USD/IDR</label>
-                <input
-                  type="number"
-                  className="form-input"
+                <NumberInput
+                  allowDecimal
                   value={form.exchangeRate}
-                  onChange={e => setForm({ ...form, exchangeRate: Number(e.target.value) })}
+                  onChange={exchangeRate => setForm({ ...form, exchangeRate })}
                 />
               </div>
             </div>
 
             {/* Calculations Card */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '20px', borderRadius: '12px', margin: '20px 0', border: '1px solid rgba(52,211,153,0.3)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] my-5 mx-0 border border-[rgba(52,211,153,0.3)]">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
                 <div>
                   <span className="stat-lbl">Total Nilai Penjualan Ekspor (USD)</span>
-                  <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '1.4rem' }}>
+                  <div className="font-extrabold text-sky-light text-[1.4rem]">
                     $ {totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
                   </div>
                 </div>
                 <div>
                   <span className="stat-lbl">Nilai Kesetaraan Rupiah (IDR)</span>
-                  <div style={{ fontWeight: 800, color: '#34d399', fontSize: '1.3rem' }}>
+                  <div className="font-extrabold text-emerald-light text-[1.3rem]">
                     Rp {totalIDR.toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <span className="stat-lbl">Fasilitas Perpajakan</span>
-                  <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '1.1rem' }}>
+                  <div className="font-extrabold text-gold-light text-[1.1rem]">
                     PPN 0% (Pasal 4B UU PPN Ekspor)
                   </div>
                 </div>
               </div>
             </div>
 
-            <button type="submit" className="btn-primary" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+            <button type="submit" className="btn-primary bg-[linear-gradient(135deg,_#10b981,_#059669)]">
               <CheckCircle2 size={18} /> Terbitkan Commercial Invoice & Posting Auto-Jurnal PPN 0%
             </button>
           </form>
