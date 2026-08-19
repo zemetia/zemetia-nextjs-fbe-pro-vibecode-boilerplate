@@ -292,18 +292,37 @@ const PurchaseOrder = {
 
         const order = this.orders[index];
         const paymentAmount = parseFloat(paymentData.amount || 0);
-        const currentPaid = parseFloat(order.paidAmountIDR || 0) + paymentAmount;
-        const totalCost = parseFloat(order.totalLandedCostIDR || order.total || order.subtotalIDR || 0);
-        const newRemaining = Math.max(0, totalCost - currentPaid);
-        const isFullyPaid = newRemaining === 0;
+        const category = paymentData.category || paymentData.paymentCategory || 'PO_PRINCIPAL';
+
+        let categoryLabel = paymentData.categoryLabel;
+        if (!categoryLabel) {
+            switch (category) {
+                case 'CUSTOMS_DUTY_PPH22':
+                    categoryLabel = '🏛️ Pajak PPh 22 Impor (0,25%)';
+                    break;
+                case 'LOGISTICS_HANDLING':
+                    categoryLabel = '🚚 Logistik & Handling';
+                    break;
+                case 'OTHER_EXPENSE':
+                    categoryLabel = '📑 Biaya Tambahan';
+                    break;
+                default:
+                    categoryLabel = '💰 Pelunasan Pokok Supplier';
+                    break;
+            }
+        }
 
         const historyEntry = {
             id: paymentData.id || Date.now(),
             voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
             voucherType: paymentData.voucherType || 'BBK',
             date: paymentData.date || new Date().toISOString().split('T')[0],
+            category,
+            categoryLabel,
+            payee: paymentData.payee || order.supplierName || 'Supplier',
             bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
             bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
+            accountCode: paymentData.accountCode || (category === 'CUSTOMS_DUTY_PPH22' ? '1135' : '2111'),
             amount: paymentAmount,
             notes: paymentData.notes || paymentData.description || '',
             recordedAt: new Date().toISOString()
@@ -311,11 +330,34 @@ const PurchaseOrder = {
 
         const existingHistory = Array.isArray(order.paymentHistory) ? order.paymentHistory : [];
 
+        let currentPaid = parseFloat(order.paidAmountIDR || 0);
+        const totalCost = parseFloat(order.totalLandedCostIDR || order.total || order.subtotalIDR || 0);
+        let newRemaining = typeof order.remainingBalanceIDR !== 'undefined' ? parseFloat(order.remainingBalanceIDR) : Math.max(0, totalCost - currentPaid);
+        let customsPaid = parseFloat(order.customsPaidAmountIDR || 0);
+        let logisticsPaid = parseFloat(order.logisticsPaidAmountIDR || 0);
+        let otherExpensesPaid = parseFloat(order.otherExpensesPaidAmountIDR || 0);
+
+        if (category === 'PO_PRINCIPAL') {
+            currentPaid += paymentAmount;
+            newRemaining = Math.max(0, totalCost - currentPaid);
+        } else if (category === 'CUSTOMS_DUTY_PPH22') {
+            customsPaid += paymentAmount;
+        } else if (category === 'LOGISTICS_HANDLING') {
+            logisticsPaid += paymentAmount;
+        } else {
+            otherExpensesPaid += paymentAmount;
+        }
+
+        const isFullyPaid = newRemaining === 0;
+
         this.orders[index] = {
             ...order,
             paidAmountIDR: currentPaid,
             remainingBalanceIDR: newRemaining,
-            paymentStatus: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
+            customsPaidAmountIDR: customsPaid,
+            logisticsPaidAmountIDR: logisticsPaid,
+            otherExpensesPaidAmountIDR: otherExpensesPaid,
+            paymentStatus: isFullyPaid ? 'PAID' : currentPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
             lastPaymentVoucher: historyEntry.voucherNo,
             lastPaymentDate: historyEntry.date,
             paymentHistory: [historyEntry, ...existingHistory],

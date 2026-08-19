@@ -16,6 +16,7 @@ export default function ExportSalesOrderPage() {
 
   const [form, setForm] = useState({
     soNumber: 'SO-EXP-2026-001',
+    customerPONumber: 'PO-DMCC-2026-8899',
     date: new Date().toISOString().split('T')[0],
     selectedCustomerId: '',
     buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
@@ -59,6 +60,7 @@ export default function ExportSalesOrderPage() {
         {
           id: 'SO-EXP-2026-001',
           soNumber: 'SO-EXP-2026-001',
+          customerPONumber: 'PO-DMCC-2026-8899',
           date: '2026-08-10',
           buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
           country: 'United Arab Emirates (UAE)',
@@ -137,6 +139,7 @@ export default function ExportSalesOrderPage() {
 
   const filteredOrders = salesOrders.filter(so =>
     so.soNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    so.customerPONumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     so.buyerName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -191,7 +194,7 @@ export default function ExportSalesOrderPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
               <input
                 className="form-input pl-9.5 w-full"
-                placeholder="Cari No. SO atau Nama Buyer..."
+                placeholder="Cari No. SO, PO Customer, atau Nama Buyer..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -219,7 +222,12 @@ export default function ExportSalesOrderPage() {
                 ) : (
                   filteredOrders.map(so => (
                     <tr key={so.id || so.soNumber}>
-                      <td><strong>{so.soNumber}</strong></td>
+                      <td>
+                        <strong>{so.soNumber}</strong>
+                        {so.customerPONumber && (
+                          <small className="text-fg-muted block text-xs">PO Cust: {so.customerPONumber}</small>
+                        )}
+                      </td>
                       <td>{so.date}</td>
                       <td><strong>{so.buyerName}</strong></td>
                       <td>{so.country}</td>
@@ -233,7 +241,7 @@ export default function ExportSalesOrderPage() {
                           onClick={() => showModal({
                             variant: 'info',
                             title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
-                            message: `Dokumen PDF untuk ${so.buyerName}.`
+                            message: `• Buyer: ${so.buyerName}\n• No. PO Customer: ${so.customerPONumber || '-'}\n• Berat: ${so.weightGrams}g\n• Total Nilai: $ ${(so.totalUSD || 0).toLocaleString()} USD`
                           })}
                         >
                           <Printer size={14} /> Cetak SO
@@ -278,6 +286,16 @@ export default function ExportSalesOrderPage() {
                   className="form-input"
                   value={form.soNumber}
                   onChange={e => setForm({ ...form, soNumber: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">No. PO Customer (Buyer PO)</label>
+                <input
+                  className="form-input font-semibold text-gold-light"
+                  placeholder="Contoh: PO-DMCC-2026-8899"
+                  value={form.customerPONumber}
+                  onChange={e => setForm({ ...form, customerPONumber: e.target.value })}
                 />
               </div>
 

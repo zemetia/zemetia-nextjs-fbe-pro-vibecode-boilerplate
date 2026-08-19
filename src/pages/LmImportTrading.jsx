@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlaneTakeoff, Plus, Calculator, RefreshCw, Scale, Printer, Sparkles, History, AlertCircle } from 'lucide-react';
+import { PlaneTakeoff, Plus, Calculator, RefreshCw, Scale, Printer, Sparkles, History, AlertCircle, Eye, Package, Truck } from 'lucide-react';
 import { createPurchaseOrder, getPurchaseOrders } from '../services/storageService';
 import { fetchBcaERateUSD, getStoredUsdRate } from '../services/currencyService';
 import Modal, { useModal } from '../components/ui/Modal';
@@ -11,11 +11,13 @@ export default function LmImportTrading() {
   const [loadingRate, setLoadingRate] = useState(false);
   const [unitMode, setUnitMode] = useState('oz'); // 'oz' (Troy Ounce) or 'gram' (Gram)
   const [selectedPOHistory, setSelectedPOHistory] = useState(null); // State for Payment History Modal
+  const [selectedPODetail, setSelectedPODetail] = useState(null); // State for Detail PO Modal
 
   const [formData, setFormData] = useState({
     supplierName: 'YLG Bullion Singapore Pte Ltd',
     orderDate: new Date().toISOString().split('T')[0],
     currency: 'USD',
+    invoiceNumber: 'INV-YLG-SG-2026-8812',
     paymentTerms: '100% Cash Before Delivery (Advance TT)',
     exchangeRate: getStoredUsdRate(),
     
@@ -73,6 +75,7 @@ export default function LmImportTrading() {
       supplier: 'SUPP-YLG-SG',
       supplierName: formData.supplierName,
       orderDate: formData.orderDate,
+      invoiceNumber: formData.invoiceNumber || '',
       currency: formData.currency,
       paymentTerms: formData.paymentTerms,
       exchangeRate: Number(formData.exchangeRate),
@@ -186,6 +189,16 @@ export default function LmImportTrading() {
                 className="form-input"
                 value={formData.orderDate}
                 onChange={e => setFormData({ ...formData, orderDate: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">No. Invoice Supplier</label>
+              <input
+                className="form-input font-semibold text-gold-light"
+                placeholder="Contoh: INV-YLG-SG-2026-8812"
+                value={formData.invoiceNumber}
+                onChange={e => setFormData({ ...formData, invoiceNumber: e.target.value })}
               />
             </div>
 
@@ -362,7 +375,12 @@ export default function LmImportTrading() {
 
                   return (
                     <tr key={po.id || po.poNumber}>
-                      <td><strong className="text-sky-light">{po.poNumber}</strong></td>
+                      <td>
+                        <strong className="text-sky-light">{po.poNumber}</strong>
+                        {po.invoiceNumber && (
+                          <small className="text-fg-muted block text-xs">Inv: {po.invoiceNumber}</small>
+                        )}
+                      </td>
                       <td><strong>{po.supplierName || po.supplier}</strong></td>
                       <td>{po.orderDate}</td>
                       <td>
@@ -387,6 +405,12 @@ export default function LmImportTrading() {
                       <td>
                         <div className="flex gap-1.5 flex-wrap">
                           <button
+                            className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(251,191,36,0.15)] border border-gold text-gold-light cursor-pointer"
+                            onClick={() => setSelectedPODetail(po)}
+                          >
+                            <Eye size={13} /> Detail PO
+                          </button>
+                          <button
                             className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(56,189,248,0.2)] border border-sky-light text-sky-light cursor-pointer"
                             onClick={() => setSelectedPOHistory(po)}
                           >
@@ -397,7 +421,7 @@ export default function LmImportTrading() {
                             onClick={() => showModal({
                               variant: 'info',
                               title: `🖨️ Cetak Dokumen PO ${po.poNumber}`,
-                              message: `• Supplier: ${po.supplierName || po.supplier}\n• Total Nilai: $ ${(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalCostIDR.toLocaleString()})\n• Status Pembayaran: ${paidIDR >= totalCostIDR && totalCostIDR > 0 ? '🟢 LUNAS' : paidIDR > 0 ? `🟡 DICICIL (Terbayar Rp ${paidIDR.toLocaleString()} | Sisa Rp ${remainingIDR.toLocaleString()})` : '🔴 BELUM BAYAR'}\n• Status Fisik: ${po.status === 'received' ? 'Diterima di Vault TTB' : 'Approved (Open)'}`
+                              message: `• Supplier: ${po.supplierName || po.supplier}\n• No. Invoice: ${po.invoiceNumber || '-'}\n• Total Nilai: $ ${(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalCostIDR.toLocaleString()})\n• Status Pembayaran: ${paidIDR >= totalCostIDR && totalCostIDR > 0 ? '🟢 LUNAS' : paidIDR > 0 ? `🟡 DICICIL (Terbayar Rp ${paidIDR.toLocaleString()} | Sisa Rp ${remainingIDR.toLocaleString()})` : '🔴 BELUM BAYAR'}\n• Status Fisik: ${po.status === 'received' ? 'Diterima di Vault TTB' : 'Approved (Open)'}`
                             })}
                           >
                             <Printer size={13} /> Cetak PO
@@ -412,6 +436,185 @@ export default function LmImportTrading() {
           </table>
         </div>
       </div>
+
+      {/* MODAL POPUP DETAIL LENGKAP PO IMPORT */}
+      {selectedPODetail && (() => {
+        const po = selectedPODetail;
+        const totalCostIDR = po.totalLandedCostIDR || ((po.totalAmountUSD || 0) * (po.exchangeRate || 16250)) || Number(po.total || 0);
+        const paidIDR = Number(po.paidAmountIDR || 0);
+        const remainingIDR = typeof po.remainingBalanceIDR !== 'undefined' ? po.remainingBalanceIDR : Math.max(0, totalCostIDR - paidIDR);
+        const barSerials = Array.isArray(po.barSerialNumbers) ? po.barSerialNumbers : [];
+
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-5">
+            <div className="glass-panel w-full max-w-[750px] max-h-[90vh] overflow-y-auto p-6 bg-[#0f172a] border border-gold">
+              <div className="flex justify-between items-center mb-4 border-b border-line pb-3">
+                <h3 className="font-heading text-[1.2rem] text-gold-light flex items-center gap-2">
+                  <Eye size={20} /> Detail Purchase Order Impor — {po.poNumber}
+                </h3>
+                <button
+                  className="btn-primary py-1 px-2.5 text-xs bg-rose/20 border border-rose text-rose cursor-pointer"
+                  onClick={() => setSelectedPODetail(null)}
+                >
+                  ✕ Tutup
+                </button>
+              </div>
+
+              {/* Info Header */}
+              <div className="bg-white/3 p-3.5 rounded-lg mb-4">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
+                  <div>
+                    <span className="stat-lbl">Supplier Impor</span>
+                    <strong className="text-fg block">{po.supplierName || po.supplier}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-lbl">Tgl PO</span>
+                    <strong className="text-fg block">{po.orderDate}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-lbl">No. Invoice Supplier</span>
+                    <strong className="text-gold-light block">{po.invoiceNumber || '-'}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-lbl">Termin Pembayaran</span>
+                    <strong className="text-fg block">{po.paymentTerms || '-'}</strong>
+                  </div>
+                  <div>
+                    <span className="stat-lbl">Status Fisik Brankas</span>
+                    {po.status === 'received' ? (
+                      <span className="badge badge-blue">📦 RECEIVED IN VAULT</span>
+                    ) : (
+                      <span className="badge badge-emerald">🟢 APPROVED (OPEN)</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Rincian Volume & Harga */}
+              <h4 className="text-[0.9rem] text-sky-light mb-2.5 flex items-center gap-1.5">
+                <Calculator size={16} /> Rincian Volume & Struktur Harga
+              </h4>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 mb-4 bg-[rgba(15,23,42,0.6)] p-3.5 rounded-lg">
+                <div>
+                  <span className="stat-lbl">Jumlah Pesanan</span>
+                  <strong className="text-gold-light block">
+                    {po.quantityUnits ? `${po.quantityUnits.toLocaleString()} ${po.unitMode || 'oz'}` : '-'}
+                  </strong>
+                  <small className="text-fg-muted">≈ {(po.weightGrams || 0).toLocaleString()} g ({(po.weightOz || 0).toLocaleString()} oz)</small>
+                </div>
+                <div>
+                  <span className="stat-lbl">Total Nilai Kesepakatan (USD)</span>
+                  <strong className="text-sky-light block">$ {(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Kurs Acuan Transaksi</span>
+                  <strong className="text-fg block">Rp {Number(po.exchangeRate || 0).toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Total Landed Cost (IDR)</span>
+                  <strong className="text-emerald-light block">Rp {totalCostIDR.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">HPP / Gram</span>
+                  <strong className="text-gold-light block">Rp {Math.round(po.unitLandedCostIDRPerGram || 0).toLocaleString()} / g</strong>
+                </div>
+              </div>
+
+              {/* Item Breakdown */}
+              <h4 className="text-[0.9rem] text-sky-light mb-2.5 flex items-center gap-1.5">
+                <Package size={16} /> Rincian Barang
+              </h4>
+              <div className="table-container mb-4">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Nama Barang</th>
+                      <th className="text-right">Kuantitas</th>
+                      <th className="text-right">Harga/Satuan (USD)</th>
+                      <th className="text-right">Harga/Satuan (IDR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(po.items || []).length === 0 ? (
+                      <tr><td colSpan="4" className="text-center text-fg-muted p-4">Tidak ada rincian barang.</td></tr>
+                    ) : po.items.map((it, i) => (
+                      <tr key={i}>
+                        <td>{it.itemName}</td>
+                        <td className="text-right">{Number(it.quantity || 0).toLocaleString()} {it.unit || 'gram'}</td>
+                        <td className="text-right">$ {Number(it.unitPriceUSD || it.unitPrice || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        <td className="text-right">Rp {Number(it.unitPriceIDR || 0).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Logistik */}
+              <h4 className="text-[0.9rem] text-sky-light mb-2.5 flex items-center gap-1.5">
+                <Truck size={16} /> Logistik & Keamanan Pengiriman
+              </h4>
+              <div className="bg-[rgba(15,23,42,0.6)] p-3.5 rounded-lg mb-4">
+                <div className="mb-2">
+                  <span className="stat-lbl">Kargo Pengamanan</span>
+                  <strong className="text-fg block">{po.logisticsCarrier || '-'}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">No. Seri Batangan / Segel Koper</span>
+                  {barSerials.length === 0 ? (
+                    <div className="text-fg-muted text-sm">-</div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {barSerials.map((s, i) => (
+                        <span key={i} className="badge badge-gold text-xs">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Pembayaran */}
+              <h4 className="text-[0.9rem] text-sky-light mb-2.5">💰 Status Pembayaran</h4>
+              <div className="grid grid-cols-3 gap-3 mb-4 bg-[rgba(15,23,42,0.6)] p-3.5 rounded-lg">
+                <div>
+                  <span className="stat-lbl">Terbayar</span>
+                  <strong className="text-emerald-light block">Rp {paidIDR.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Sisa Tagihan</span>
+                  <strong className="text-rose block">Rp {remainingIDR.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Status</span>
+                  <strong className="block">
+                    {paidIDR >= totalCostIDR && totalCostIDR > 0 ? '🟢 PAID / LUNAS' : paidIDR > 0 ? '🟡 PARTIALLY PAID' : '🔴 UNPAID'}
+                  </strong>
+                </div>
+              </div>
+
+              {po.notes && (
+                <>
+                  <h4 className="text-[0.9rem] text-sky-light mb-2">📝 Catatan</h4>
+                  <div className="bg-[rgba(15,23,42,0.6)] p-3.5 rounded-lg mb-4 text-sm text-fg-soft whitespace-pre-wrap">
+                    {po.notes}
+                  </div>
+                </>
+              )}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(56,189,248,0.2)] border border-sky-light text-sky-light cursor-pointer"
+                  onClick={() => { setSelectedPODetail(null); setSelectedPOHistory(po); }}
+                >
+                  <History size={13} /> Lihat Riwayat Cicilan
+                </button>
+                <button className="btn-primary" onClick={() => setSelectedPODetail(null)}>
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL POPUP RIWAYAT CICILAN PEMBAYARAN PO (AUDIT TRAIL) */}
       {selectedPOHistory && (
@@ -429,43 +632,54 @@ export default function LmImportTrading() {
               </button>
             </div>
 
-            <div className="bg-white/3 p-3.5 rounded-lg mb-4">
-              <div className="grid grid-cols-3 gap-2.5">
+            <div className="bg-white/3 p-3.5 rounded-lg mb-4 border border-line">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 <div>
                   <span className="stat-lbl">Nomor PO</span>
                   <strong className="text-sky-light">{selectedPOHistory.poNumber}</strong>
                 </div>
                 <div>
-                  <span className="stat-lbl">Supplier</span>
+                  <span className="stat-lbl">Supplier Emas</span>
                   <strong>{selectedPOHistory.supplierName || selectedPOHistory.supplier}</strong>
                 </div>
                 <div>
-                  <span className="stat-lbl">Total Tagihan PO</span>
-                  <strong className="text-gold-light">
+                  <span className="stat-lbl">Total Tagihan Pokok PO</span>
+                  <strong className="text-fg">
                     Rp {(selectedPOHistory.totalLandedCostIDR || (selectedPOHistory.totalAmountUSD * (selectedPOHistory.exchangeRate || 16250))).toLocaleString()}
+                  </strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Sisa Hutang Pokok</span>
+                  <strong className="text-gold-light">
+                    Rp {(typeof selectedPOHistory.remainingBalanceIDR !== 'undefined' ? selectedPOHistory.remainingBalanceIDR : Math.max(0, (selectedPOHistory.totalLandedCostIDR || 0) - (selectedPOHistory.paidAmountIDR || 0))).toLocaleString()}
                   </strong>
                 </div>
               </div>
             </div>
 
-            <h4 className="text-[0.9rem] text-sky-light mb-2.5">
-              📋 Rincian Transaksi Voucher BBK yang Diterbitkan:
+            <h4 className="text-[0.9rem] text-sky-light mb-2.5 flex items-center justify-between">
+              <span>📋 Rincian Multi-Voucher Pembayaran Terkait PO:</span>
+              <span className="text-xs text-fg-muted">
+                {selectedPOHistory.paymentHistory?.length || 0} Voucher Diterbitkan
+              </span>
             </h4>
 
             {(!selectedPOHistory.paymentHistory || selectedPOHistory.paymentHistory.length === 0) ? (
               <div className="p-6 text-center text-fg-muted bg-[rgba(15,23,42,0.6)] rounded-lg">
                 <AlertCircle size={28} className="text-rose mx-auto mb-2" />
-                Belum ada transaksi pembayaran (BBK) untuk PO ini. (Status: 🔴 UNPAID)
+                Belum ada transaksi voucher pembayaran (BBK/BKK) untuk PO ini. (Status: 🔴 UNPAID)
               </div>
             ) : (
               <div className="table-container">
                 <table className="custom-table">
                   <thead>
                     <tr>
-                      <th>No. Voucher BBK</th>
-                      <th>Tanggal Bayar</th>
+                      <th>No. Voucher</th>
+                      <th>Tanggal</th>
+                      <th>Kategori Alokasi</th>
+                      <th>Penerima (Payee)</th>
                       <th>Rekening Bank</th>
-                      <th className="text-right">Nominal Cicilan</th>
+                      <th className="text-right">Nominal (IDR)</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -474,7 +688,21 @@ export default function LmImportTrading() {
                       <tr key={i}>
                         <td><strong className="text-sky-light">{pmt.voucherNo}</strong></td>
                         <td>{pmt.date}</td>
-                        <td><small>{pmt.bank || 'Bank BCA Devisa USD'}</small></td>
+                        <td>
+                          <span className={`badge text-xs ${
+                            pmt.category === 'CUSTOMS_DUTY_PPH22'
+                              ? 'bg-sky-950/80 text-sky-300 border border-sky-600/50'
+                              : pmt.category === 'LOGISTICS_HANDLING'
+                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/50'
+                              : pmt.category === 'OTHER_EXPENSE'
+                              ? 'bg-purple-950/80 text-purple-300 border border-purple-600/50'
+                              : 'bg-amber-950/80 text-gold-light border border-gold/50'
+                          }`}>
+                            {pmt.categoryLabel || (pmt.category === 'CUSTOMS_DUTY_PPH22' ? '🏛️ PPh 22 (0,25%)' : pmt.category === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
+                          </span>
+                        </td>
+                        <td><small className="font-semibold text-fg">{pmt.payee || selectedPOHistory.supplierName || 'Supplier'}</small></td>
+                        <td><small>{pmt.bank || 'Bank BCA'}</small></td>
                         <td className="text-right font-extrabold text-emerald-light">
                           Rp {Number(pmt.amount || 0).toLocaleString()}
                         </td>

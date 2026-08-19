@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign, ArrowUpRight, ArrowDownRight, Scale, Clock, Award } from 'lucide-react';
-import { getCOA } from '../services/storageService';
+import {
+  BookOpen, FileText, Plus, Search, Filter, Printer, DollarSign,
+  ArrowUpRight, ArrowDownRight, Scale, Clock, Award, ShieldCheck,
+  CheckCircle2, TrendingUp, AlertTriangle, Layers
+} from 'lucide-react';
+import {
+  getCOA,
+  getExportDeliveryOrders
+} from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
 import NumberInput from '../components/ui/NumberInput';
 
@@ -11,42 +18,66 @@ export default function AccountingReports() {
   const [selectedAccountCode, setSelectedAccountCode] = useState('1157');
   const [showAddForm, setShowAddForm] = useState(false);
   const [coaList, setCoaList] = useState([]);
+  const [exportInvoices, setExportInvoices] = useState([]);
+  const [localPurchases, setLocalPurchases] = useState([]);
+  const [importPOs, setImportPOs] = useState([]);
 
   const [newJournal, setNewJournal] = useState({
     date: new Date().toISOString().split('T')[0],
     description: 'Jurnal Penyesuaian / Transaksi Kas Ops',
     debitAccount: '1157',
-    creditAccount: '2110',
+    creditAccount: '2111',
     amount: 10000000
   });
 
   useEffect(() => {
-    setCoaList(getCOA().filter(a => a.type === 'detail'));
-    loadJournals();
+    const detailCOA = getCOA().filter(a => a.type === 'detail');
+    setCoaList(detailCOA);
+    loadFinancialData();
   }, [activeTab]);
 
-  const loadJournals = () => {
+  const loadFinancialData = () => {
     if (typeof window !== 'undefined' && window.Storage) {
-      const stored = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      setJournals(stored);
+      const storedJournals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
+      setJournals(storedJournals);
+
+      const invs = window.Storage.get('pttan_export_invoices') || [];
+      setExportInvoices(invs);
+
+      const local = window.Storage.get('pttan_local_purchases') || [];
+      setLocalPurchases(local);
+
+      const pos = window.Storage.get(window.Storage.KEYS.PURCHASE_ORDERS) || [];
+      setImportPOs(pos);
     }
   };
 
-  const handleCreateJournal = (e) => {
+  const handleCreateJournal = async (e) => {
     e.preventDefault();
     if (!newJournal.amount || !newJournal.description) {
-      showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Deskripsi dan nominal jurnal wajib diisi.' });
+      showModal({
+        variant: 'warning',
+        title: 'Data Belum Lengkap',
+        message: 'Deskripsi dan nominal jurnal wajib diisi.'
+      });
       return;
     }
 
+    const entryNum = typeof window.Storage.getNextReferenceNumber === 'function'
+      ? await window.Storage.getNextReferenceNumber('journal')
+      : `JRN-${Date.now().toString().slice(-6)}`;
+
+    const debitAccName = coaList.find(a => a.code === newJournal.debitAccount)?.name || newJournal.debitAccount;
+    const creditAccName = coaList.find(a => a.code === newJournal.creditAccount)?.name || newJournal.creditAccount;
+
     const entry = {
       id: Date.now(),
-      entryNumber: `JRN-${Date.now().toString().slice(-6)}`,
+      entryNumber: entryNum,
       date: newJournal.date,
       description: newJournal.description,
       lines: [
-        { accountCode: newJournal.debitAccount, accountName: coaList.find(a => a.code === newJournal.debitAccount)?.name || newJournal.debitAccount, debit: Number(newJournal.amount), credit: 0 },
-        { accountCode: newJournal.creditAccount, accountName: coaList.find(a => a.code === newJournal.creditAccount)?.name || newJournal.creditAccount, debit: 0, credit: Number(newJournal.amount) }
+        { accountCode: newJournal.debitAccount, accountName: debitAccName, debit: Number(newJournal.amount), credit: 0 },
+        { accountCode: newJournal.creditAccount, accountName: creditAccName, debit: 0, credit: Number(newJournal.amount) }
       ],
       createdAt: new Date().toISOString()
     };
@@ -54,26 +85,82 @@ export default function AccountingReports() {
     if (typeof window !== 'undefined' && window.Storage) {
       const list = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       list.unshift(entry);
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, list);
+      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, list);
+
       showModal({
         variant: 'success',
         title: `✅ Jurnal Mutasi (${entry.entryNumber}) Diposting`,
-        message: `${entry.description}\nNominal: Rp ${Number(newJournal.amount).toLocaleString()}`
+        message: `${entry.description}\n• Debet: ${debitAccName} Rp ${Number(newJournal.amount).toLocaleString()}\n• Kredit: ${creditAccName} Rp ${Number(newJournal.amount).toLocaleString()}`
       });
-      loadJournals();
+      loadFinancialData();
       setShowAddForm(false);
     }
   };
 
-  // Compute GL Mutations for selected account
+  // ==========================================
+  // DYNAMIC FINANCIAL ENGINE CALCULATIONS
+  // ==========================================
+
+  // 1. Account Balances Map from all Journals
+  const accountBalances = {};
+  coaList.forEach(acc => {
+    accountBalances[acc.code] = {
+      code: acc.code,
+      name: acc.name,
+      category: acc.category,
+      totalDebit: 0,
+      totalCredit: 0,
+      balance: 0
+    };
+  });
+
+  journals.forEach(j => {
+    j.lines?.forEach(l => {
+      const code = l.accountCode;
+      if (!accountBalances[code]) {
+        accountBalances[code] = {
+          code: code,
+          name: l.accountName || code,
+          category: code.startsWith('1') ? 'aset' : code.startsWith('2') ? 'kewajiban' : code.startsWith('3') ? 'ekuitas' : code.startsWith('4') ? 'pendapatan' : 'beban',
+          totalDebit: 0,
+          totalCredit: 0,
+          balance: 0
+        };
+      }
+      accountBalances[code].totalDebit += Number(l.debit || 0);
+      accountBalances[code].totalCredit += Number(l.credit || 0);
+    });
+  });
+
+  // Calculate Net Balances based on standard normal balance rules
+  Object.values(accountBalances).forEach(acc => {
+    const isDebitNormal = acc.category === 'aset' || acc.category === 'beban' || acc.code.startsWith('1') || acc.code.startsWith('5') || acc.code.startsWith('6');
+    if (isDebitNormal) {
+      acc.balance = acc.totalDebit - acc.totalCredit;
+    } else {
+      acc.balance = acc.totalCredit - acc.totalDebit;
+    }
+  });
+
+  // 2. General Ledger (GL) Mutations for selected account (Chronologically Sorted)
+  const selectedAcc = accountBalances[selectedAccountCode] || { code: selectedAccountCode, name: selectedAccountCode, category: 'aset' };
+  const isSelectedDebitNormal = selectedAcc.category === 'aset' || selectedAcc.category === 'beban' || selectedAccountCode.startsWith('1') || selectedAccountCode.startsWith('5') || selectedAccountCode.startsWith('6');
+
+  // Chronological copy for GL calculation
+  const chronologicalJournals = [...journals].sort((a, b) => new Date(a.date) - new Date(b.date));
   const glMutations = [];
   let runningBalance = 0;
-  journals.forEach(j => {
+
+  chronologicalJournals.forEach(j => {
     j.lines?.forEach(line => {
       if (line.accountCode === selectedAccountCode) {
         const debit = Number(line.debit || 0);
         const credit = Number(line.credit || 0);
-        runningBalance += (debit - credit);
+        if (isSelectedDebitNormal) {
+          runningBalance += (debit - credit);
+        } else {
+          runningBalance += (credit - debit);
+        }
         glMutations.push({
           journalNo: j.entryNumber,
           date: j.date,
@@ -86,6 +173,76 @@ export default function AccountingReports() {
     });
   });
 
+  // 3. Trial Balance Summaries
+  let trialTotalDebit = 0;
+  let trialTotalCredit = 0;
+  const trialAccounts = Object.values(accountBalances).filter(a => a.totalDebit > 0 || a.totalCredit > 0 || a.balance !== 0);
+  trialAccounts.forEach(a => {
+    trialTotalDebit += a.totalDebit;
+    trialTotalCredit += a.totalCredit;
+  });
+
+  // 4. Laba Rugi SAK EMKM
+  const revenueAccounts = Object.values(accountBalances).filter(a => a.code.startsWith('4') || a.category === 'pendapatan');
+  const hppAccounts = Object.values(accountBalances).filter(a => a.code.startsWith('5') || a.category === 'hpp');
+  const opexAccounts = Object.values(accountBalances).filter(a => (a.code.startsWith('6') || a.category === 'beban') && !a.code.startsWith('5'));
+
+  const totalPendapatan = revenueAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+  const totalHPP = hppAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+  const totalOpex = opexAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+  const labaKotor = totalPendapatan - totalHPP;
+  const labaBersih = labaKotor - totalOpex;
+
+  // 5. Neraca / Posisi Keuangan SAK EMKM
+  const assetAccounts = Object.values(accountBalances).filter(a => a.code.startsWith('1') || a.category === 'aset');
+  const liabilityAccounts = Object.values(accountBalances).filter(a => a.code.startsWith('2') || a.category === 'kewajiban');
+  const equityAccounts = Object.values(accountBalances).filter(a => a.code.startsWith('3') || a.category === 'ekuitas');
+
+  const totalAset = assetAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalKewajiban = liabilityAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const modalDisetor = equityAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalEkuitas = modalDisetor + labaBersih;
+  const totalKewajibanDanEkuitas = totalKewajiban + totalEkuitas;
+  const isBalanceMatch = Math.abs(totalAset - totalKewajibanDanEkuitas) < 1;
+
+  // 6. Arus Kas Langsung (Direct Cash Flow)
+  let cashInflow = 0;
+  let cashOutflow = 0;
+  const cashMovements = [];
+
+  chronologicalJournals.forEach(j => {
+    j.lines?.forEach(line => {
+      const isCashOrBank = line.accountCode.startsWith('111') || line.accountCode.startsWith('112');
+      if (isCashOrBank) {
+        const debit = Number(line.debit || 0);
+        const credit = Number(line.credit || 0);
+        if (debit > 0) {
+          cashInflow += debit;
+          cashMovements.push({
+            date: j.date,
+            journalNo: j.entryNumber,
+            description: j.description,
+            account: line.accountName || line.accountCode,
+            type: 'IN',
+            amount: debit
+          });
+        }
+        if (credit > 0) {
+          cashOutflow += credit;
+          cashMovements.push({
+            date: j.date,
+            journalNo: j.entryNumber,
+            description: j.description,
+            account: line.accountName || line.accountCode,
+            type: 'OUT',
+            amount: credit
+          });
+        }
+      }
+    });
+  });
+  const netCashFlow = cashInflow - cashOutflow;
+
   return (
     <div>
       {/* Header Controls */}
@@ -96,15 +253,25 @@ export default function AccountingReports() {
               <BookOpen color="#f59e0b" size={24} /> Modul Laporan Keuangan Lengkap SAK EMKM PT TAN
             </h2>
             <p className="text-[0.8rem] text-fg-soft">
-              8 Laporan Keuangan Resmi (Jurnal Umum, Buku Besar, Neraca Saldo, Laba Rugi, Neraca, Arus Kas, Aging AR/AP, & CALK)
+              8 Laporan Keuangan Resmi Dinamis: Jurnal Umum, Buku Besar, Neraca Saldo, Laba Rugi SAK, Posisi Keuangan (Neraca), Arus Kas, Aging AR/AP, & CALK
             </p>
           </div>
 
           <div className="flex gap-2.5">
-            <button className="btn-primary" onClick={() => showModal({ variant: 'info', title: '🖨️ Cetak Laporan Keuangan PDF', message: 'Menyiapkan berkas PDF laporan keuangan PT TAN.' })}>
+            <button
+              className="btn-primary"
+              onClick={() => showModal({
+                variant: 'info',
+                title: '🖨️ Cetak Laporan Keuangan SAK EMKM PT TAN',
+                message: `Laporan Keuangan PT TAN (SAK EMKM):\n\n• Total Pendapatan Usaha: Rp ${totalPendapatan.toLocaleString()}\n• Total HPP & Beban: Rp ${(totalHPP + totalOpex).toLocaleString()}\n• Laba Bersih Usaha: Rp ${labaBersih.toLocaleString()}\n• Total Aset: Rp ${totalAset.toLocaleString()}\n• Total Kewajiban & Ekuitas: Rp ${totalKewajibanDanEkuitas.toLocaleString()}\n• Status Neraca: ${isBalanceMatch ? '✅ SEIMBANG (BALANCED)' : '⚠️ SELISIH'}\n\nBerkas laporan siap dicetak atau diekspor ke PDF.`
+              })}
+            >
               <Printer size={16} /> Cetak Laporan PDF
             </button>
-            <button className="btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
+            <button
+              className="btn-primary bg-linear-135 from-gold to-gold-dark font-bold text-white"
+              onClick={() => setShowAddForm(!showAddForm)}
+            >
               <Plus size={16} /> Input Jurnal Manual
             </button>
           </div>
@@ -113,13 +280,13 @@ export default function AccountingReports() {
         {/* Tab Navigation */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           {[
-            { id: 'journals', label: '📖 Mutasi Jurnal' },
-            { id: 'gl', label: '📒 Buku Besar' },
-            { id: 'trial', label: '⚖️ Neraca Saldo' },
-            { id: 'income', label: '📈 Laba Rugi SAK' },
+            { id: 'journals', label: '📖 Mutasi Jurnal Umum' },
+            { id: 'gl', label: '📒 Buku Besar (General Ledger)' },
+            { id: 'trial', label: '⚖️ Neraca Saldo (Trial Balance)' },
+            { id: 'income', label: '📈 Laba Rugi SAK EMKM' },
             { id: 'balance', label: '🏛️ Posisi Keuangan (Neraca)' },
-            { id: 'cashflow', label: '💵 Arus Kas' },
-            { id: 'aging', label: '⏱️ Aging AR/AP' },
+            { id: 'cashflow', label: '💵 Arus Kas (Cash Flow)' },
+            { id: 'aging', label: '⏱️ Aging AR / AP' },
             { id: 'calk', label: '📜 CALK SAK EMKM' }
           ].map(tab => (
             <button
@@ -139,7 +306,7 @@ export default function AccountingReports() {
         {/* Form Add Manual Journal */}
         {showAddForm && (
           <form className="bg-[rgba(15,23,42,0.7)] p-5 rounded-[12px] mt-5 border border-gold" onSubmit={handleCreateJournal}>
-            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Input Jurnal Manual</h4>
+            <h4 className="text-gold-light mb-3.5 text-[0.95rem]">➕ Form Input Jurnal Penyesuaian Manual</h4>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Tanggal Jurnal</label>
@@ -197,134 +364,54 @@ export default function AccountingReports() {
         )}
       </div>
 
-      {/* Tab 1: Mutasi Jurnal Umum */}
-      {activeTab === 'journals' && (
-        <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.1rem] mb-4">
-            📖 Daftar Mutasi Jurnal Umum ({journals.length})
-          </h3>
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. Jurnal</th>
-                  <th>Tanggal</th>
-                  <th>Deskripsi Keterangan</th>
-                  <th>Kode & Nama Akun</th>
-                  <th className="text-right">Debet (IDR)</th>
-                  <th className="text-right">Kredit (IDR)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {journals.map(j => (
-                  <React.Fragment key={j.id || j.entryNumber}>
-                    {j.lines?.map((line, idx) => (
-                      <tr key={idx} className={idx === 0 ? 'bg-white/[0.02]' : 'bg-transparent'}>
-                        {idx === 0 && <td rowSpan={j.lines.length}><strong>{j.entryNumber}</strong></td>}
-                        {idx === 0 && <td rowSpan={j.lines.length}>{j.date}</td>}
-                        {idx === 0 && <td rowSpan={j.lines.length}>{j.description}</td>}
-                        <td>
-                          <span className={line.credit > 0 ? 'pl-5' : 'pl-0'}>
-                            <strong>{line.accountCode}</strong> - {line.accountName}
-                          </span>
-                        </td>
-                        <td className="text-right">
-                          {line.debit > 0 ? `Rp ${line.debit.toLocaleString()}` : '-'}
-                        </td>
-                        <td className="text-right">
-                          {line.credit > 0 ? `Rp ${line.credit.toLocaleString()}` : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2: Buku Besar (General Ledger) */}
-      {activeTab === 'gl' && (
-        <div className="glass-panel p-6">
-          <div className="flex gap-4 items-center mb-5 flex-wrap">
-            <label className="form-label mb-0">Pilih Akun Buku Besar:</label>
-            <select
-              className="form-select max-w-[360px]"
-              value={selectedAccountCode}
-              onChange={e => setSelectedAccountCode(e.target.value)}
-            >
-              {coaList.map(a => (
-                <option key={a.code} value={a.code}>{a.code} - {a.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <h3 className="font-heading text-[1.1rem] mb-4">
-            📒 Buku Besar Akun {selectedAccountCode} ({glMutations.length} Mutasi)
-          </h3>
-
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. Jurnal</th>
-                  <th>Tanggal</th>
-                  <th>Keterangan</th>
-                  <th className="text-right">Debet (IDR)</th>
-                  <th className="text-right">Kredit (IDR)</th>
-                  <th className="text-right">Saldo Akhir (IDR)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {glMutations.length === 0 ? (
-                  <tr><td className="text-center p-7.5 text-fg-muted" colSpan="6">Belum ada mutasi untuk akun ini</td></tr>
-                ) : (
-                  glMutations.map((m, i) => (
-                    <tr key={i}>
-                      <td><strong>{m.journalNo}</strong></td>
-                      <td>{m.date}</td>
-                      <td>{m.description}</td>
-                      <td className={`text-right ${m.debit > 0 ? 'text-emerald-light' : 'text-inherit'}`}>{m.debit > 0 ? `Rp ${m.debit.toLocaleString()}` : '-'}</td>
-                      <td className={`text-right ${m.credit > 0 ? 'text-danger' : 'text-inherit'}`}>{m.credit > 0 ? `Rp ${m.credit.toLocaleString()}` : '-'}</td>
-                      <td className="text-right font-bold text-gold-light">Rp {m.balance.toLocaleString()}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Tab 3: Neraca Saldo (Trial Balance) */}
       {activeTab === 'trial' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.1rem] mb-4 text-gold-light">
-            ⚖️ Laporan Neraca Saldo (Trial Balance SAK EMKM)
-          </h3>
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+            <h3 className="font-heading text-[1.1rem] text-gold-light">
+              ⚖️ Laporan Neraca Saldo (Trial Balance SAK EMKM Dinamis)
+            </h3>
+            <span className={`badge ${Math.abs(trialTotalDebit - trialTotalCredit) < 1 ? 'badge-emerald' : 'badge-rose'}`}>
+              {Math.abs(trialTotalDebit - trialTotalCredit) < 1 ? '✅ Debet = Kredit Seimbang' : '⚠️ Selisih Terdeteksi'}
+            </span>
+          </div>
+
           <div className="table-container">
             <table className="custom-table">
               <thead>
                 <tr>
                   <th>Kode Akun</th>
                   <th>Nama Akun Keuangan</th>
+                  <th>Kategori</th>
                   <th className="text-right">Total Debet (IDR)</th>
                   <th className="text-right">Total Kredit (IDR)</th>
-                  <th className="text-right">Saldo Akhir</th>
+                  <th className="text-right">Saldo Netto Akhir</th>
                 </tr>
               </thead>
               <tbody>
-                {coaList.map(acc => (
+                {trialAccounts.map(acc => (
                   <tr key={acc.code}>
                     <td><strong>{acc.code}</strong></td>
                     <td>{acc.name}</td>
-                    <td className="text-right">Rp {(acc.balance || 0).toLocaleString()}</td>
-                    <td className="text-right">Rp 0</td>
-                    <td className="text-right font-bold">Rp {(acc.balance || 0).toLocaleString()}</td>
+                    <td><span className="badge text-xs">{acc.category?.toUpperCase() || 'SAK'}</span></td>
+                    <td className="text-right text-emerald-light">{acc.totalDebit > 0 ? `Rp ${acc.totalDebit.toLocaleString()}` : '-'}</td>
+                    <td className="text-right text-danger">{acc.totalCredit > 0 ? `Rp ${acc.totalCredit.toLocaleString()}` : '-'}</td>
+                    <td className="text-right font-bold text-gold-light">
+                      Rp {acc.balance.toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-line bg-white/[0.04] font-extrabold text-[0.95rem]">
+                  <td colSpan={3}>TOTAL NERACA SALDO</td>
+                  <td className="text-right text-emerald-light">Rp {trialTotalDebit.toLocaleString()}</td>
+                  <td className="text-right text-danger">Rp {trialTotalCredit.toLocaleString()}</td>
+                  <td className="text-right text-gold-light">
+                    {Math.abs(trialTotalDebit - trialTotalCredit) < 1 ? '✅ Balanced' : '⚠️ Unbalanced'}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -333,75 +420,162 @@ export default function AccountingReports() {
       {/* Tab 4: Laporan Laba Rugi */}
       {activeTab === 'income' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.2rem] mb-5 text-gold-light">
-            📈 Laporan Laba Rugi SAK EMKM (Ekspor PPN 0%)
+          <h3 className="font-heading text-[1.2rem] mb-5 text-gold-light flex items-center gap-2">
+            <TrendingUp size={22} /> Laporan Laba Rugi SAK EMKM (Dihitung Real-Time dari Jurnal)
           </h3>
-          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
-            <div className="border-b border-line pb-3 mb-3">
-              <strong className="text-emerald-light">PENDAPATAN EKSPOR (PPN 0%)</strong>
-              <div className="flex justify-between my-2 mx-0">
-                <span>4110 - Pendapatan Ekspor Logam Mulia</span>
-                <span>Rp 1.500.000.000</span>
+
+          <div className="bg-[rgba(15,23,42,0.6)] p-6 rounded-[12px] border border-line space-y-6">
+            {/* 1. Pendapatan */}
+            <div>
+              <div className="flex justify-between items-center border-b border-emerald/30 pb-2 mb-3">
+                <strong className="text-emerald-light text-[1rem]">I. PENDAPATAN USAHA (REVENUE)</strong>
+                <span className="badge badge-emerald">PPN 0% EKSPOR</span>
               </div>
-              <div className="flex justify-between my-2 mx-0">
-                <span>4120 - Pendapatan Ekspor Perhiasan Emas</span>
-                <span>Rp 850.000.000</span>
-              </div>
-              <div className="flex justify-between font-bold text-emerald-light text-[1.05rem] mt-2.5">
-                <span>TOTAL PENDAPATAN EKSPOR</span>
-                <span>Rp 2.350.000.000</span>
+              {revenueAccounts.length === 0 ? (
+                <div className="text-fg-muted text-sm py-2">Belum ada jurnal pendapatan usaha.</div>
+              ) : (
+                revenueAccounts.map(a => (
+                  <div key={a.code} className="flex justify-between my-2 text-sm">
+                    <span>{a.code} - {a.name}</span>
+                    <span className="font-medium text-emerald-light">Rp {a.balance.toLocaleString()}</span>
+                  </div>
+                ))
+              )}
+              <div className="flex justify-between font-bold text-emerald-light text-[1.05rem] pt-3 border-t border-line/50">
+                <span>TOTAL PENDAPATAN USAHA</span>
+                <span>Rp {totalPendapatan.toLocaleString()}</span>
               </div>
             </div>
 
-            <div className="border-b border-line pb-3 mb-3">
-              <strong className="text-danger">HARGA POKOK PENJUALAN (HPP)</strong>
-              <div className="flex justify-between my-2 mx-0">
-                <span>5114 - HPP Ekspor LM Lokal</span>
-                <span>(Rp 1.200.000.000)</span>
+            {/* 2. HPP */}
+            <div>
+              <div className="flex justify-between items-center border-b border-danger/30 pb-2 mb-3">
+                <strong className="text-danger text-[1rem]">II. HARGA POKOK PENJUALAN (HPP)</strong>
+                <span className="badge badge-rose">BIAYA PEROLEHAN EMAS</span>
               </div>
-              <div className="flex justify-between my-2 mx-0">
-                <span>5115 - HPP Ekspor LM Import (Landed Cost)</span>
-                <span>(Rp 650.000.000)</span>
-              </div>
-              <div className="flex justify-between font-bold text-danger text-[1.05rem] mt-2.5">
-                <span>TOTAL HPP PENJUALAN</span>
-                <span>(Rp 1.850.000.000)</span>
+              {hppAccounts.length === 0 ? (
+                <div className="text-fg-muted text-sm py-2">Belum ada jurnal HPP penjualan.</div>
+              ) : (
+                hppAccounts.map(a => (
+                  <div key={a.code} className="flex justify-between my-2 text-sm">
+                    <span>{a.code} - {a.name}</span>
+                    <span className="font-medium text-danger">(Rp {a.balance.toLocaleString()})</span>
+                  </div>
+                ))
+              )}
+              <div className="flex justify-between font-bold text-danger text-[1.05rem] pt-3 border-t border-line/50">
+                <span>TOTAL HARGA POKOK PENJUALAN</span>
+                <span>(Rp {totalHPP.toLocaleString()})</span>
               </div>
             </div>
 
-            <div className="flex justify-between font-extrabold text-[1.2rem] text-gold-light bg-[rgba(245,158,11,0.1)] p-3.5 rounded-[10px]">
-              <span>LABA BERSIH USAHA EKSPOR PT TAN</span>
-              <span>Rp 500.000.000</span>
+            {/* Laba Kotor */}
+            <div className="flex justify-between font-bold text-[1.1rem] bg-white/[0.03] p-3 rounded-[8px] text-sky-light">
+              <span>LABA KOTOR (GROSS PROFIT)</span>
+              <span>Rp {labaKotor.toLocaleString()}</span>
+            </div>
+
+            {/* 3. Beban Operasional */}
+            {opexAccounts.length > 0 && (
+              <div>
+                <strong className="text-amber-400 text-[1rem] block border-b border-amber-400/30 pb-2 mb-3">
+                  III. BEBAN OPERASIONAL & UMUM
+                </strong>
+                {opexAccounts.map(a => (
+                  <div key={a.code} className="flex justify-between my-2 text-sm">
+                    <span>{a.code} - {a.name}</span>
+                    <span className="font-medium text-danger">(Rp {a.balance.toLocaleString()})</span>
+                  </div>
+                ))}
+                <div className="flex justify-between font-bold text-amber-400 text-[1.05rem] pt-3 border-t border-line/50">
+                  <span>TOTAL BEBAN OPERASIONAL</span>
+                  <span>(Rp {totalOpex.toLocaleString()})</span>
+                </div>
+              </div>
+            )}
+
+            {/* Laba Bersih Akhir */}
+            <div className="flex justify-between font-extrabold text-[1.25rem] text-gold-light bg-[rgba(245,158,11,0.12)] p-4 rounded-[10px] border border-gold/40">
+              <span>LABA BERSIH PERIODE BERJALAN PT TAN</span>
+              <span>Rp {labaBersih.toLocaleString()}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 5: Laporan Posisi Keuangan */}
+      {/* Tab 5: Laporan Posisi Keuangan (Neraca) */}
       {activeTab === 'balance' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.2rem] mb-5 text-sky-light">
-            🏛️ Laporan Posisi Keuangan (Neraca SAK EMKM)
-          </h3>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-5">
-            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
-              <h4 className="text-emerald-light mb-3">ASET (ASSETS)</h4>
-              <div className="flex justify-between my-1.5 mx-0"><span>1125 - Bank Valas USD</span><span>Rp 850.000.000</span></div>
-              <div className="flex justify-between my-1.5 mx-0"><span>1157 - Persediaan LM Lokal</span><span>Rp 1.250.000.000</span></div>
-              <div className="flex justify-between my-1.5 mx-0"><span>1158 - Persediaan LM Import</span><span>Rp 2.100.000.000</span></div>
-              <div className="flex justify-between my-1.5 mx-0"><span>1160 - Persediaan Perhiasan Ekspor</span><span>Rp 1.300.000.000</span></div>
-              <div className="flex justify-between font-extrabold text-emerald-light mt-4 border-t border-line pt-2.5">
-                <span>TOTAL ASET</span><span>Rp 5.500.000.000</span>
+          <div className="flex justify-between items-center mb-5 flex-wrap gap-4">
+            <h3 className="font-heading text-[1.2rem] text-sky-light flex items-center gap-2">
+              <Scale size={22} /> Laporan Posisi Keuangan (Neraca SAK EMKM Dinamis)
+            </h3>
+            <span className={`badge ${isBalanceMatch ? 'badge-emerald' : 'badge-rose'}`}>
+              {isBalanceMatch ? '✅ Keseimbangan Neraca Sempurna' : '⚠️ Selisih Terdeteksi'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-6">
+            {/* Sisi Kiri: ASET */}
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] border border-line">
+              <h4 className="text-emerald-light font-bold text-[1.05rem] mb-4 border-b border-emerald/30 pb-2">
+                ASET (ASSETS)
+              </h4>
+              <div className="space-y-2.5">
+                {assetAccounts.filter(a => a.balance !== 0).map(a => (
+                  <div key={a.code} className="flex justify-between text-sm">
+                    <span>{a.code} - {a.name}</span>
+                    <span className="font-medium text-emerald-light">Rp {a.balance.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between font-extrabold text-emerald-light text-[1.15rem] mt-6 border-t-2 border-line pt-3">
+                <span>TOTAL ASET</span>
+                <span>Rp {totalAset.toLocaleString()}</span>
               </div>
             </div>
 
-            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
-              <h4 className="text-sky-light mb-3">KEWAJIBAN & EKUITAS</h4>
-              <div className="flex justify-between my-1.5 mx-0"><span>2110 - Utang Usaha</span><span>Rp 1.500.000.000</span></div>
-              <div className="flex justify-between my-1.5 mx-0"><span>3110 - Modal Disetor</span><span>Rp 3.500.000.000</span></div>
-              <div className="flex justify-between my-1.5 mx-0"><span>3210 - Saldo Laba Bersih</span><span>Rp 500.000.000</span></div>
-              <div className="flex justify-between font-extrabold text-sky-light mt-4 border-t border-line pt-2.5">
-                <span>TOTAL KEWAJIBAN & EKUITAS</span><span>Rp 5.500.000.000</span>
+            {/* Sisi Kanan: KEWAJIBAN & EKUITAS */}
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] border border-line flex flex-col justify-between">
+              <div>
+                <h4 className="text-sky-light font-bold text-[1.05rem] mb-4 border-b border-sky/30 pb-2">
+                  KEWAJIBAN & EKUITAS
+                </h4>
+
+                <div className="mb-5">
+                  <div className="text-xs font-bold text-fg-soft mb-2">KEWAJIBAN (LIABILITIES):</div>
+                  <div className="space-y-2">
+                    {liabilityAccounts.filter(a => a.balance !== 0).length === 0 ? (
+                      <div className="text-fg-muted text-xs">Tidak ada saldo hutang aktif.</div>
+                    ) : (
+                      liabilityAccounts.filter(a => a.balance !== 0).map(a => (
+                        <div key={a.code} className="flex justify-between text-sm">
+                          <span>{a.code} - {a.name}</span>
+                          <span className="font-medium text-sky-light">Rp {a.balance.toLocaleString()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-bold text-fg-soft mb-2">EKUITAS (EQUITY):</div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>3110 - Modal Disetor Pemilik</span>
+                      <span className="font-medium text-gold-light">Rp {modalDisetor.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>3210 - Saldo Laba Bersih Periode Berjalan</span>
+                      <span className="font-medium text-emerald-light">Rp {labaBersih.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between font-extrabold text-sky-light text-[1.15rem] mt-6 border-t-2 border-line pt-3">
+                <span>TOTAL KEWAJIBAN & EKUITAS</span>
+                <span>Rp {totalKewajibanDanEkuitas.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -411,66 +585,174 @@ export default function AccountingReports() {
       {/* Tab 6: Laporan Arus Kas */}
       {activeTab === 'cashflow' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.2rem] mb-5 text-emerald-light">
-            💵 Laporan Arus Kas (Direct Cash Flow Method)
+          <h3 className="font-heading text-[1.2rem] mb-5 text-emerald-light flex items-center gap-2">
+            <DollarSign size={22} /> Laporan Arus Kas Langsung (Direct Cash Flow Real-Time)
           </h3>
-          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px]">
-            <div className="my-2 mx-0 flex justify-between">
-              <span>Arus Kas Dari Aktivitas Operasional (Penerimaan Ekspor & Pembelian LM)</span>
-              <strong className="text-emerald-light">+ Rp 450.000.000</strong>
+
+          <div className="bg-[rgba(15,23,42,0.6)] p-6 rounded-[12px] border border-line mb-6">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4 mb-5">
+              <div className="bg-white/[0.03] p-4 rounded-[10px]">
+                <div className="text-xs text-fg-soft">Total Arus Kas Masuk (Inflow):</div>
+                <div className="text-[1.3rem] font-bold text-emerald-light">+ Rp {cashInflow.toLocaleString()}</div>
+              </div>
+              <div className="bg-white/[0.03] p-4 rounded-[10px]">
+                <div className="text-xs text-fg-soft">Total Arus Kas Keluar (Outflow):</div>
+                <div className="text-[1.3rem] font-bold text-danger">- Rp {cashOutflow.toLocaleString()}</div>
+              </div>
+              <div className="bg-white/[0.03] p-4 rounded-[10px]">
+                <div className="text-xs text-fg-soft">Kenaikan / (Penurunan) Kas Bersih:</div>
+                <div className={`text-[1.3rem] font-extrabold ${netCashFlow >= 0 ? 'text-gold-light' : 'text-danger'}`}>
+                  {netCashFlow >= 0 ? `+ Rp ${netCashFlow.toLocaleString()}` : `- Rp ${Math.abs(netCashFlow).toLocaleString()}`}
+                </div>
+              </div>
             </div>
-            <div className="my-2 mx-0 flex justify-between">
-              <span>Arus Kas Dari Aktivitas Investasi (Peralatan & Brankas Vault)</span>
-              <strong className="text-danger">- Rp 50.000.000</strong>
-            </div>
-            <div className="flex justify-between font-extrabold text-[1.1rem] text-gold-light mt-4 border-t border-line pt-3">
-              <span>KENAIKAN BERSIH KAS & BANK VALAS</span>
-              <span>+ Rp 400.000.000</span>
+
+            <h4 className="text-fg-soft text-xs font-bold mb-3">RINCIAN MUTASI KAS & BANK TERAKHIR:</h4>
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>No. Jurnal</th>
+                    <th>Akun Kas / Bank</th>
+                    <th>Keterangan</th>
+                    <th className="text-right">Nominal Arus Kas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cashMovements.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-6 text-fg-soft">
+                        Belum ada mutasi arus kas tercatat.
+                      </td>
+                    </tr>
+                  ) : (
+                    cashMovements.slice(-10).reverse().map((cm, idx) => (
+                      <tr key={idx}>
+                        <td>{cm.date}</td>
+                        <td><strong>{cm.journalNo}</strong></td>
+                        <td>{cm.account}</td>
+                        <td>{cm.description}</td>
+                        <td className={`text-right font-bold ${cm.type === 'IN' ? 'text-emerald-light' : 'text-danger'}`}>
+                          {cm.type === 'IN' ? `+ Rp ${cm.amount.toLocaleString()}` : `- Rp ${cm.amount.toLocaleString()}`}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tab 7: Aging AR/AP */}
+      {/* Tab 7: Aging AR / AP */}
       {activeTab === 'aging' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.2rem] mb-4 text-sky-light">
-            ⏱️ Laporan Umur Piutang & Utang (AR/AP Aging Report)
+          <h3 className="font-heading text-[1.2rem] mb-4 text-sky-light flex items-center gap-2">
+            <Clock size={20} /> Laporan Umur Piutang & Utang (AR / AP Aging Real-Time)
           </h3>
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Nama Mitra / Buyer</th>
-                  <th>Kategori</th>
-                  <th>1-30 Hari</th>
-                  <th>31-60 Hari</th>
-                  <th>61-90 Hari</th>
-                  <th>&gt; 90 Hari</th>
-                  <th className="text-right">Total Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>Dubai Gold & Jewelry DMCC</strong></td>
-                  <td><span className="badge badge-emerald">Piutang Ekspor</span></td>
-                  <td className="text-emerald-light">$ 50,000.00</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td className="text-right font-bold">$ 50,000.00</td>
-                </tr>
-                <tr>
-                  <td><strong>Valcambi SA Switzerland</strong></td>
-                  <td><span className="badge badge-gold">Utang Impor</span></td>
-                  <td>$ 75,000.00</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td className="text-right font-bold">$ 75,000.00</td>
-                </tr>
-              </tbody>
-            </table>
+
+          <div className="space-y-6">
+            <div>
+              <h4 className="text-emerald-light font-bold text-sm mb-3">📋 REKAPITULASI PIUTANG EKSPOR (ACCOUNTS RECEIVABLE):</h4>
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>No. Invoice</th>
+                      <th>Tanggal</th>
+                      <th>Nama Buyer Ekspor</th>
+                      <th className="text-right">Total Tagihan USD</th>
+                      <th className="text-right">Sisa Piutang (USD)</th>
+                      <th className="text-right">Nilai Piutang (IDR)</th>
+                      <th>Status Pembayaran</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exportInvoices.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-6 text-fg-soft">
+                          Tidak ada piutang ekspor.
+                        </td>
+                      </tr>
+                    ) : (
+                      exportInvoices.map(inv => (
+                        <tr key={inv.id || inv.invoiceNo}>
+                          <td><strong>{inv.invoiceNo}</strong></td>
+                          <td>{inv.date}</td>
+                          <td><strong>{inv.buyerName}</strong></td>
+                          <td className="text-right font-medium">$ {(inv.totalUSD || 0).toLocaleString()}</td>
+                          <td className="text-right font-bold text-gold-light">
+                            $ {(typeof inv.remainingBalanceUSD !== 'undefined' ? inv.remainingBalanceUSD : inv.totalUSD || 0).toLocaleString()}
+                          </td>
+                          <td className="text-right text-emerald-light font-bold">
+                            Rp {(inv.totalIDR || 0).toLocaleString()}
+                          </td>
+                          <td>
+                            <span className={`badge ${inv.paymentStatus === 'PAID' ? 'badge-emerald' : 'badge-gold'}`}>
+                              {inv.paymentStatus || 'UNPAID'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-danger font-bold text-sm mb-3">📋 REKAPITULASI HUTANG PEMBELIAN EMAS (ACCOUNTS PAYABLE):</h4>
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Ref Dokumen</th>
+                      <th>Tanggal</th>
+                      <th>Supplier Emas</th>
+                      <th>Jenis Pengadaan</th>
+                      <th className="text-right">Total Tagihan (IDR)</th>
+                      <th className="text-right">Sisa Hutang (IDR)</th>
+                      <th>Status Pelunasan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...localPurchases, ...importPOs].filter(p => p.paymentStatus !== 'PAID').length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-6 text-fg-soft">
+                          Semua hutang pembelian emas telah lunas.
+                        </td>
+                      </tr>
+                    ) : (
+                      [...localPurchases, ...importPOs].filter(p => p.paymentStatus !== 'PAID').map((p, idx) => (
+                        <tr key={p.id || idx}>
+                          <td><strong>{p.poNumber || p.receiptNo || p.id}</strong></td>
+                          <td>{p.date || p.orderDate}</td>
+                          <td><strong>{p.supplierName || p.supplier}</strong></td>
+                          <td>
+                            <span className="badge text-xs">
+                              {String(p.poNumber || '').includes('IMP') ? 'Impor LBMA' : 'Lokal Tempo'}
+                            </span>
+                          </td>
+                          <td className="text-right">
+                            Rp {Number(p.totalAmount || p.totalLandedCostIDR || p.total || 0).toLocaleString()}
+                          </td>
+                          <td className="text-right font-extrabold text-danger">
+                            Rp {Number(p.remainingBalanceIDR || p.totalAmount || p.totalLandedCostIDR || 0).toLocaleString()}
+                          </td>
+                          <td>
+                            <span className="badge badge-rose">
+                              {p.paymentStatus || 'UNPAID'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -478,24 +760,37 @@ export default function AccountingReports() {
       {/* Tab 8: CALK SAK EMKM */}
       {activeTab === 'calk' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.2rem] mb-4 text-gold-light">
-            📜 Catatan Atas Laporan Keuangan (CALK SAK EMKM)
+          <h3 className="font-heading text-[1.2rem] mb-4 text-gold-light flex items-center gap-2">
+            <Award size={20} /> Catatan Atas Laporan Keuangan (CALK SAK EMKM PT TAN)
           </h3>
-          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] text-[0.85rem] leading-[1.7]">
-            <h4 className="text-gold-light mb-2">1. Umum & Dasar Penyusunan Laporan Keuangan</h4>
-            <p>
-              PT TAN didirikan di Indonesia dengan kegiatan usaha utama Trading Logam Mulia dan Produksi Perhiasan Emas Khusus Ekspor (PPN 0%). Laporan keuangan disusun berdasarkan Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).
-            </p>
+          <div className="bg-[rgba(15,23,42,0.6)] p-6 rounded-[12px] border border-line text-[0.85rem] leading-[1.8] space-y-4">
+            <div>
+              <h4 className="text-gold-light font-bold text-sm mb-1">1. Entitas & Kegiatan Usaha</h4>
+              <p className="text-fg-soft">
+                PT Trifactor Alura Nusantara (PT TAN) adalah perseroan terbatas yang bergerak dalam bidang perdagangan besar logam mulia dan perhiasan emas (KBLI 46691) serta industri manufaktur perhiasan emas khusus ekspor (KBLI 32111). Laporan keuangan disusun berdasarkan Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).
+              </p>
+            </div>
 
-            <h4 className="text-gold-light mt-4 mb-2">2. Kebijakan Akuntansi Persediaan & Landed Cost</h4>
-            <p>
-              Persediaan emas murni impor dinilai berdasarkan Biaya Perolehan Landed Cost (Biaya Pembelian FOB + Bea Masuk + Freight & Asuransi Impor). PPh 22 Impor diakui sebagai Pajak Dibayar Di Muka (Aset Lancar) dan tidak dikapitalisasi ke nilai barang.
-            </p>
+            <div>
+              <h4 className="text-gold-light font-bold text-sm mb-1">2. Kebijakan Pengakuan Persediaan Emas (Alur 2 Tahap)</h4>
+              <p className="text-fg-soft">
+                Pengadaan emas lokal dicatat melalui mekanisme pengamanan 2 tahap: pengeluaran dana tunai mendebet akun <code>1159</code> (Persediaan Emas Transit Kurir), dan baru dipindahkan ke akun <code>1157</code> (Persediaan Emas Murni Vault Utama) setelah emas ditimbang dan diverifikasi oleh 4 tanda tangan serah terima fisik di brankas PT TAN.
+              </p>
+            </div>
 
-            <h4 className="text-gold-light mt-4 mb-2">3. Transaksi Mata Uang Asing (Valas)</h4>
-            <p>
-              Transaksi ekspor dan impor dalam mata uang USD dikonversi ke mata uang fungsional Rupiah menggunakan Kurs BCA e-Rate pada tanggal transaksi. Selisih kurs diakui pada Laporan Laba Rugi (Akun `6110`).
-            </p>
+            <div>
+              <h4 className="text-gold-light font-bold text-sm mb-1">3. Kebijakan Impor & PPh 22 Dibayar di Muka</h4>
+              <p className="text-fg-soft">
+                Impor emas batangan LBMA dinilai berdasarkan Landed Cost (FOB + Freight + Asuransi BRINKS). PPh Pasal 22 Impor sebesar 0,25% diakui sebagai Pajak Dibayar di Muka (Akun <code>1135</code>) dan tidak dikapitalisasi ke nilai persediaan emas.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="text-gold-light font-bold text-sm mb-1">4. Fasilitas Perpajakan PPN 0% Ekspor</h4>
+              <p className="text-fg-soft">
+                Penjualan perhiasan emas ke luar negeri (Dubai DMCC, dsb.) memenuhi kriteria ekspor Barang Kena Pajak Berwujud sesuai PMK dan dikenai tarif Pajak Pertambahan Nilai (PPN) 0% dengan dokumen pelengkap Pemberitahuan Ekspor Barang (PEB).
+              </p>
+            </div>
           </div>
         </div>
       )}

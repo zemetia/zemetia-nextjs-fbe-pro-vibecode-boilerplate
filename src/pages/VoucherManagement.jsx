@@ -14,11 +14,13 @@ export default function VoucherManagement() {
   const [coaAccounts, setCoaAccounts] = useState([]);
   const [chequeBooks, setChequeBooks] = useState([]);
 
+  const [searchTerm, setSearchTerm] = useState('');
   const [form, setForm] = useState({
     voucherType: 'BBK',
     voucherNo: '',
     date: new Date().toISOString().split('T')[0],
     selectedPONumber: '', // Ref No. PO
+    paymentCategory: 'PO_PRINCIPAL', // 'PO_PRINCIPAL', 'CUSTOMS_DUTY_PPH22', 'LOGISTICS_HANDLING', 'OTHER_EXPENSE'
     poTotalAmountIDR: 0,
     poPaidAmountIDR: 0,
     poRemainingIDR: 0,
@@ -54,12 +56,15 @@ export default function VoucherManagement() {
         poNumber: lp.poNumber,
         supplierName: lp.supplierName,
         supplier: lp.supplierName,
-        currency: 'IDR',
-        exchangeRate: 1,
+        currency: lp.currency || 'IDR',
+        exchangeRate: lp.exchangeRate || 1,
         total: lp.totalAmount,
-        totalLandedCostIDR: lp.totalAmount,
+        totalLandedCostIDR: lp.totalLandedCostIDR || lp.totalAmount,
         paidAmountIDR: Number(lp.paidAmountIDR || 0),
         remainingBalanceIDR: typeof lp.remainingBalanceIDR !== 'undefined' ? Number(lp.remainingBalanceIDR) : Math.max(0, Number(lp.totalAmount || 0) - Number(lp.paidAmountIDR || 0)),
+        customsPaidAmountIDR: Number(lp.customsPaidAmountIDR || 0),
+        logisticsPaidAmountIDR: Number(lp.logisticsPaidAmountIDR || 0),
+        otherExpensesPaidAmountIDR: Number(lp.otherExpensesPaidAmountIDR || 0),
         paymentStatus: lp.paymentStatus || (Number(lp.paidAmountIDR || 0) >= Number(lp.totalAmount || 0) && Number(lp.totalAmount || 0) > 0 ? 'PAID' : Number(lp.paidAmountIDR || 0) > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
         paymentHistory: lp.paymentHistory || []
       }))
@@ -84,6 +89,7 @@ export default function VoucherManagement() {
           type: 'BBK',
           date: new Date().toISOString().split('T')[0],
           selectedPONumber: 'PO-IMP-2026-001',
+          paymentCategory: 'PO_PRINCIPAL',
           payee: 'YLG Bullion Singapore Pte Ltd',
           payer: 'PT TAN',
           bankAccountCode: '1111-USD',
@@ -111,15 +117,106 @@ export default function VoucherManagement() {
     }
   };
 
+  // Helper untuk menentukan konfigurasi default per kategori pengeluaran PO
+  const getCategoryDefaults = (category, selectedPO) => {
+    if (!selectedPO) {
+      if (category === 'CUSTOMS_DUTY_PPH22') {
+        return {
+          paymentCategory: category,
+          payeePayer: 'Kas Negara / DJBC (ID Billing PPh 22 Impor 0.25%)',
+          bankAccountCode: '1111-IDR',
+          accountCode: '1135',
+          amount: 0,
+          description: 'Pembayaran ID Billing DJBC - PPh 22 Impor (0,25%)'
+        };
+      }
+      if (category === 'LOGISTICS_HANDLING') {
+        return {
+          paymentCategory: category,
+          payeePayer: 'PT BRINKS Global Services / Vendor Kargo',
+          bankAccountCode: '1111-IDR',
+          accountCode: '5150',
+          amount: 0,
+          description: 'Pembayaran Biaya Freight & Handling Kargo'
+        };
+      }
+      if (category === 'OTHER_EXPENSE') {
+        return {
+          paymentCategory: category,
+          payeePayer: 'PT Sucofindo / Surveyor / Vendor Terkait',
+          bankAccountCode: '1111-IDR',
+          accountCode: '5150',
+          amount: 0,
+          description: 'Biaya Tambahan Operasional Pengadaan'
+        };
+      }
+      return {
+        paymentCategory: 'PO_PRINCIPAL',
+        payeePayer: 'Supplier Emas Lokal / Vendor',
+        bankAccountCode: '1111-IDR',
+        accountCode: '2111',
+        amount: 50000000,
+        description: 'Pembayaran Pelunasan Tagihan PO Emas'
+      };
+    }
+
+    const totalIDR = selectedPO.totalLandedCostIDR || ((selectedPO.totalAmountUSD || 0) * (selectedPO.exchangeRate || 16250)) || Number(selectedPO.total || 0);
+    const paidIDR = Number(selectedPO.paidAmountIDR || 0);
+    const remaining = Math.max(0, totalIDR - paidIDR);
+    const pph22Est = Math.round(totalIDR * 0.0025); // 0,25% PPh 22
+
+    if (category === 'CUSTOMS_DUTY_PPH22') {
+      return {
+        paymentCategory: category,
+        payeePayer: 'Kas Negara / DJBC (ID Billing PPh 22 Impor 0.25%)',
+        bankAccountCode: '1111-IDR', // Selalu IDR via MPN G2 / Bank Persepsi
+        accountCode: '1135', // PPh 22 Dibayar Di Muka (Impor Emas)
+        amount: pph22Est,
+        description: `Pembayaran ID Billing DJBC - PPh 22 Impor (0,25%) Ref PO: ${selectedPO.poNumber || selectedPO.id} (${selectedPO.supplierName || selectedPO.supplier})`
+      };
+    } else if (category === 'LOGISTICS_HANDLING') {
+      return {
+        paymentCategory: category,
+        payeePayer: selectedPO.logisticsCarrier || 'PT BRINKS Global Services / Vendor Kargo',
+        bankAccountCode: '1111-IDR',
+        accountCode: '5150', // Biaya Freight & Insurance Impor / Ekspor
+        amount: 0,
+        description: `Biaya Freight, Kargo & Handling Ekspedisi Ref PO: ${selectedPO.poNumber || selectedPO.id}`
+      };
+    } else if (category === 'OTHER_EXPENSE') {
+      return {
+        paymentCategory: category,
+        payeePayer: 'PT Sucofindo / Surveyor / Vendor Terkait',
+        bankAccountCode: '1111-IDR',
+        accountCode: '5150',
+        amount: 0,
+        description: `Biaya Tambahan Pengadaan Ref PO: ${selectedPO.poNumber || selectedPO.id}`
+      };
+    } else {
+      // PO_PRINCIPAL
+      const defaultBank = selectedPO.currency === 'USD' ? '1111-USD' : selectedPO.currency === 'SGD' ? '1111-SGD' : '1111-IDR';
+      return {
+        paymentCategory: 'PO_PRINCIPAL',
+        payeePayer: selectedPO.supplierName || selectedPO.supplier || 'Supplier Emas',
+        bankAccountCode: defaultBank,
+        accountCode: '2111', // Hutang Usaha Logam Mulia
+        amount: remaining > 0 ? remaining : totalIDR,
+        description: `Pembayaran Tagihan Pokok PO ${selectedPO.poNumber || selectedPO.id} - ${selectedPO.supplierName || selectedPO.supplier}${selectedPO.paymentTerms ? ` [Termin: ${selectedPO.paymentTerms}]` : ''}`
+      };
+    }
+  };
+
   // Handler Saat User Memilih Nomor PO Pembelian (Auto-Pull Tagihan & Sisa Hutang)
   const handleSelectPO = (poNum) => {
     if (!poNum) {
       setForm(prev => ({
         ...prev,
         selectedPONumber: '',
+        paymentCategory: 'PO_PRINCIPAL',
         poTotalAmountIDR: 0,
         poPaidAmountIDR: 0,
-        poRemainingIDR: 0
+        poRemainingIDR: 0,
+        ...getCategoryDefaults('PO_PRINCIPAL', null)
       }));
       return;
     }
@@ -129,23 +226,27 @@ export default function VoucherManagement() {
       const totalIDR = selectedPO.totalLandedCostIDR || ((selectedPO.totalAmountUSD || 0) * (selectedPO.exchangeRate || 16250)) || Number(selectedPO.total || 0);
       const paidIDR = Number(selectedPO.paidAmountIDR || 0);
       const remaining = Math.max(0, totalIDR - paidIDR);
-
-      // Tentukan default bank rekening bayar (USD jika impor, IDR jika lokal)
-      const defaultBank = selectedPO.currency === 'USD' ? '1111-USD' : selectedPO.currency === 'SGD' ? '1111-SGD' : '1111-IDR';
+      const catDefaults = getCategoryDefaults(form.paymentCategory || 'PO_PRINCIPAL', selectedPO);
 
       setForm(prev => ({
         ...prev,
         selectedPONumber: selectedPO.poNumber || selectedPO.id,
-        payeePayer: selectedPO.supplierName || selectedPO.supplier || 'Supplier Emas',
-        bankAccountCode: defaultBank,
-        accountCode: '2111', // Hutang Usaha Dagang
         poTotalAmountIDR: totalIDR,
         poPaidAmountIDR: paidIDR,
         poRemainingIDR: remaining,
-        amount: remaining > 0 ? remaining : totalIDR,
-        description: `Pembayaran Tagihan PO ${selectedPO.poNumber || selectedPO.id} - ${selectedPO.supplierName || selectedPO.supplier}${selectedPO.paymentTerms ? ` [Termin: ${selectedPO.paymentTerms}]` : ''}`
+        ...catDefaults
       }));
     }
+  };
+
+  // Handler Saat User Mengganti Kategori Pembayaran (Pokok vs Pajak PPh 22 vs Logistik)
+  const handleCategoryChange = (newCategory) => {
+    const selectedPO = purchaseOrders.find(p => (p.poNumber === form.selectedPONumber || p.id === form.selectedPONumber));
+    const defaults = getCategoryDefaults(newCategory, selectedPO);
+    setForm(prev => ({
+      ...prev,
+      ...defaults
+    }));
   };
 
   // Ambil buku cek aktif berdasarkan bank yang dipilih
@@ -160,12 +261,12 @@ export default function VoucherManagement() {
       return;
     }
 
-    // VALIDASI SISA TAGIHAN PO (GUARD RAIL OVERPAYMENT)
-    if (form.selectedPONumber && form.poRemainingIDR > 0 && Number(form.amount) > form.poRemainingIDR) {
+    // VALIDASI SISA TAGIHAN PO (GUARD RAIL OVERPAYMENT HANYA UNTUK POKOK SUPPLIER)
+    if (form.selectedPONumber && form.paymentCategory === 'PO_PRINCIPAL' && form.poRemainingIDR > 0 && Number(form.amount) > form.poRemainingIDR) {
       showModal({
         variant: 'warning',
         title: '⚠️ Nominal Melebihi Sisa Tagihan',
-        message: `Nominal cicilan yang Anda input (Rp ${Number(form.amount).toLocaleString()}) melebihi sisa tagihan PO ${form.selectedPONumber} (Sisa: Rp ${Number(form.poRemainingIDR).toLocaleString()}).\n\nSilakan sesuaikan nominal cicilan atau bayar pas sisa tagihan.`
+        message: `Nominal cicilan pokok yang Anda input (Rp ${Number(form.amount).toLocaleString()}) melebihi sisa tagihan hutang PO ${form.selectedPONumber} (Sisa: Rp ${Number(form.poRemainingIDR).toLocaleString()}).\n\nSilakan sesuaikan nominal cicilan atau bayar pas sisa tagihan.`
       });
       return;
     }
@@ -189,6 +290,13 @@ export default function VoucherManagement() {
       }
     }
 
+    const categoryLabels = {
+      'PO_PRINCIPAL': '💰 Pelunasan Pokok Supplier',
+      'CUSTOMS_DUTY_PPH22': '🏛️ Pajak PPh 22 Impor (0,25%)',
+      'LOGISTICS_HANDLING': '🚚 Logistik & Handling',
+      'OTHER_EXPENSE': '📑 Biaya Tambahan'
+    };
+
     const newVoucher = {
       id: Date.now(),
       voucherNumber: `${currentType}-${Date.now().toString().slice(-6)}`,
@@ -196,6 +304,8 @@ export default function VoucherManagement() {
       type: currentType,
       date: form.date,
       selectedPONumber: form.selectedPONumber,
+      paymentCategory: form.paymentCategory || 'PO_PRINCIPAL',
+      categoryLabel: categoryLabels[form.paymentCategory] || '💰 Pelunasan Pokok Supplier',
       payee: form.payeePayer,
       payer: form.payeePayer,
       bankAccountCode: form.bankAccountCode,
@@ -221,14 +331,24 @@ export default function VoucherManagement() {
       await window.Storage.set(key, list);
 
       // JURNAL SAK EMKM OTOMATIS:
-      const creditBankGl = isCheque ? '2115' : form.bankAccountCode;
-      const creditBankName = isCheque 
+      const isReceipt = currentType === 'BBM' || currentType === 'BKM';
+      const bankGl = isCheque ? '2115' : form.bankAccountCode;
+      const bankName = isCheque 
         ? 'Hutang Cek / Bilyet Giro Beredar' 
         : form.bankAccountCode === '1111-USD'
         ? 'Bank BCA Devisa USD'
         : form.bankAccountCode === '1111-SGD'
         ? 'Bank BCA Devisa SGD'
+        : form.bankAccountCode === '1110'
+        ? 'Kas Kecil (Petty Cash)'
         : 'Bank BCA IDR Operasional';
+
+      const lawanAccountName = coaAccounts.find(a => a.code === form.accountCode)?.name || (
+        form.accountCode === '1135' ? 'PPh 22 Dibayar Di Muka (Impor Emas)' :
+        form.accountCode === '5150' ? 'Biaya Freight & Insurance Impor / Ekspor' :
+        form.accountCode === '1159' ? 'Persediaan Emas Transit' :
+        isReceipt ? 'Piutang Usaha' : 'Hutang Usaha'
+      );
 
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
@@ -236,12 +356,19 @@ export default function VoucherManagement() {
         entryNumber: `JRN-${currentType}-${Date.now().toString().slice(-6)}`,
         date: form.date,
         description: isCheque
-          ? `Penerbitan Cek/Bilyet Giro (${newVoucher.checkNumber}) - ${newVoucher.payee} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
-          : `Pembayaran Voucher ${currentType} (${newVoucher.voucherNumber}) - ${newVoucher.payee} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`,
-        lines: [
-          { accountCode: form.accountCode, accountName: coaAccounts.find(a => a.code === form.accountCode)?.name || 'Hutang Usaha', debit: Number(form.amount), credit: 0 },
-          { accountCode: creditBankGl, accountName: creditBankName, debit: 0, credit: Number(form.amount) }
-        ],
+          ? `Penerbitan Cek/Bilyet Giro (${newVoucher.checkNumber}) - ${newVoucher.payee} [${newVoucher.categoryLabel}] [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
+          : isReceipt
+          ? `Penerimaan Kas/Bank Voucher ${currentType} (${newVoucher.voucherNumber}) dari ${newVoucher.payer} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
+          : `Pembayaran Voucher ${currentType} (${newVoucher.voucherNumber}) - ${newVoucher.payee} [${newVoucher.categoryLabel}] [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`,
+        lines: isReceipt
+          ? [
+              { accountCode: bankGl, accountName: bankName, debit: Number(form.amount), credit: 0 },
+              { accountCode: form.accountCode, accountName: lawanAccountName, debit: 0, credit: Number(form.amount) }
+            ]
+          : [
+              { accountCode: form.accountCode, accountName: lawanAccountName, debit: Number(form.amount), credit: 0 },
+              { accountCode: bankGl, accountName: bankName, debit: 0, credit: Number(form.amount) }
+            ],
         createdAt: new Date().toISOString()
       });
       await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
@@ -252,10 +379,14 @@ export default function VoucherManagement() {
           id: newVoucher.id,
           voucherNo: newVoucher.voucherNumber,
           voucherType: currentType,
+          category: form.paymentCategory || 'PO_PRINCIPAL',
+          categoryLabel: newVoucher.categoryLabel,
           date: form.date,
           amount: Number(form.amount),
-          bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : creditBankName,
-          bankAccountCode: creditBankGl,
+          payee: form.payeePayer,
+          bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : bankName,
+          bankAccountCode: bankGl,
+          accountCode: form.accountCode,
           description: form.description
         });
         loadPurchaseOrders();
@@ -288,7 +419,7 @@ export default function VoucherManagement() {
       showModal({
         variant: 'success',
         title: `Voucher ${currentType} Diterbitkan!`,
-        message: `Voucher (${newVoucher.voucherNumber}) berhasil disimpan dan diposting ke Buku Besar!\n${newVoucher.selectedPONumber ? `• Tagihan PO: ${newVoucher.selectedPONumber} berhasil direkonsiliasi.\n` : ''}${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Status: BEREDAR (Akun 2115)` : `• Sumber Bank: ${creditBankName}`}`
+        message: `Voucher (${newVoucher.voucherNumber}) [${newVoucher.categoryLabel}] berhasil disimpan dan diposting ke Buku Besar!\n${newVoucher.selectedPONumber ? `• Tagihan PO: ${newVoucher.selectedPONumber} berhasil dikaitkan.\n` : ''}${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Status: BEREDAR (Akun 2115)` : `• Sumber Kas/Bank: ${bankName} (${bankGl})`}`
       });
 
       loadVouchers();
@@ -373,6 +504,20 @@ export default function VoucherManagement() {
     }
   };
 
+  // Filter Vouchers berdasarkan Search Term
+  const filteredVouchers = vouchers.filter(v => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (v.voucherNumber && v.voucherNumber.toLowerCase().includes(term)) ||
+      (v.selectedPONumber && v.selectedPONumber.toLowerCase().includes(term)) ||
+      (v.payee && v.payee.toLowerCase().includes(term)) ||
+      (v.payer && v.payer.toLowerCase().includes(term)) ||
+      (v.description && v.description.toLowerCase().includes(term)) ||
+      (v.categoryLabel && v.categoryLabel.toLowerCase().includes(term))
+    );
+  });
+
   return (
     <div>
       {/* Header & Controls */}
@@ -383,7 +528,7 @@ export default function VoucherManagement() {
               <CreditCard color="#f59e0b" size={24} /> Manajemen Pembayaran Kas, Bank, & Cek / Bilyet Giro (BG)
             </h2>
             <p className="text-[0.8rem] text-fg-soft">
-              Penerbitan Voucher BBK/BCK Terhubung No. PO Pembelian, Validasi Sisa Tagihan, & Auto-Jurnal SAK EMKM
+              Penerbitan Multi-Voucher per PO (Pokok Supplier, Bea Cukai PPh 22 0,25%, Logistik & Handling) & Auto-Jurnal SAK EMKM
             </p>
           </div>
 
@@ -418,8 +563,8 @@ export default function VoucherManagement() {
 
             <div className="form-grid">
               {/* DROPDOWN PILIH REFERENSI NO. PO PEMBELIAN */}
-              <div className="form-group col-span-2 bg-[rgba(56,189,248,0.1)] p-3 rounded-sm border border-sky-light">
-                <label className="form-label text-sky-light font-bold flex items-center gap-1.5">
+              <div className="form-group col-span-2 bg-[rgba(56,189,248,0.1)] p-3.5 rounded-lg border border-sky-light">
+                <label className="form-label text-sky-light font-bold flex items-center gap-1.5 mb-1.5">
                   <FileText size={16} /> Hubungkan Pembayaran ke Nomor Purchase Order (PO):
                 </label>
                 <Combobox className="border border-sky-light text-sky-light font-bold text-[0.95rem]"
@@ -437,20 +582,93 @@ export default function VoucherManagement() {
                 />
 
                 {form.selectedPONumber && (
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5 mt-2.5 bg-[rgba(15,23,42,0.8)] p-2.5 rounded-[6px]">
-                    <div>
-                      <span className="stat-lbl">Total Nilai PO</span>
-                      <div className="font-bold text-fg">Rp {form.poTotalAmountIDR.toLocaleString()}</div>
+                  <>
+                    {/* Ringkasan Nilai PO */}
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5 mt-3 bg-[rgba(15,23,42,0.8)] p-2.5 rounded-[6px] border border-line">
+                      <div>
+                        <span className="stat-lbl">Total Nilai PO</span>
+                        <div className="font-bold text-fg">Rp {form.poTotalAmountIDR.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="stat-lbl">Pokok Sudah Dibayar</span>
+                        <div className="font-bold text-emerald-light">Rp {form.poPaidAmountIDR.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="stat-lbl">Sisa Hutang Pokok Supplier</span>
+                        <div className="font-extrabold text-gold-light">Rp {form.poRemainingIDR.toLocaleString()}</div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="stat-lbl">Sudah Dibayar</span>
-                      <div className="font-bold text-emerald-light">Rp {form.poPaidAmountIDR.toLocaleString()}</div>
+
+                    {/* SELECTOR KATEGORI PENGELUARAN / ALOKASI BIAYA */}
+                    <div className="mt-3.5 pt-3 border-t border-sky-light/30">
+                      <label className="form-label text-sky-light font-bold flex items-center gap-1.5 mb-2">
+                        <Layers size={15} /> Pilih Kategori / Tujuan Pengeluaran untuk PO ini:
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCategoryChange('PO_PRINCIPAL')}
+                          className={`p-2.5 text-left rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                            form.paymentCategory === 'PO_PRINCIPAL'
+                              ? 'bg-gold/20 border-gold text-gold-light shadow-md'
+                              : 'bg-canvas/60 border-line text-fg-soft hover:border-gold/50'
+                          }`}
+                        >
+                          <div className="font-bold text-[0.85rem] mb-0.5">💰 Pokok Supplier</div>
+                          <div className="text-[0.7rem] text-fg-muted">Hutang Usaha (Akun 2111)</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCategoryChange('CUSTOMS_DUTY_PPH22')}
+                          className={`p-2.5 text-left rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                            form.paymentCategory === 'CUSTOMS_DUTY_PPH22'
+                              ? 'bg-sky/20 border-sky text-sky-light shadow-md'
+                              : 'bg-canvas/60 border-line text-fg-soft hover:border-sky/50'
+                          }`}
+                        >
+                          <div className="font-bold text-[0.85rem] mb-0.5">🏛️ Bea Cukai / PPh 22 (0,25%)</div>
+                          <div className="text-[0.7rem] text-fg-muted">Uang Muka Pajak (Akun 1135)</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCategoryChange('LOGISTICS_HANDLING')}
+                          className={`p-2.5 text-left rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                            form.paymentCategory === 'LOGISTICS_HANDLING'
+                              ? 'bg-emerald/20 border-emerald text-emerald-light shadow-md'
+                              : 'bg-canvas/60 border-line text-fg-soft hover:border-emerald/50'
+                          }`}
+                        >
+                          <div className="font-bold text-[0.85rem] mb-0.5">🚚 Logistik & Kargo</div>
+                          <div className="text-[0.7rem] text-fg-muted">Freight & Handling (Akun 5150)</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCategoryChange('OTHER_EXPENSE')}
+                          className={`p-2.5 text-left rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                            form.paymentCategory === 'OTHER_EXPENSE'
+                              ? 'bg-purple-500/20 border-purple-400 text-purple-300 shadow-md'
+                              : 'bg-canvas/60 border-line text-fg-soft hover:border-purple-400/50'
+                          }`}
+                        >
+                          <div className="font-bold text-[0.85rem] mb-0.5">📑 Biaya Tambahan</div>
+                          <div className="text-[0.7rem] text-fg-muted">Surveyor / Lab / Lainnya</div>
+                        </button>
+                      </div>
+
+                      {/* Notifikasi Informative Akuntansi untuk Bea Cukai */}
+                      {form.paymentCategory === 'CUSTOMS_DUTY_PPH22' && (
+                        <div className="mt-2.5 p-2.5 bg-sky-950/40 border border-sky-600/40 rounded text-xs text-sky-200 flex items-start gap-2">
+                          <AlertCircle size={16} className="text-sky-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>Pemisahan Rekening & Pajak (SAK EMKM):</strong> Pembayaran PPh 22 Impor (0,25%) ditransfer ke Kas Negara / DJBC (via ID Billing MPN G2) dan didebet ke <strong>Akun 1135 (PPh 22 Dibayar Di Muka - Aset Lancar / Creditable)</strong>. Nominal ini tercatat terkait ke PO ini tanpa memotong sisa hutang komersial supplier.
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <span className="stat-lbl">Sisa Hutang Tagihan</span>
-                      <div className="font-extrabold text-gold-light">Rp {form.poRemainingIDR.toLocaleString()}</div>
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
 
@@ -465,7 +683,7 @@ export default function VoucherManagement() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Penerima Pembayaran (Payee / Supplier)</label>
+                <label className="form-label">Penerima Pembayaran (Payee / Rekening Tujuan)</label>
                 <input
                   className="form-input font-bold text-gold-light"
                   value={form.payeePayer}
@@ -476,7 +694,7 @@ export default function VoucherManagement() {
               {/* SUMBER REKENING BANK */}
               {activeTab !== 'BKK' && activeTab !== 'BKM' && (
                 <div className="form-group">
-                  <label className="form-label text-sky-light font-bold">Rekening Bank Pembayar</label>
+                  <label className="form-label text-sky-light font-bold">Rekening Bank Pembayar (Kredit)</label>
                   <select
                     className="form-select"
                     value={form.bankAccountCode}
@@ -485,6 +703,7 @@ export default function VoucherManagement() {
                     <option value="1111-IDR">Bank BCA IDR Operasional (1111-IDR)</option>
                     <option value="1111-USD">Bank BCA Devisa USD (1111-USD)</option>
                     <option value="1111-SGD">Bank BCA Devisa SGD (1111-SGD)</option>
+                    <option value="1110">Kas Kecil / Tunai (1110)</option>
                   </select>
                 </div>
               )}
@@ -540,7 +759,7 @@ export default function VoucherManagement() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Alokasi Akun COA (Lawan)</label>
+                <label className="form-label">Alokasi Akun COA (Lawan Debet)</label>
                 <Combobox
                   value={form.accountCode}
                   onChange={accountCode => setForm({ ...form, accountCode })}
@@ -553,7 +772,7 @@ export default function VoucherManagement() {
 
               <div className="form-group">
                 <div className="flex justify-between items-center">
-                  <label className="form-label">Nominal Bayar / Cicilan (IDR)</label>
+                  <label className="form-label">Nominal Bayar / Transfer (IDR)</label>
                   {activeTab === 'BCK' && (
                     <span className="text-xs text-sky-light font-bold">
                       <Lock className="inline mr-1" size={12} />
@@ -583,7 +802,7 @@ export default function VoucherManagement() {
             </div>
 
             <button type="submit" className="btn-primary mt-3">
-              <CheckCircle size={16} /> Terbitkan Voucher {activeTab} & Rekonsiliasi Sisa Tagihan PO
+              <CheckCircle size={16} /> Terbitkan Voucher {activeTab} & Posting Jurnal
             </button>
           </form>
         )}
@@ -591,16 +810,29 @@ export default function VoucherManagement() {
 
       {/* Voucher Table */}
       <div className="glass-panel p-6">
-        <h3 className="font-heading text-[1.1rem] mb-4">
-          📋 Daftar Voucher {getTabLabel(activeTab)} ({vouchers.length})
-        </h3>
+        <div className="flex justify-between items-center flex-wrap gap-4 mb-4">
+          <h3 className="font-heading text-[1.1rem]">
+            📋 Daftar Voucher {getTabLabel(activeTab)} ({filteredVouchers.length})
+          </h3>
+
+          <div className="w-full sm:w-72">
+            <input
+              type="text"
+              placeholder="🔍 Cari No. Voucher, Ref PO, Penerima…"
+              className="form-input text-xs py-1.5 px-3"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
         <div className="table-container">
           <table className="custom-table">
             <thead>
               <tr>
                 <th>No. Voucher</th>
                 <th>Tanggal</th>
-                <th>Ref No. PO</th>
+                <th>Ref No. PO & Kategori</th>
                 <th>Penerima Pembayaran</th>
                 {activeTab === 'BCK' && <th>No. Cek / Bank</th>}
                 {activeTab === 'BCK' && <th>Jatuh Tempo Kliring</th>}
@@ -611,23 +843,28 @@ export default function VoucherManagement() {
               </tr>
             </thead>
             <tbody>
-              {vouchers.length === 0 ? (
+              {filteredVouchers.length === 0 ? (
                 <tr>
                   <td className="text-center text-fg-muted p-7.5" colSpan={activeTab === 'BCK' ? 10 : 8}>
-                    Belum ada data voucher {activeTab} yang diterbitkan.
+                    {searchTerm ? 'Tidak ada data voucher yang cocok dengan pencarian.' : `Belum ada data voucher ${activeTab} yang diterbitkan.`}
                   </td>
                 </tr>
               ) : (
-                vouchers.map(v => (
+                filteredVouchers.map(v => (
                   <tr key={v.id || v.voucherNumber}>
                     <td><strong>{v.voucherNumber}</strong></td>
                     <td>{v.date}</td>
                     <td>
                       {v.selectedPONumber ? (
-                        <span className="badge badge-gold text-xs">
-                          <FileText className="inline mr-1" size={11} />
-                          {v.selectedPONumber}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="badge badge-gold text-xs">
+                            <FileText className="inline mr-1" size={11} />
+                            {v.selectedPONumber}
+                          </span>
+                          <span className="badge text-[0.68rem] bg-sky-950/60 text-sky-300 border border-sky-700/50">
+                            {v.categoryLabel || (v.paymentCategory === 'CUSTOMS_DUTY_PPH22' ? '🏛️ PPh 22 (0,25%)' : v.paymentCategory === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
+                          </span>
+                        </div>
                       ) : (
                         <span className="text-fg-muted text-[0.8rem]">Non-PO</span>
                       )}
@@ -679,7 +916,7 @@ export default function VoucherManagement() {
                           onClick={() => showModal({
                             variant: 'info',
                             title: `🖨️ Cetak PDF Voucher ${v.voucherNumber}`,
-                            message: `• Ref PO: ${v.selectedPONumber || 'Non-PO'}\n• Untuk: ${v.payee}`
+                            message: `• Ref PO: ${v.selectedPONumber || 'Non-PO'}\n• Kategori: ${v.categoryLabel || 'Pembayaran'}\n• Untuk: ${v.payee}\n• Nominal: Rp ${(v.amount || 0).toLocaleString()}`
                           })}
                         >
                           <Printer size={13} /> Cetak

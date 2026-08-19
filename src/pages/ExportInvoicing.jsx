@@ -18,6 +18,7 @@ export default function ExportInvoicing() {
   // Form State with Auto-Selection Dropdowns
   const [form, setForm] = useState({
     invoiceNo: 'INV-EXP-2026-001',
+    customerPONumber: 'PO-DMCC-2026-8899',
     date: new Date().toISOString().split('T')[0],
     selectedSOId: '',
     selectedCustomerId: '',
@@ -58,6 +59,7 @@ export default function ExportInvoicing() {
           id: 'INV-EXP-2026-001',
           invoiceNo: 'INV-EXP-2026-001',
           soNumber: 'SO-EXP-2026-001',
+          customerPONumber: 'PO-DMCC-2026-8899',
           date: '2026-08-10',
           buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
           country: 'United Arab Emirates (UAE)',
@@ -82,6 +84,7 @@ export default function ExportInvoicing() {
       setForm({
         ...form,
         selectedSOId: soId,
+        customerPONumber: foundSO.customerPONumber || form.customerPONumber || '',
         buyerName: foundSO.buyerName,
         country: foundSO.country,
         itemDescription: foundSO.itemDescription,
@@ -92,7 +95,7 @@ export default function ExportInvoicing() {
       showModal({
         variant: 'success',
         title: `✅ Data Ditarik Dari ${foundSO.soNumber}`,
-        message: `• Harga fixing: $ ${foundSO.pricePerGramUSD}/g\n• Total terkunci: $ ${foundSO.totalUSD.toLocaleString()} USD`
+        message: `• Ref PO Cust: ${foundSO.customerPONumber || '-'}\n• Harga fixing: $ ${foundSO.pricePerGramUSD}/g\n• Total terkunci: $ ${foundSO.totalUSD.toLocaleString()} USD`
       });
     }
   };
@@ -113,6 +116,11 @@ export default function ExportInvoicing() {
       ...form,
       totalUSD,
       totalIDR,
+      paidAmountUSD: 0,
+      remainingBalanceUSD: totalUSD,
+      paidAmountIDR: 0,
+      remainingBalanceIDR: totalIDR,
+      paymentStatus: 'UNPAID',
       status: 'PEB APPROVED (PPN 0%)',
       createdAt: new Date().toISOString()
     };
@@ -123,7 +131,7 @@ export default function ExportInvoicing() {
       list.unshift(newInvoice);
       window.Storage.set('pttan_export_invoices', list);
 
-      // 2. Auto Posting EMKM Journal
+      // 2. Auto Posting EMKM Journal (Pengakuan Piutang Ekspor vs Pendapatan Ekspor PPN 0%)
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
         id: Date.now(),
@@ -131,7 +139,7 @@ export default function ExportInvoicing() {
         date: form.date,
         description: `Penjualan Ekspor Perhiasan (${newInvoice.invoiceNo}) Ref SO: ${form.selectedSOId || 'Direct'} - ${newInvoice.buyerName} [PEB: ${newInvoice.pebNumber}]`,
         lines: [
-          { accountCode: '1125', accountName: 'Bank Valas USD (Mandiri/BCA)', debit: totalIDR, credit: 0 },
+          { accountCode: '1132', accountName: 'Piutang Usaha Ekspor USD', debit: totalIDR, credit: 0 },
           { accountCode: '4120', accountName: 'Pendapatan Ekspor Perhiasan Emas (PPN 0%)', debit: 0, credit: totalIDR }
         ],
         createdAt: new Date().toISOString()
@@ -141,7 +149,7 @@ export default function ExportInvoicing() {
       showModal({
         variant: 'success',
         title: `✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Diterbitkan`,
-        message: `• Buyer: ${newInvoice.buyerName}\n• Jurnal PPN 0% diposting ke Akun 4120.`
+        message: `• Buyer: ${newInvoice.buyerName}\n• Nilai Ekspor: $ ${totalUSD.toLocaleString()} USD (Rp ${totalIDR.toLocaleString()})\n• Jurnal Piutang Ekspor diposting ke Akun 1132 vs Pendapatan Ekspor (Akun 4120).\n• Status Pembayaran: 🔴 UNPAID (Siap dilunasi saat DHE masuk di BBM Kasir).`
       });
       loadInitialData();
       setActiveView('list');
@@ -150,6 +158,7 @@ export default function ExportInvoicing() {
 
   const filteredInvoices = invoices.filter(inv =>
     inv.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    inv.customerPONumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     inv.buyerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     inv.pebNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -205,7 +214,7 @@ export default function ExportInvoicing() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
               <input
                 className="form-input pl-9.5 w-full"
-                placeholder="Cari Invoice, Buyer, atau PEB..."
+                placeholder="Cari Invoice, PO Cust, Buyer, atau PEB..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -231,7 +240,12 @@ export default function ExportInvoicing() {
               <tbody>
                 {filteredInvoices.map(inv => (
                   <tr key={inv.id || inv.invoiceNo}>
-                    <td><strong>{inv.invoiceNo}</strong></td>
+                    <td>
+                      <strong>{inv.invoiceNo}</strong>
+                      {inv.customerPONumber && (
+                        <small className="text-fg-muted block text-xs">PO Cust: {inv.customerPONumber}</small>
+                      )}
+                    </td>
                     <td><small className="text-gold-light">{inv.soNumber || 'SO-EXP-2026-001'}</small></td>
                     <td>{inv.date}</td>
                     <td><strong>{inv.buyerName}</strong></td>
@@ -246,7 +260,7 @@ export default function ExportInvoicing() {
                         onClick={() => showModal({
                           variant: 'info',
                           title: `🖨️ Cetak Commercial Export Invoice ${inv.invoiceNo}`,
-                          message: `Dokumen PDF untuk ${inv.buyerName}.`
+                          message: `• Buyer: ${inv.buyerName}\n• No. PO Customer: ${inv.customerPONumber || '-'}\n• Ref SO: ${inv.soNumber || '-'}\n• Total: $ ${(inv.totalUSD || 0).toLocaleString()} USD`
                         })}
                       >
                         <Printer size={14} /> Cetak Invoice
@@ -293,6 +307,16 @@ export default function ExportInvoicing() {
                   className="form-input"
                   value={form.invoiceNo}
                   onChange={e => setForm({ ...form, invoiceNo: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">No. PO Customer (Buyer PO)</label>
+                <input
+                  className="form-input font-semibold text-gold-light"
+                  placeholder="Contoh: PO-DMCC-2026-8899"
+                  value={form.customerPONumber}
+                  onChange={e => setForm({ ...form, customerPONumber: e.target.value })}
                 />
               </div>
 

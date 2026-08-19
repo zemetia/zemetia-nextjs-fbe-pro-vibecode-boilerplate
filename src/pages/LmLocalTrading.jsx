@@ -744,8 +744,8 @@ export default function LmLocalTrading() {
               </button>
             </div>
 
-            <div className="bg-white/3 p-3.5 rounded-lg mb-4">
-              <div className="grid grid-cols-3 gap-2.5">
+            <div className="bg-white/3 p-3.5 rounded-lg mb-4 border border-line">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 <div>
                   <span className="stat-lbl">No. Transaksi / PO</span>
                   <strong className="text-sky-light">{selectedPOHistory.receiptNo || selectedPOHistory.poNumber}</strong>
@@ -755,22 +755,31 @@ export default function LmLocalTrading() {
                   <strong>{selectedPOHistory.supplierName}</strong>
                 </div>
                 <div>
-                  <span className="stat-lbl">Total Tagihan</span>
-                  <strong className="text-gold-light">
+                  <span className="stat-lbl">Total Tagihan Pokok</span>
+                  <strong className="text-fg">
                     Rp {Number(selectedPOHistory.totalAmount || 0).toLocaleString()}
+                  </strong>
+                </div>
+                <div>
+                  <span className="stat-lbl">Sisa Hutang Pokok</span>
+                  <strong className="text-gold-light">
+                    Rp {(typeof selectedPOHistory.remainingBalanceIDR !== 'undefined' ? selectedPOHistory.remainingBalanceIDR : Math.max(0, Number(selectedPOHistory.totalAmount || 0) - Number(selectedPOHistory.paidAmountIDR || 0))).toLocaleString()}
                   </strong>
                 </div>
               </div>
             </div>
 
-            <h4 className="text-[0.9rem] text-sky-light mb-2.5">
-              📋 Rincian Transaksi Voucher Pembayaran yang Diterbitkan:
+            <h4 className="text-[0.9rem] text-sky-light mb-2.5 flex items-center justify-between">
+              <span>📋 Rincian Transaksi Voucher Pembayaran yang Diterbitkan:</span>
+              <span className="text-xs text-fg-muted">
+                {selectedPOHistory.paymentHistory?.length || 0} Voucher Diterbitkan
+              </span>
             </h4>
 
             {(!selectedPOHistory.paymentHistory || selectedPOHistory.paymentHistory.length === 0) ? (
               <div className="p-6 text-center text-fg-muted bg-[rgba(15,23,42,0.6)] rounded-lg">
                 <AlertCircle size={28} className="text-rose mx-auto mb-2" />
-                Belum ada transaksi pembayaran (BBK) untuk transaksi ini. (Status: 🔴 UNPAID)
+                Belum ada transaksi pembayaran (BBK/BKK) untuk transaksi ini. (Status: 🔴 UNPAID)
               </div>
             ) : (
               <div className="table-container">
@@ -779,8 +788,10 @@ export default function LmLocalTrading() {
                     <tr>
                       <th>No. Voucher / Ref</th>
                       <th>Tanggal Bayar</th>
+                      <th>Kategori Alokasi</th>
+                      <th>Penerima (Payee)</th>
                       <th>Akun Bank / Sumber</th>
-                      <th className="text-right">Nominal Cicilan</th>
+                      <th className="text-right">Nominal (IDR)</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -789,6 +800,20 @@ export default function LmLocalTrading() {
                       <tr key={i}>
                         <td><strong className="text-sky-light">{pmt.voucherNo}</strong></td>
                         <td>{pmt.date}</td>
+                        <td>
+                          <span className={`badge text-xs ${
+                            pmt.category === 'CUSTOMS_DUTY_PPH22'
+                              ? 'bg-sky-950/80 text-sky-300 border border-sky-600/50'
+                              : pmt.category === 'LOGISTICS_HANDLING'
+                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/50'
+                              : pmt.category === 'OTHER_EXPENSE'
+                              ? 'bg-purple-950/80 text-purple-300 border border-purple-600/50'
+                              : 'bg-amber-950/80 text-gold-light border border-gold/50'
+                          }`}>
+                            {pmt.categoryLabel || (pmt.category === 'CUSTOMS_DUTY_PPH22' ? '🏛️ Pajak PPh 22' : pmt.category === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
+                          </span>
+                        </td>
+                        <td><small className="font-semibold text-fg">{pmt.payee || selectedPOHistory.supplierName}</small></td>
                         <td><small>{pmt.bank || 'Bank BCA IDR'}</small></td>
                         <td className="text-right font-extrabold text-emerald-light">
                           Rp {Number(pmt.amount || 0).toLocaleString()}

@@ -14,6 +14,7 @@ export default function ExportDeliveryOrderPage() {
 
   const [form, setForm] = useState({
     doNumber: 'DO-EXP-2026-001',
+    customerPONumber: 'PO-DMCC-2026-8899',
     date: new Date().toISOString().split('T')[0],
     selectedInvoiceNo: '',
     soNumber: 'SO-EXP-2026-001', // Ref Sales Order Number
@@ -46,6 +47,7 @@ export default function ExportDeliveryOrderPage() {
         {
           id: 'DO-EXP-2026-001',
           doNumber: 'DO-EXP-2026-001',
+          customerPONumber: 'PO-DMCC-2026-8899',
           invoiceNo: 'INV-EXP-2026-001',
           soNumber: 'SO-EXP-2026-001',
           goldCertificateNo: 'CERT-FINEGOLD-998812',
@@ -75,6 +77,7 @@ export default function ExportDeliveryOrderPage() {
         ...form,
         selectedInvoiceNo: invNo,
         soNumber: foundInv.soNumber || 'SO-EXP-2026-001',
+        customerPONumber: foundInv.customerPONumber || form.customerPONumber || '',
         buyerName: foundInv.buyerName,
         country: foundInv.country,
         pebNumber: foundInv.pebNumber || 'PEB-2026-088912',
@@ -86,7 +89,7 @@ export default function ExportDeliveryOrderPage() {
       showModal({
         variant: 'success',
         title: `✅ Data Ditarik Dari Invoice ${foundInv.invoiceNo}`,
-        message: `• Ref SO: ${foundInv.soNumber || 'SO-EXP-2026-001'}\n• Buyer: ${foundInv.buyerName}\nForm surat jalan sudah terisi otomatis.`
+        message: `• Ref SO: ${foundInv.soNumber || 'SO-EXP-2026-001'}\n• Ref PO Cust: ${foundInv.customerPONumber || '-'}\n• Buyer: ${foundInv.buyerName}\nForm surat jalan sudah terisi otomatis.`
       });
     }
   };
@@ -112,11 +115,28 @@ export default function ExportDeliveryOrderPage() {
       list.unshift(newDO);
       window.Storage.set('pttan_export_delivery_orders', list);
 
-      // 2. Deduct Physical Stock from Vault 1160
+      // 2. Auto-Post HPP Ekspor Jurnal (Pengakuan HPP saat barang keluar dari Vault 1160)
+      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
+      const hppCostPerGram = 1350000;
+      const totalHPP = (form.netWeightGram || 0) * hppCostPerGram;
+
+      journals.unshift({
+        id: Date.now(),
+        entryNumber: `JRN-HPP-${Date.now().toString().slice(-6)}`,
+        date: form.date,
+        description: `Pengakuan HPP Penjualan Ekspor (${newDO.doNumber}) Ref SO: ${newDO.soNumber} - ${newDO.buyerName} [${newDO.netWeightGram}g Perhiasan Karat 750]`,
+        lines: [
+          { accountCode: '5115', accountName: 'HPP Ekspor Logam Mulia & Perhiasan', debit: totalHPP, credit: 0 },
+          { accountCode: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor', debit: 0, credit: totalHPP }
+        ],
+        createdAt: new Date().toISOString()
+      });
+      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+
       showModal({
         variant: 'success',
         title: `✅ Surat Jalan Ekspor (${newDO.doNumber}) Diterbitkan`,
-        message: `• Ref SO: ${newDO.soNumber}\n• Sertifikat Emas: ${newDO.goldCertificateNo}\n• Sertifikat Kadar: ${newDO.purityCertificateNo}`
+        message: `• Ref SO: ${newDO.soNumber} | Ref Invoice: ${newDO.invoiceNo}\n• Pengeluaran Fisik: ${newDO.netWeightGram}g dari Vault Siap Ekspor (Akun 1160).\n• Jurnal HPP Diposting: Debet Akun 5115 vs Kredit Akun 1160 Rp ${totalHPP.toLocaleString()}.`
       });
       loadInitialData();
       setActiveView('list');
@@ -125,10 +145,10 @@ export default function ExportDeliveryOrderPage() {
 
   const filteredDO = deliveryOrders.filter(d =>
     d.doNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.buyerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.customerPONumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     d.soNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.goldCertificateNo?.toLowerCase().includes(searchQuery.toLowerCase())
+    d.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.buyerName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -182,7 +202,7 @@ export default function ExportDeliveryOrderPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" size={18} />
               <input
                 className="form-input pl-9.5 w-full"
-                placeholder="Cari Surat Jalan, SO, Invoice, atau Sertifikat..."
+                placeholder="Cari Surat Jalan, PO Cust, SO, Invoice..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -208,7 +228,12 @@ export default function ExportDeliveryOrderPage() {
               <tbody>
                 {filteredDO.map(d => (
                   <tr key={d.id || d.doNumber}>
-                    <td><strong>{d.doNumber}</strong></td>
+                    <td>
+                      <strong>{d.doNumber}</strong>
+                      {d.customerPONumber && (
+                        <small className="text-fg-muted block text-xs">PO Cust: {d.customerPONumber}</small>
+                      )}
+                    </td>
                     <td><span className="badge badge-gold text-xs">{d.soNumber || 'SO-EXP-2026-001'}</span></td>
                     <td><small className="text-emerald-light">{d.invoiceNo}</small></td>
                     <td>{d.date}</td>
@@ -223,7 +248,7 @@ export default function ExportDeliveryOrderPage() {
                         onClick={() => showModal({
                           variant: 'info',
                           title: `🖨️ Cetak Surat Jalan Ekspor ${d.doNumber}`,
-                          message: `• SO: ${d.soNumber}\n• Cert Emas: ${d.goldCertificateNo}\n• Cert Kadar: ${d.purityCertificateNo}`
+                          message: `• SO: ${d.soNumber}\n• No. PO Customer: ${d.customerPONumber || '-'}\n• Cert Emas: ${d.goldCertificateNo}\n• Cert Kadar: ${d.purityCertificateNo}`
                         })}
                       >
                         <Printer size={14} /> Cetak Surat Jalan
@@ -270,6 +295,16 @@ export default function ExportDeliveryOrderPage() {
                   className="form-input"
                   value={form.doNumber}
                   onChange={e => setForm({ ...form, doNumber: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">No. PO Customer (Buyer PO)</label>
+                <input
+                  className="form-input font-semibold text-gold-light"
+                  placeholder="Contoh: PO-DMCC-2026-8899"
+                  value={form.customerPONumber}
+                  onChange={e => setForm({ ...form, customerPONumber: e.target.value })}
                 />
               </div>
 

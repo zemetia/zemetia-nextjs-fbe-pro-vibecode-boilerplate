@@ -63,37 +63,106 @@ export default function JewelryProduction() {
     showModal({ variant: 'success', title: '✅ Rumus BOM Diperbarui', message: `Formula BOM karat ${editingFormula.code} berhasil disimpan.` });
   };
 
-  const handleIssueToWIP = (e) => {
+  const handleIssueToWIP = async (e) => {
     e.preventDefault();
     if (typeof window !== 'undefined' && window.Storage) {
+      const spkId = `SPK-${Date.now().toString().slice(-6)}`;
+      const spkRecord = {
+        id: spkId,
+        spkNo: `SPK-PROD-${Date.now().toString().slice(-4)}`,
+        date: new Date().toISOString().split('T')[0],
+        buyerName: orderForm.buyerName,
+        jewelryType: orderForm.jewelryType,
+        targetKarat: orderForm.targetKarat,
+        grossWeight: Number(orderForm.grossWeight),
+        lossTolerancePct: Number(orderForm.lossTolerancePct),
+        fineGoldNeeded: Number(fineGoldNeeded.toFixed(2)),
+        masterAlloyNeeded: Number(masterAlloyNeeded.toFixed(2)),
+        status: 'IN_WIP',
+        createdAt: new Date().toISOString()
+      };
+
+      const spkList = window.Storage.get('pttan_production_spk') || [];
+      spkList.unshift(spkRecord);
+      await window.Storage.set('pttan_production_spk', spkList);
+
       const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
       journals.unshift({
         id: Date.now(),
         entryNumber: `JRN-${Date.now().toString().slice(-6)}`,
-        date: new Date().toISOString().split('T')[0],
-        description: `Pengeluaran Bahan SPK Produksi ${orderForm.jewelryType} - ${orderForm.buyerName}`,
+        date: spkRecord.date,
+        description: `Pengeluaran Bahan SPK Produksi ${orderForm.jewelryType} (${spkRecord.spkNo}) - ${orderForm.buyerName}`,
         lines: [
-          { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: fineGoldNeeded * 1250000, credit: 0 },
-          { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (LM Utama)', debit: 0, credit: fineGoldNeeded * 1250000 }
+          { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: fineGoldNeeded * 1300000, credit: 0 },
+          { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (LM Utama)', debit: 0, credit: fineGoldNeeded * 1300000 }
         ],
         createdAt: new Date().toISOString()
       });
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+
       showModal({
         variant: 'success',
-        title: '✅ SPK Produksi Terbit',
-        message: `${fineGoldNeeded.toFixed(2)}g emas murni 999.9 dikeluarkan dari Vault Utama (1157) ke Vault Emas WIP (11502).`
+        title: `✅ SPK Produksi (${spkRecord.spkNo}) Terbit`,
+        message: `• ${fineGoldNeeded.toFixed(2)}g emas murni 999.9 dikeluarkan dari Vault Utama (1157) ke Vault Emas WIP (11502).\n• Master Alloy Campuran: ${masterAlloyNeeded.toFixed(2)}g`
       });
     }
   };
 
-  const handleSettlementProduction = (e) => {
+  const handleSettlementProduction = async (e) => {
     e.preventDefault();
-    showModal({
-      variant: 'success',
-      title: `✅ Settlement Produksi (${settlementForm.joNumber}) Tersimpan`,
-      message: `${settlementForm.jewelryOutputWeight}g perhiasan jadi dipindahkan ke Vault Perhiasan Siap Ekspor (Akun 1160).`
-    });
+    if (typeof window !== 'undefined' && window.Storage) {
+      const outputWeight = Number(settlementForm.jewelryOutputWeight || 0);
+      const scrapWeight = Number(settlementForm.scrapReturnWeight || 0);
+      const lossWeight = Number(settlementForm.goldLossWeight || 0);
+      const laborFee = Number(settlementForm.laborFeeIDR || 0);
+      const totalWipDeducted = outputWeight + scrapWeight + lossWeight;
+
+      const settlementRecord = {
+        id: settlementForm.joNumber,
+        joNumber: settlementForm.joNumber,
+        date: new Date().toISOString().split('T')[0],
+        jewelryOutputWeight: outputWeight,
+        scrapReturnWeight: scrapWeight,
+        goldLossWeight: lossWeight,
+        laborFeeIDR: laborFee,
+        karat: orderForm.targetKarat || '750',
+        status: 'COMPLETED',
+        createdAt: new Date().toISOString()
+      };
+
+      const settlements = window.Storage.get('pttan_production_settlements') || [];
+      settlements.unshift(settlementRecord);
+      await window.Storage.set('pttan_production_settlements', settlements);
+
+      // Auto-post settlement journal
+      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
+      const totalWipValue = totalWipDeducted * 1300000;
+      const jewelryValue = (outputWeight * 1350000) + laborFee;
+      const scrapValue = scrapWeight * 1200000;
+      const lossValue = lossWeight * 1300000;
+
+      journals.unshift({
+        id: Date.now(),
+        entryNumber: `JRN-SETTLE-${Date.now().toString().slice(-6)}`,
+        date: settlementRecord.date,
+        description: `Settlement Produksi Workshop (${settlementForm.joNumber}): Hasil Perhiasan ${outputWeight}g (Vault 1160) | Scrap Retur ${scrapWeight}g (Vault 1152) | Susut Lebur ${lossWeight}g`,
+        lines: [
+          { accountCode: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor', debit: jewelryValue, credit: 0 },
+          ...(scrapWeight > 0 ? [{ accountCode: '1152', accountName: 'Persediaan Emas Scrap & Leburan', debit: scrapValue, credit: 0 }] : []),
+          ...(lossWeight > 0 ? [{ accountCode: '5120', accountName: 'Beban Susut Lebur / Gold Loss', debit: lossValue, credit: 0 }] : []),
+          { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: 0, credit: totalWipValue },
+          ...(laborFee > 0 ? [{ accountCode: '2111', accountName: 'Hutang Biaya Ongkos Tukang (Labor)', debit: 0, credit: laborFee }] : [])
+        ],
+        createdAt: new Date().toISOString()
+      });
+      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+
+      showModal({
+        variant: 'success',
+        title: `✅ Settlement Produksi (${settlementForm.joNumber}) Selesai`,
+        message: `• ${outputWeight}g perhiasan jadi dipindahkan ke Vault Perhiasan Siap Ekspor (Akun 1160).\n• ${scrapWeight}g scrap retur masuk ke Vault Scrap (Akun 1152).\n• Saldo Vault WIP (11502) berkurang ${totalWipDeducted}g.`
+      });
+    }
   };
 
   return (
