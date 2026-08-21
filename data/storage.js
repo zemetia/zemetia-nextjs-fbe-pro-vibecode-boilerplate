@@ -234,6 +234,7 @@ const Storage = {
         QC_LOGS: 'QC_LOGS',
         LEAVE_REQUESTS: 'LEAVE_REQUESTS',
         LEAVE_BALANCES: 'LEAVE_BALANCES',
+        COMPANY_DAYOFFS: 'erp_company_dayoffs',
         SETTINGS: 'erp_settings',
         SYSTEM_SETTINGS: 'erp_system_settings',
         REORDER_SETTINGS: 'reorder_settings',
@@ -525,16 +526,13 @@ const Storage = {
         // This fixes issues where counters get reset or out of sync
         this.recalculateCounters();
 
-        // Initialize Master Data with sample data if empty
+        if (!localStorage.getItem(this.KEYS.ITEMS)) {
             const sampleItems = [
-                { id: 'LM-ANTAM-100G', code: 'LM-ANTAM-100G', name: 'Emas Batangan Antam 100g (999.9)', category: 'Emas Murni', unit: 'gram', weight: 100, purity: 99.99, minStock: 50, inventoryAccount: '1157', cogsAccount: '5114', salesAccount: '4110', description: 'Logam Mulia Lokal Antam 100g' },
-                { id: 'LM-ANTAM-1000G', code: 'LM-ANTAM-1000G', name: 'Emas Batangan Antam 1kg (999.9)', category: 'Emas Murni', unit: 'gram', weight: 1000, purity: 99.99, minStock: 1000, inventoryAccount: '1157', cogsAccount: '5114', salesAccount: '4110', description: 'Logam Mulia Lokal Antam 1000g' },
-                { id: 'LM-VALCAMBI-1KG', code: 'LM-VALCAMBI-1KG', name: 'Valcambi Suisse Gold Bar 1kg (999.9 LBMA)', category: 'Emas Impor', unit: 'gram', weight: 1000, purity: 99.99, minStock: 1000, inventoryAccount: '1158', cogsAccount: '5115', salesAccount: '4110', description: 'Logam Mulia Impor Valcambi Suisse LBMA' },
-                { id: 'LM-PAMP-1KG', code: 'LM-PAMP-1KG', name: 'PAMP Suisse Gold Bar 1kg (999.9 LBMA)', category: 'Emas Impor', unit: 'gram', weight: 1000, purity: 99.99, minStock: 1000, inventoryAccount: '1158', cogsAccount: '5115', salesAccount: '4110', description: 'Logam Mulia Impor PAMP Suisse LBMA' },
-                { id: 'GOLD-GRANULE-9999', code: 'GOLD-GRANULE-9999', name: 'Granul Emas Murni 999.9', category: 'Bahan Baku', unit: 'gram', purity: 99.99, minStock: 500, inventoryAccount: '1182', cogsAccount: '5111', salesAccount: '4110', description: 'Bahan baku granul emas murni untuk lebur & manufaktur' },
-                { id: 'GOLD-SCRAP-VAR', code: 'GOLD-SCRAP-VAR', name: 'Pecahan Perhiasan Scrap (Kadar Variatif)', category: 'Scrap', unit: 'gram', purity: 0, minStock: 0, inventoryAccount: '1152', cogsAccount: '5111', salesAccount: '4110', description: 'Pecahan perhiasan rongsok/bekas hasil pembelian' }
+                { id: 'LM-ANTAM-100G', code: 'LM-ANTAM-100G', name: 'Logam Mulia Antam 100g (99.99%)', category: 'Finished Goods', unit: 'gram', price: 1350000, inventoryAccount: '1157', cogsAccount: '5114', stock: 100 },
+                { id: 'LM-VALCAMBI-1KG', code: 'LM-VALCAMBI-1KG', name: 'Valcambi Suisse Gold Bar 1kg (999.9 LBMA)', category: 'Finished Goods', unit: 'gram', price: 1350000, inventoryAccount: '1158', cogsAccount: '5115', stock: 1000 }
             ];
             localStorage.setItem(this.KEYS.ITEMS, JSON.stringify(sampleItems));
+        }
 
         if (!localStorage.getItem(this.KEYS.TAXES) || JSON.parse(localStorage.getItem(this.KEYS.TAXES)).length === 0) {
             const sampleTaxes = [
@@ -549,9 +547,7 @@ const Storage = {
 
         if (!localStorage.getItem(this.KEYS.BANK_ACCOUNTS) || JSON.parse(localStorage.getItem(this.KEYS.BANK_ACCOUNTS)).length === 0) {
             const sampleBanks = [
-                { id: 'BANK-BCA-IDR', code: 'BCA-IDR', accountHolder: 'PT. Trifactor Alura Nusantara (TAN)', bankName: 'Bank BCA', accountNumber: '889-012-3456', currency: 'IDR', branch: 'KCU Thamrin Jakarta', glAccount: '1111-IDR', notes: 'Rekening Utama Operasional & Pembelian Lokal', active: true, createdAt: new Date().toISOString() },
-                { id: 'BANK-BCA-USD', code: 'BCA-USD', accountHolder: 'PT. Trifactor Alura Nusantara (TAN)', bankName: 'Bank BCA Devisa', accountNumber: '889-012-USD1', currency: 'USD', branch: 'KCU Thamrin Jakarta (Swift: CENAIDJA)', glAccount: '1111-USD', notes: 'Khusus Pembayaran Impor LBMA Valcambi & Penerimaan Ekspor Dubai', active: true, createdAt: new Date().toISOString() },
-                { id: 'BANK-BCA-SGD', code: 'BCA-SGD', accountHolder: 'PT. Trifactor Alura Nusantara (TAN)', bankName: 'Bank BCA Devisa', accountNumber: '889-012-SGD1', currency: 'SGD', branch: 'KCU Thamrin Jakarta (Swift: CENAIDJA)', glAccount: '1111-SGD', notes: 'Khusus Pembayaran Impor Bullion Singapura', active: true, createdAt: new Date().toISOString() }
+                { id: 'BANK-BCA-001', code: 'BCA-001', accountHolder: 'PT. Golden Alura Refinery', bankName: 'BCA', accountNumber: '1234567890', currency: 'IDR', branch: 'Jakarta Pusat', glAccount: '1121', notes: 'Rekening utama operasional', active: true, createdAt: new Date().toISOString() }
             ];
             localStorage.setItem(this.KEYS.BANK_ACCOUNTS, JSON.stringify(sampleBanks));
         }
@@ -938,9 +934,126 @@ const Storage = {
         }
 
         console.log('Storage initialized with sample data');
+
+        // Automatically purge target dummy employees from database and transactions
+        this.purgeTargetDummyEmployees();
     },
 
-    // Force load sample data (call from console: Storage.loadSampleData())
+    /**
+     * Purge specific 4 dummy employees (Andi Pratama, Siti Aminah, Budi Baru, Cici Baru)
+     * from database and all transactions (Attendance, Payroll, Leaves, BPJS, Users).
+     * Exact name matching is used to protect all other real employees.
+     */
+    async purgeTargetDummyEmployees() {
+        const TARGET_DUMMY_NAMES = [
+            'andi pratama',
+            'siti aminah',
+            'budi baru',
+            'cici baru'
+        ];
+
+        const isTargetDummy = (name) => {
+            if (!name) return false;
+            const clean = String(name).trim().toLowerCase();
+            return TARGET_DUMMY_NAMES.includes(clean);
+        };
+
+        try {
+            // 1. Purge from Employees
+            const employees = this.get(this.KEYS.EMPLOYEES) || [];
+            const dummyEmps = employees.filter(e => isTargetDummy(e.name || e.fullName));
+            const dummyIds = new Set(dummyEmps.map(e => String(e.id)));
+            const dummyNiks = new Set(dummyEmps.map(e => String(e.nik || '').trim()).filter(Boolean));
+
+            // Known dummy sample NIKs
+            ['EMP-2024-001', 'EMP-2024-002', 'EMP-2024-003', 'EMP-2024-005', 'EMP-001', 'EMP-002', 'EMP-003', 'EMP-005'].forEach(n => dummyNiks.add(n));
+
+            if (dummyEmps.length > 0) {
+                console.log(`🧹 [DataCleanup] Purging ${dummyEmps.length} target dummy employees from DB:`, dummyEmps.map(e => e.name));
+                const remaining = employees.filter(e => !isTargetDummy(e.name || e.fullName));
+                await this.set(this.KEYS.EMPLOYEES, remaining);
+
+                if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled && FirebaseSync.isEnabled()) {
+                    for (const emp of dummyEmps) {
+                        await FirebaseSync.deleteFromCloud(this.KEYS.EMPLOYEES, String(emp.id)).catch(() => {});
+                    }
+                }
+            }
+
+            // 2. Purge from Attendance
+            const attendance = this.get(this.KEYS.ATTENDANCE) || [];
+            const filteredAttendance = attendance.filter(a => {
+                if (isTargetDummy(a.name || a.employee_name)) return false;
+                if (a.employee_id && dummyIds.has(String(a.employee_id))) return false;
+                if (a.nik && dummyNiks.has(String(a.nik).trim())) return false;
+                return true;
+            });
+            if (filteredAttendance.length !== attendance.length) {
+                const deletedAtd = attendance.filter(a => !filteredAttendance.includes(a));
+                console.log(`🧹 [DataCleanup] Purging ${deletedAtd.length} attendance records for dummy employees.`);
+                await this.set(this.KEYS.ATTENDANCE, filteredAttendance);
+                if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled && FirebaseSync.isEnabled()) {
+                    for (const atd of deletedAtd) {
+                        if (atd.id) await FirebaseSync.deleteFromCloud(this.KEYS.ATTENDANCE, String(atd.id)).catch(() => {});
+                    }
+                }
+            }
+
+            // 3. Purge from Payroll
+            const payroll = this.get(this.KEYS.PAYROLL) || [];
+            const filteredPayroll = payroll.filter(p => {
+                if (isTargetDummy(p.name)) return false;
+                if (p.employee_id && dummyIds.has(String(p.employee_id))) return false;
+                if (p.nik && dummyNiks.has(String(p.nik).trim())) return false;
+                return true;
+            });
+            if (filteredPayroll.length !== payroll.length) {
+                const deletedPay = payroll.filter(p => !filteredPayroll.includes(p));
+                console.log(`🧹 [DataCleanup] Purging ${deletedPay.length} payroll records for dummy employees.`);
+                await this.set(this.KEYS.PAYROLL, filteredPayroll);
+                if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled && FirebaseSync.isEnabled()) {
+                    for (const pay of deletedPay) {
+                        if (pay.id) await FirebaseSync.deleteFromCloud(this.KEYS.PAYROLL, String(pay.id)).catch(() => {});
+                    }
+                }
+            }
+
+            // 4. Purge from Leaves
+            const leaves = this.get(this.KEYS.LEAVES) || [];
+            const filteredLeaves = leaves.filter(l => {
+                if (isTargetDummy(l.employee_name || l.name)) return false;
+                if (l.employee_id && dummyIds.has(String(l.employee_id))) return false;
+                if (l.nik && dummyNiks.has(String(l.nik).trim())) return false;
+                return true;
+            });
+            if (filteredLeaves.length !== leaves.length) {
+                const deletedLeaves = leaves.filter(l => !filteredLeaves.includes(l));
+                console.log(`🧹 [DataCleanup] Purging ${deletedLeaves.length} leave records for dummy employees.`);
+                await this.set(this.KEYS.LEAVES, filteredLeaves);
+                if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled && FirebaseSync.isEnabled()) {
+                    for (const l of deletedLeaves) {
+                        if (l.id) await FirebaseSync.deleteFromCloud(this.KEYS.LEAVES, String(l.id)).catch(() => {});
+                    }
+                }
+            }
+
+            // 5. Purge from BPJS Offboarding
+            const offboarding = this.get(this.KEYS.BPJS_OFFBOARDING) || [];
+            const filteredOffboarding = offboarding.filter(o => !isTargetDummy(o.name || o.employee_name));
+            if (filteredOffboarding.length !== offboarding.length) {
+                await this.set(this.KEYS.BPJS_OFFBOARDING, filteredOffboarding);
+            }
+
+            // 6. Purge from Users
+            const users = this.get(this.KEYS.USERS) || [];
+            const filteredUsers = users.filter(u => !isTargetDummy(u.fullName || u.username || u.name));
+            if (filteredUsers.length !== users.length) {
+                await this.set(this.KEYS.USERS, filteredUsers);
+            }
+        } catch (e) {
+            console.error('❌ [Storage] Error during target dummy purge:', e);
+        }
+    },
     loadSampleData() {
         const sampleItems = [];
         localStorage.setItem(this.KEYS.ITEMS, JSON.stringify(sampleItems));
@@ -1057,6 +1170,8 @@ const Storage = {
 
         // POPULATED LOOK (DUMMY LISTS)
         const dummyItems = [
+            { id: 'LM-ANTAM-100G', code: 'LM-ANTAM-100G', name: 'Logam Mulia Antam 100g (99.99%)', category: 'Finished Goods', unit: 'gram', price: 1350000, inventoryAccount: '1157', cogsAccount: '5114', stock: 100 },
+            { id: 'LM-VALCAMBI-1KG', code: 'LM-VALCAMBI-1KG', name: 'Valcambi Suisse Gold Bar 1kg (999.9 LBMA)', category: 'Finished Goods', unit: 'gram', price: 1350000, inventoryAccount: '1158', cogsAccount: '5115', stock: 1000 },
             { id: 101, code: 'FG-001', name: 'Fine Gold Bar 999.9 (1000g)', category: 'Finished Goods', unit: 'g', price: 1200000, stock: 0 },
             { id: 102, code: 'FG-002', name: 'Fine Gold Bar 999.9 (100g)', category: 'Finished Goods', unit: 'g', price: 1205000, stock: 0 },
             { id: 103, code: 'FG-003', name: 'Fine Gold Grain 99.9', category: 'Finished Goods', unit: 'g', price: 1195000, stock: 0 },
@@ -1066,7 +1181,7 @@ const Storage = {
         const dummyCustomers = [
             { id: 201, code: 'CUST-001', name: 'PT. Logam Mulia Jaya', contact: 'Budi Santoso', status: 'active' },
             { id: 202, code: 'CUST-002', name: 'Toko Emas Sejahtera', contact: 'Haji Ahmad', status: 'active' },
-            { id: 203, code: 'CUST-003', name: 'CV. Mitra Emas', contact: 'Siti Aminah', status: 'active' }
+            { id: 203, code: 'CUST-003', name: 'CV. Mitra Emas', contact: 'Dewi Rahmawati', status: 'active' }
         ];
 
         const dummySuppliers = [
@@ -1656,1508 +1771,1936 @@ const Storage = {
 
     // Default Chart of Accounts (SAK EMKM compliant) - Gold Refinery Edition
         getDefaultChartOfAccounts() {
-  return [
-    {
-        "code": "1",
-        "name": "Aktiva",
-        "type": "header",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "11",
-        "name": "Aktiva Lancar",
-        "type": "header",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1110",
-        "name": "Kas",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1110-1",
-        "name": "Kas Kecil",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1111",
-        "name": "Bank",
-        "type": "header",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1111-IDR",
-        "name": "Bank BCA IDR (Operasional & Beli Lokal)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1111-USD",
-        "name": "Bank BCA Devisa USD (Impor LBMA & Ekspor Valas)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1111-SGD",
-        "name": "Bank BCA Devisa SGD (Impor Valas Singapura)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1112",
-        "name": "Deposito",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1113",
-        "name": "Piutang Usaha",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1113-1",
-        "name": "Piutang usaha Lokal",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1113-2",
-        "name": "Piiutang Usaha Eksport",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1114",
-        "name": "Piutang Lain lain",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1115",
-        "name": "Persediaan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1115-1",
-        "name": "Persediaan bahan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1115-2",
-        "name": "Persediaan dalam proses",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1115-3",
-        "name": "Persediaan barang jadi",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1116",
-        "name": "Investasi",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1116-1",
-        "name": "Saham",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1117",
-        "name": "Perlengkapan Kantor",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1117-1",
-        "name": "Stasionery dan lain nya",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1118",
-        "name": "Biaya Dibayar dimuka",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1118-1",
-        "name": "Sewa dibayar dimuka",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1118-2",
-        "name": "Asuransi dibayar dimuka",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1119",
-        "name": "Uang titipan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1119-1",
-        "name": "Uang titipan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1120",
-        "name": "Pajak Dibayar dimuka",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1120-1",
-        "name": "PPN",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1120-2",
-        "name": "PPh 21",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1120-3",
-        "name": "PPh 22",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1120-4",
-        "name": "PPh 23",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1120-5",
-        "name": "PPh 25",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "12",
-        "name": "Aktiva Tetap Berwujud",
-        "type": "header",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1201",
-        "name": "Harga Perolehan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1201-1",
-        "name": "Tanah",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1201-2",
-        "name": "Bangunan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1201-3",
-        "name": "Kendaraan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1201-4",
-        "name": "Mesin",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1201-5",
-        "name": "Inventaris dan Peralatan Kantor",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1202",
-        "name": "Akumulasi Penyusutan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1202-1",
-        "name": "Bangunan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1202-2",
-        "name": "Kendaraan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1202-3",
-        "name": "Mesin",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1202-4",
-        "name": "Inventaris dan Peralatan Kantor",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "13",
-        "name": "Aktiva Tetap Tak Berwujud",
-        "type": "header",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1301-1",
-        "name": "Biaya Pra Operasi",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1301-2",
-        "name": "Goodwill",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "2",
-        "name": "Passiva",
-        "type": "header",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "21",
-        "name": "Kewajiban Lancar",
-        "type": "header",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2110-1",
-        "name": "Hutang bank BCA",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2111",
-        "name": "Hutang Usaha",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2111-1",
-        "name": "Hutang Dagang",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2112",
-        "name": "Hutang lain lain",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2112-1",
-        "name": "Hutang biaya lain lain",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2112-2",
-        "name": "Hutang pembelian kendaraan",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2113",
-        "name": "Biaya yang masih harus dibayar",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2113-1",
-        "name": "Listrik",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2113-2",
-        "name": "Air",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2113-3",
-        "name": "Telp",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2113-4",
-        "name": "Gaji",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2113-5",
-        "name": "Lain lain",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2115",
-        "name": "Hutang Cek / Bilyet Giro Beredar",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114",
-        "name": "Hutang pajak",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114-1",
-        "name": "PPN",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114-2",
-        "name": "Hutang PPh 21",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114-3",
-        "name": "Hutang PPh 22",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114-4",
-        "name": "Hutang PPh 23",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114-5",
-        "name": "Hutang PPh Pasal 4 ayat 2",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2114-6",
-        "name": "Hutang PPh Badan",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "22",
-        "name": "Hutang jangka Panjang",
-        "type": "header",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2211",
-        "name": "Hutang Bank",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2211-1",
-        "name": "Hutang bank \"X\"",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "23",
-        "name": "Ekuitas",
-        "type": "header",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2310",
-        "name": "Modal Disetor",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2310-1",
-        "name": "Modal disetor",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2311",
-        "name": "Saldo Laba",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2311-1",
-        "name": "Laba Berjalan",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2311-2",
-        "name": "Saldo laba",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2312",
-        "name": "Deviden",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "2312-1",
-        "name": "Deviden tunai",
-        "type": "detail",
-        "category": "kewajiban",
-        "balance": 0
-    },
-    {
-        "code": "3",
-        "name": "Pendapatan",
-        "type": "header",
-        "category": "pendapatan",
-        "balance": 0
-    },
-    {
-        "code": "31",
-        "name": "Penjualan",
-        "type": "header",
-        "category": "pendapatan",
-        "balance": 0
-    },
-    {
-        "code": "3110",
-        "name": "Penjualan Lokal",
-        "type": "detail",
-        "category": "pendapatan",
-        "balance": 0
-    },
-    {
-        "code": "3110-1",
-        "name": "Penjualan Lokal",
-        "type": "detail",
-        "category": "pendapatan",
-        "balance": 0
-    },
-    {
-        "code": "3120",
-        "name": "Penjualan Export",
-        "type": "detail",
-        "category": "pendapatan",
-        "balance": 0
-    },
-    {
-        "code": "3120-1",
-        "name": "Penjualan Export",
-        "type": "detail",
-        "category": "pendapatan",
-        "balance": 0
-    },
-    {
-        "code": "4",
-        "name": "Harga Pokok Penjualan",
-        "type": "header",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "41",
-        "name": "Harga Pokok Penjualan",
-        "type": "header",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4110",
-        "name": "Direct Labour",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4110-1",
-        "name": "Upah Buruh /Harian",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4110-2",
-        "name": "THR dan Bonus",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120",
-        "name": "Pendapatan Ekspor Perhiasan Emas (PPN 0%)",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-1",
-        "name": "Gaji staf",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-2",
-        "name": "THR dan Bonus",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-3",
-        "name": "Lembur",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-4",
-        "name": "Tunjangan lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-5",
-        "name": "Listrik",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-6",
-        "name": "Air",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-7",
-        "name": "Gas",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-8",
-        "name": "Bahan pembantu",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-9",
-        "name": "Biaya Maintanance Mesin",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-10",
-        "name": "Biaya Maintanance Gedung",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-11",
-        "name": "Biaya Penyusutan Mesin",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-12",
-        "name": "Biaya Sewa Pabrik",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-13",
-        "name": "Biaya Bahan bakar Mesin",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-14",
-        "name": "Biaya Asuransi Mesin dan bangunan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4120-20",
-        "name": "Biaya lain lain",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "42",
-        "name": "HPP Penjualan Emas",
-        "type": "header",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4210",
-        "name": "HPP Penjualan Emas",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4210-1",
-        "name": "HPP Penjualan Lokal",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "4210-2",
-        "name": "HPP Penjualan Export",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5",
-        "name": "Biaya Operasional",
-        "type": "header",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "51",
-        "name": "Biaya Penjualan",
-        "type": "header",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5110",
-        "name": "Biaya Gaji",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5110-1",
-        "name": "Biaya Gaji Karyawan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5110-2",
-        "name": "THR dan Bonus",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5110-3",
-        "name": "Tunjangan Transport",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5110-9",
-        "name": "Tunjangan lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5111",
-        "name": "Biaya kesejahteraan pegawai",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5111-1",
-        "name": "BPJS",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5111-2",
-        "name": "Uang Makan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5111-9",
-        "name": "Lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5112",
-        "name": "Biaya Transportasi",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5112-1",
-        "name": "Bahan bakar",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5112-2",
-        "name": "Taxi dll",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5112-9",
-        "name": "Lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5113",
-        "name": "Biaya iklan dan Promosi",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5113-1",
-        "name": "Biaya Promosi",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5113-2",
-        "name": "Biaya Marketing Tools",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5113-3",
-        "name": "Biaya iklan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5114",
-        "name": "HPP Penjualan LM Lokal",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5114-1",
-        "name": "Sewa Stand",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5114-9",
-        "name": "Sewa lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5115",
-        "name": "HPP Penjualan LM Import (Landed Cost)",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5115-1",
-        "name": "alat Tulis Stasionery",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5116",
-        "name": "Biaya Pameran",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5116-1",
-        "name": "Biaya Booth",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5116-2",
-        "name": "Biaya cetakan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5116-9",
-        "name": "Biaya lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5117",
-        "name": "Biaya lain lain",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5117-1",
-        "name": "Biaya lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "52",
-        "name": "Biaya Administrasi dan Umum",
-        "type": "header",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5210",
-        "name": "Biaya Gaji",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5210-1",
-        "name": "Biaya Gaji Karyawan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5210-2",
-        "name": "THR dan Bonus",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5210-3",
-        "name": "Tunjangan Transport",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5210-9",
-        "name": "Tunjangan lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5211",
-        "name": "Biaya kesejahteraan pegawai",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5211-1",
-        "name": "BPJS",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5211-2",
-        "name": "Uang Makan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5211-9",
-        "name": "Lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5212",
-        "name": "Biaya Transportasi",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5212-1",
-        "name": "Bahan bakar",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5212-2",
-        "name": "Taxi dll",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5212-9",
-        "name": "Lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5213",
-        "name": "Biaya Utilitas",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5213-1",
-        "name": "Listrik",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5213-2",
-        "name": "Air",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5213-3",
-        "name": "Telpon",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5214",
-        "name": "Biaya Sewa",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5214-1",
-        "name": "Sewa Kantor",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5214-9",
-        "name": "Sewa lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5215",
-        "name": "Biaya Perlengkapan kantor",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5215-1",
-        "name": "alat Tulis Stasionery",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5215-2",
-        "name": "Cetakan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5216",
-        "name": "Biaya Jasa profesional",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5216-1",
-        "name": "Biaya Notaris dan Konsultan hukum",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5216-2",
-        "name": "Biaya Akuntan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5216-9",
-        "name": "Biaya profesional lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5217",
-        "name": "Biaya Penyusutan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5217-1",
-        "name": "Biaya Penyusutan Kendaraan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5217-2",
-        "name": "Biaya Penyusutan Inventaris Kantor",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5218",
-        "name": "Biaya Amortisasi",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5218-1",
-        "name": "Biaya Amortisasi Pra Operasi",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5218-9",
-        "name": "Biaya Amortisasi Aktiva Tak berwujud lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5219",
-        "name": "Biaya pajak bumi dan bangunan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5219-1",
-        "name": "PBB",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5220",
-        "name": "Biaya pajak lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5220-1",
-        "name": "PPh pasal 4 ayat 2",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5220-2",
-        "name": "pajak penghasilan tahunan",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5220-9",
-        "name": "Biaya pajak lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5225",
-        "name": "Biaya operasional lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "5225-1",
-        "name": "Biaya lainnya",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "6",
-        "name": "Biaya dan Pendapatan diluar usaha",
-        "type": "header",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "61",
-        "name": "Biaya diluar usaha",
-        "type": "header",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6110",
-        "name": "Laba / Rugi Selisih Kurs Valas USD & Biaya Bunga Bank",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6110-1",
-        "name": "Biaya bunga bank",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6110-2",
-        "name": "Pajak jasa giro",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6110-3",
-        "name": "Biaya administrasi bank",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6110-9",
-        "name": "Biaya bunga lainnya",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6111",
-        "name": "Biaya selisih kurs",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6111-1",
-        "name": "Selisih kurs",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6115",
-        "name": "Biaya lain diluar usaha",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6115-1",
-        "name": "Rugi penjualan aktiva",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6115-9",
-        "name": "Biaya diluar usaha lainnya",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "62",
-        "name": "Pendapatan diluar usaha",
-        "type": "header",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6210",
-        "name": "Pendapatan bunga",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6210-1",
-        "name": "Pendapatan bunga bank",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6210-2",
-        "name": "Pendapatan bunga lainnya",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6215",
-        "name": "Pendapatan lainnya",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6215-1",
-        "name": "Pendapatan jasa lainnya",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6215-2",
-        "name": "Laba penjualan aktifa",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "6215-9",
-        "name": "Pendapatan lainnya",
-        "type": "detail",
-        "category": "diluar_usaha",
-        "balance": 0
-    },
-    {
-        "code": "1157",
-        "name": "Persediaan Emas Murni 999.9 (LM Lokal - Vault Utama)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1158",
-        "name": "Persediaan Emas Murni 999.9 (LM Import - Vault Impor)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1159",
-        "name": "Persediaan Emas Dalam Perjalanan Kurir (Transit)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "11502",
-        "name": "Persediaan Emas WIP (Vault Production WIP)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1160",
-        "name": "Persediaan Perhiasan Emas Siap Ekspor (Vault Ekspor)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1152",
-        "name": "Persediaan Scrap Retur Leburan",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1125",
-        "name": "Bank Valas USD (Mandiri/BCA Ekspor)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "5118",
-        "name": "Biaya Susut Lebur Emas (Gold Loss)",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    },
-    {
-        "code": "1132",
-        "name": "Piutang Usaha Ekspor USD",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "1135",
-        "name": "PPh 22 Dibayar Di Muka (Impor Emas)",
-        "type": "detail",
-        "category": "aset",
-        "balance": 0
-    },
-    {
-        "code": "5150",
-        "name": "Biaya Freight & Insurance Impor / Ekspor",
-        "type": "detail",
-        "category": "beban",
-        "balance": 0
-    }
+        return [
+          {
+                    "code": "1000",
+                    "name": "ASET",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1100",
+                    "name": "ASET LANCAR",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1110",
+                    "name": "Kas",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11101",
+                    "name": "Kas Kecil",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1120",
+                    "name": "Bank",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1121",
+                    "name": "Bank BCA",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11210",
+                    "name": "Deposito",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11211",
+                    "name": "Deposito BCA",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11212",
+                    "name": "BANK BCA",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11213",
+                    "name": "Bank BSI",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11214",
+                    "name": "Bank BCA",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1122",
+                    "name": "Bank BCA",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1123",
+                    "name": "Escrow Account Bank",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1125",
+                    "name": "Bank USD (Valas)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11299",
+                    "name": "Kas dalam Perjalanan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1130",
+                    "name": "Piutang Usaha",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1132",
+                    "name": "Piutang Usaha - Ekspor",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1135",
+                    "name": "Uang Muka Impor / Pembelian Valas",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11301",
+                    "name": "Piutang usaha Refineri",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11302",
+                    "name": "Piiutang Usaha Digital Emas",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1140",
+                    "name": "Piutang Lain-lain",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11400",
+                    "name": "Investasi",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11401",
+                    "name": "Piutang Karyawan - Perjalanan Dinas",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11402",
+                    "name": "Piutang Karyawan - Belanja",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1150",
+                    "name": "PERSEDIAAN BAHAN BAKU",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11502",
+                    "name": "Persediaan dalam proses",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11503",
+                    "name": "Persediaan barang jadi",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1151",
+                    "name": "Emas Mentah",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1152",
+                    "name": "Scrap Gold",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1153",
+                    "name": "Silver & Logam Mulia Lain",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1157",
+                    "name": "Persediaan Logam Mulia Antam (Gold Bar)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1158",
+                    "name": "Persediaan Logam Mulia Valcambi/LBMA (Import)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1154",
+                    "name": "Chemicals & Flux Materials",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1155",
+                    "name": "Consumables (Crucibles, Molds)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115601",
+                    "name": "Persediaan Emas Pelapis Digital - 1000 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115602",
+                    "name": "Persediaan Emas Pelapis Digital - 500 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115603",
+                    "name": "Persediaan Emas Pelapis Digital - 250 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115604",
+                    "name": "Persediaan Emas Pelapis Digital - 100 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115605",
+                    "name": "Persediaan Emas Pelapis Digital - 50  gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115606",
+                    "name": "Persediaan Emas Pelapis Digital - 25 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115607",
+                    "name": "Persediaan Emas Pelapis Digital - 10 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115608",
+                    "name": "Persediaan Emas Pelapis Digital - 5 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115609",
+                    "name": "Persediaan Emas Pelapis Digital - 2gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "115610",
+                    "name": "Persediaan Emas Pelapis Digital - 1 gr",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1160",
+                    "name": "PERSEDIAAN BARANG DALAM PROSES (WIP)",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1161",
+                    "name": "WIP - Melting Stage",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1162",
+                    "name": "WIP - Assay & Testing",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1163",
+                    "name": "WIP - Refining/Electrolysis",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1164",
+                    "name": "WIP - Casting Stage",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1165",
+                    "name": "WIP - Quality Control",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1170",
+                    "name": "ASET LANCAR LAINNYA",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1171",
+                    "name": "Asuransi dibyr dimuka",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1172",
+                    "name": "Emas Titipan Customer (Refining Service)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1173",
+                    "name": "Biaya Dibayar Dimuka",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1174",
+                    "name": "PPN Masukan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1180",
+                    "name": "PERSEDIAAN BARANG JADI",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1181",
+                    "name": "Gold Bar 24K (99.99%)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1182",
+                    "name": "Gold Grain/Granules",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1183",
+                    "name": "Gold Sheet/Foil",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1184",
+                    "name": "Gold Wire",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1185",
+                    "name": "By-products (Silver, Copper, dll)",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11900",
+                    "name": "Pajak Dibayar dimuka",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11901",
+                    "name": "PPN Masukan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11902",
+                    "name": "Pajak Dibayar dimuka-PPh 21",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11903",
+                    "name": "Pajak Dibayar dimuka-PPh 22",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11904",
+                    "name": "Pajak Dibayar dimuka-PPh 23",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "11905",
+                    "name": "Pajak Dibayar dimuka-PPh 25",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1200",
+                    "name": "ASET TIDAK LANCAR",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12030",
+                    "name": "Uang Muka Pembelian",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12031",
+                    "name": "Uang Muka Pembelian Tanah",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12032",
+                    "name": "Uang Muka Pembelian Bangunan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12033",
+                    "name": "Uang Muka Pembelian Kendaraan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12034",
+                    "name": "Uang Muka Pembelian Mesin",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12035",
+                    "name": "Uang Muka Pembelian Inventaris dan Peralatan Kantor",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1210",
+                    "name": "Tanah",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12100",
+                    "name": "Harga Perolehan",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12101",
+                    "name": "Tanah",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12102",
+                    "name": "Bangunan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12103",
+                    "name": "Kendaraan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12104",
+                    "name": "Mesin",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12105",
+                    "name": "Akumulasi Penyusutan Mesin",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1220",
+                    "name": "Bangunan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1221",
+                    "name": "Akumulasi Penyusutan Bangunan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1230",
+                    "name": "Kendaraan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1231",
+                    "name": "Akumulasi Penyusutan Kendaraan",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1235",
+                    "name": "Peralatan Kantor",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1236",
+                    "name": "Akumulasi Penyusutan Peralatan Kantor",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1237",
+                    "name": "Furniture Kantor",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12379",
+                    "name": "Akumulasi Penyusutan Furniture Kantor",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1240",
+                    "name": "PERALATAN PRODUKSI",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1241",
+                    "name": "Furnace & Melting Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12410",
+                    "name": "Harga Perolehan Peralatan Produksi",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12414",
+                    "name": "Furnace & Melting Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12419",
+                    "name": "Akumulasi Penyusutan Furnace & Melting Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1242",
+                    "name": "Assay Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12429",
+                    "name": "Akumulasi Penyusutan Assay Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1243",
+                    "name": "Refining Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12439",
+                    "name": "Akumulasi Penyusutan Refining Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1244",
+                    "name": "Casting Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12449",
+                    "name": "Akumulasi Penyusutan Casting Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1245",
+                    "name": "Testing & Lab Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12459",
+                    "name": "Akumulasi Penyusutan Testing & Lab",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1246",
+                    "name": "Support Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12469",
+                    "name": "Akumulasi Penyusutan Support Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1247",
+                    "name": "Safety & Ventilation Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12479",
+                    "name": "Akumulasi Penyusutan Safety & Ventilation Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1248",
+                    "name": "Waste Treatment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "12489",
+                    "name": "Akumulasi Penyusutan Waste Treatment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1250",
+                    "name": "Safety & Ventilation Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1251",
+                    "name": "Waste Treatment Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1252",
+                    "name": "Akumulasi Penyusutan - Safety Equipment",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "1290",
+                    "name": "Akumulasi Penyusutan Peralatan Produksi",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "13000",
+                    "name": "Aktiva Tetap Tak Berwujud",
+                    "type": "header",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "13011",
+                    "name": "Biaya Pra Operasi",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "13012",
+                    "name": "Goodwill",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "13013",
+                    "name": "Software",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "13021",
+                    "name": "Uang Muka Software",
+                    "type": "detail",
+                    "category": "aset",
+                    "balance": 0
+          },
+          {
+                    "code": "2000",
+                    "name": "KEWAJIBAN",
+                    "type": "header",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2100",
+                    "name": "KEWAJIBAN JANGKA PENDEK",
+                    "type": "header",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2110",
+                    "name": "Hutang Usaha",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21102",
+                    "name": "Hutang Retensi",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2111",
+                    "name": "Uang Titipan Customer",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2112",
+                    "name": "Emas Titipan Customer (Liability)",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2113",
+                    "name": "Biaya yang masih harus dibayar",
+                    "type": "header",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21140",
+                    "name": "Hutang pajak",
+                    "type": "header",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21141",
+                    "name": "Hutang Pajak - PPN",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21142",
+                    "name": "Hutang PPh 21",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21143",
+                    "name": "Hutang PPh 22",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21144",
+                    "name": "Hutang PPh 23",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21145",
+                    "name": "Hutang PPh Pasal 4 ayat 2",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21146",
+                    "name": "Hutang PPh Badan",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2120",
+                    "name": "Hutang Bank Jangka Pendek",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2130",
+                    "name": "Hutang Pajak",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2140",
+                    "name": "Hutang Lain-lain",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2141",
+                    "name": "Hutang Listrik & Utilities",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2142",
+                    "name": "Hutang Assay & Testing Services",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2150",
+                    "name": "Uang Muka Penjualan",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21601",
+                    "name": "Saldo hutang deposit nasabah ( user wallet liability)",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "21701",
+                    "name": "Hutang Emas Digital Nasabah",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2200",
+                    "name": "KEWAJIBAN JANGKA PANJANG",
+                    "type": "header",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2210",
+                    "name": "Hutang Bank Jangka Panjang",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "2220",
+                    "name": "Hutang Obligasi",
+                    "type": "detail",
+                    "category": "kewajiban",
+                    "balance": 0
+          },
+          {
+                    "code": "3000",
+                    "name": "EKUITAS",
+                    "type": "header",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "3100",
+                    "name": "Modal Disetor",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "31001",
+                    "name": "Modal Disetor",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "31100",
+                    "name": "Saldo Laba",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "31101",
+                    "name": "Laba Berjalan",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "31102",
+                    "name": "Saldo laba",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "31200",
+                    "name": "Deviden",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "31201",
+                    "name": "Deviden tunai",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "3200",
+                    "name": "Laba Ditahan",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "32001",
+                    "name": "Prive",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "3300",
+                    "name": "Laba Tahun Berjalan",
+                    "type": "detail",
+                    "category": "ekuitas",
+                    "balance": 0
+          },
+          {
+                    "code": "4000",
+                    "name": "PENDAPATAN",
+                    "type": "header",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4100",
+                    "name": "PENDAPATAN PENJUALAN PRODUK",
+                    "type": "header",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "41101",
+                    "name": "PENJUALAN",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4111",
+                    "name": "Penjualan Gold Bar",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4112",
+                    "name": "Penjualan Gold Grain",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4113",
+                    "name": "Penjualan Gold Sheet/Wire",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4114",
+                    "name": "Penjualan By-products",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4115",
+                    "name": "Penjualan Emas Digital",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4120",
+                    "name": "PENDAPATAN JASA",
+                    "type": "header",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4121",
+                    "name": "Pendapatan Jasa Refining",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4122",
+                    "name": "Pendapatan Jasa Assay/Testing",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4200",
+                    "name": "PENDAPATAN LAIN-LAIN",
+                    "type": "header",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4201",
+                    "name": "Pendapatan Selisih Kurs Emas",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4202",
+                    "name": "Gain on Gold Price Revaluation",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "420301",
+                    "name": "Pendapatan Spread jual beli",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "420302",
+                    "name": "Pendapatan biaya cetak fisik & minting",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "420303",
+                    "name": "Pendapatan biaya penarikan dana",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "4210",
+                    "name": "Pendapatan Bunga",
+                    "type": "detail",
+                    "category": "pendapatan",
+                    "balance": 0
+          },
+          {
+                    "code": "5000",
+                    "name": "BEBAN",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5100",
+                    "name": "HARGA POKOK PRODUKSI",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5110",
+                    "name": "BIAYA BAHAN BAKU LANGSUNG",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5111",
+                    "name": "Biaya Bahan Baku Emas",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5112",
+                    "name": "Biaya Chemicals & Flux",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5113",
+                    "name": "Biaya Consumables",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5114",
+                    "name": "HPP - Logam Mulia Antam",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5115",
+                    "name": "HPP - Logam Mulia Valcambi/LBMA",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5150",
+                    "name": "Beban Ekspor & Freight Ekspor",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5120",
+                    "name": "BIAYA TENAGA KERJA LANGSUNG",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5121",
+                    "name": "Gaji Operator Produksi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5122",
+                    "name": "Gaji Technician",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5130",
+                    "name": "OVERHEAD PABRIK",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5131",
+                    "name": "Biaya Produksi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5132",
+                    "name": "Biaya Gas & Fuel",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5133",
+                    "name": "Biaya Maintenance Equipment",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5134",
+                    "name": "Biaya Assay & Lab Testing",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5135",
+                    "name": "Biaya Safety & PPE",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5136",
+                    "name": "Penyusutan Peralatan Produksi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5140",
+                    "name": "LOSSES & ADJUSTMENTS",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5141",
+                    "name": "Susut Produksi Normal",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5142",
+                    "name": "Susut Produksi Abnormal",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5143",
+                    "name": "Loss on Gold Price Revaluation",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5144",
+                    "name": "Selisih Timbang (Weight Difference)",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5200",
+                    "name": "BEBAN OPERASIONAL",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5210",
+                    "name": "Beban Gaji Administrasi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5211",
+                    "name": "Beban Gaji Sales & Marketing",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5220",
+                    "name": "Beban Sewa",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5230",
+                    "name": "Beban Listrik dan Air (Office)",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5240",
+                    "name": "Beban Telepon dan Internet",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "52400",
+                    "name": "Biaya iklan dan Promosi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "52401",
+                    "name": "Biaya Promosi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "52402",
+                    "name": "Biaya Marketing Tools",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "52403",
+                    "name": "Biaya iklan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5250",
+                    "name": "Beban Pendukung Produksi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5260",
+                    "name": "Beban Penyusutan (Non-Production)",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5270",
+                    "name": "Beban Pemeliharaan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5271",
+                    "name": "Beban Lab & QC",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5272",
+                    "name": "Biaya Sertifikasi & Compliance",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5280",
+                    "name": "Beban Transport & Delivery",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5281",
+                    "name": "Biaya Waste Management",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5282",
+                    "name": "Biaya Environmental Compliance",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5290",
+                    "name": "Beban Operasional Lain-lain",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53000",
+                    "name": "Biaya Administrasi dan Umum",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53100",
+                    "name": "Biaya Gaji",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53101",
+                    "name": "Biaya Gaji Karyawan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53102",
+                    "name": "THR dan Bonus",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53103",
+                    "name": "Tunjangan Transport",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53109",
+                    "name": "Tunjangan lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53110",
+                    "name": "Biaya kesejahteraan pegawai",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53111",
+                    "name": "BPJS",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53112",
+                    "name": "Uang Makan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53113",
+                    "name": "BIaya Kesehatan Karyawan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53119",
+                    "name": "Lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53120",
+                    "name": "Biaya Transportasi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53121",
+                    "name": "Bahan bakar dan listrik mobil",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53122",
+                    "name": "Taxi dll",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53123",
+                    "name": "Biaya Hotel/penginanapan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53129",
+                    "name": "Lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53130",
+                    "name": "Biaya Utilitas",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53131",
+                    "name": "Beban Listrik",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53132",
+                    "name": "Beban Air-PDAM",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53133",
+                    "name": "Telepon",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53134",
+                    "name": "Biaya Internet",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53135",
+                    "name": "BIaya Internet - Hosting Website Aplikasi dll",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53140",
+                    "name": "Biaya Sewa",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53141",
+                    "name": "Sewa Kantor",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53149",
+                    "name": "Sewa lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53150",
+                    "name": "Biaya Perlengkapan kantor",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53151",
+                    "name": "alat Tulis Stasionery",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53152",
+                    "name": "Cetakan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53153",
+                    "name": "Biaya Pos, Meterai & Kurir",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53160",
+                    "name": "Biaya Jasa profesional",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53161",
+                    "name": "Biaya Notaris dan Konsultan hukum",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53162",
+                    "name": "Biaya Akuntan",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53169",
+                    "name": "Biaya profesional lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53180",
+                    "name": "Biaya Amortisasi",
+                    "type": "header",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53181",
+                    "name": "Biaya Amortisasi Pra Operasi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "53189",
+                    "name": "Biaya Amortisasi Aktiva Tak berwujud lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5401",
+                    "name": "Beban Processing Fee Payment Gateaway",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5402",
+                    "name": "Beban asuransi & Vault Storage Emas",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5403",
+                    "name": "Beban Registrasi ICDX",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5404",
+                    "name": "Beban Registrasi ICH",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5405",
+                    "name": "Beban transaksi",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5406",
+                    "name": "Beban emas digital lainnya",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "5900",
+                    "name": "Beban Bunga",
+                    "type": "detail",
+                    "category": "beban",
+                    "balance": 0
+          },
+          {
+                    "code": "6110",
+                    "name": "Laba/Rugi Selisih Kurs Valas",
+                    "type": "detail",
+                    "category": "pendapatan_lain",
+                    "balance": 0
+          }
 ];
-}
-,
+    },
+
+    seedTestData() {
+        const confirmed = confirm('Seed test data akan menambahkan transaksi demo. Data existing tidak akan dihapus. Lanjutkan?');
+        if (!confirmed) return false;
+
+        const testEntries = [
+            // 1. Initial Capital (already exists, but we'll add again)
+            {
+                date: '2025-01-01',
+                reference: 'JV-2025-001',
+                description: 'Modal awal perusahaan',
+                lines: [
+                    { accountCode: '1110', accountName: 'Kas', debit: 100000000, credit: 0 },
+                    { accountCode: '3100', accountName: 'Modal Disetor', debit: 0, credit: 100000000 }
+                ]
+            },
+            // 2. Purchase Fixed Asset (Investing Activity)
+            {
+                date: '2025-01-05',
+                reference: 'JV-2025-002',
+                description: 'Pembelian kendaraan operasional',
+                lines: [
+                    { accountCode: '1230', accountName: 'Kendaraan', debit: 250000000, credit: 0 },
+                    { accountCode: '1120', accountName: 'Bank', debit: 0, credit: 50000000 },
+                    { accountCode: '2210', accountName: 'Hutang Bank Jangka Panjang', debit: 0, credit: 200000000 }
+                ]
+            },
+            // 3. Revenue - Sales (Operating Activity)
+            {
+                date: '2025-01-10',
+                reference: 'JV-2025-003',
+                description: 'Penjualan barang ke PT ABC',
+                lines: [
+                    { accountCode: '1120', accountName: 'Bank', debit: 75000000, credit: 0 },
+                    { accountCode: '4110', accountName: 'Pendapatan Penjualan', debit: 0, credit: 75000000 }
+                ]
+            },
+            // 4. Revenue - Service Income (Operating Activity)
+            {
+                date: '2025-01-15',
+                reference: 'JV-2025-004',
+                description: 'Pendapatan jasa konsultasi',
+                lines: [
+                    { accountCode: '1110', accountName: 'Kas', debit: 15000000, credit: 0 },
+                    { accountCode: '4120', accountName: 'Pendapatan Jasa', debit: 0, credit: 15000000 }
+                ]
+            },
+            // 5. Expense - Salary (Operating Activity)
+            {
+                date: '2025-01-20',
+                reference: 'JV-2025-005',
+                description: 'Pembayaran gaji karyawan bulan Januari',
+                lines: [
+                    { accountCode: '5210', accountName: 'Beban Gaji', debit: 30000000, credit: 0 },
+                    { accountCode: '1120', accountName: 'Bank', debit: 0, credit: 30000000 }
+                ]
+            },
+            // 6. Expense - Rent (Operating Activity)
+            {
+                date: '2025-01-22',
+                reference: 'JV-2025-006',
+                description: 'Pembayaran sewa kantor bulan Januari',
+                lines: [
+                    { accountCode: '5220', accountName: 'Beban Sewa', debit: 10000000, credit: 0 },
+                    { accountCode: '1110', accountName: 'Kas', debit: 0, credit: 10000000 }
+                ]
+            },
+            // 7. Expense - Utilities (Operating Activity)
+            {
+                date: '2025-01-25',
+                reference: 'JV-2025-007',
+                description: 'Pembayaran listrik dan air bulan Januari',
+                lines: [
+                    { accountCode: '5230', accountName: 'Beban Listrik dan Air', debit: 3500000, credit: 0 },
+                    { accountCode: '1110', accountName: 'Kas', debit: 0, credit: 3500000 }
+                ]
+            },
+            // 8. Expense - Supplies (Operating Activity)
+            {
+                date: '2025-01-28',
+                reference: 'JV-2025-008',
+                description: 'Pembelian perlengkapan kantor',
+                lines: [
+                    { accountCode: '5250', accountName: 'Beban Perlengkapan', debit: 2000000, credit: 0 },
+                    { accountCode: '1110', accountName: 'Kas', debit: 0, credit: 2000000 }
+                ]
+            },
+            // 9. Receivable Collection (Operating Activity)
+            {
+                date: '2025-02-01',
+                reference: 'JV-2025-009',
+                description: 'Pelunasan piutang dari pelanggan',
+                lines: [
+                    { accountCode: '1120', accountName: 'Bank', debit: 25000000, credit: 0 },
+                    { accountCode: '1130', accountName: 'Piutang Usaha', debit: 0, credit: 25000000 }
+                ]
+            },
+            // 10. Credit Sales (Operating Activity)
+            {
+                date: '2025-02-05',
+                reference: 'JV-2025-010',
+                description: 'Penjualan kredit ke PT XYZ',
+                lines: [
+                    { accountCode: '1130', accountName: 'Piutang Usaha', debit: 50000000, credit: 0 },
+                    { accountCode: '4110', accountName: 'Pendapatan Penjualan', debit: 0, credit: 50000000 }
+                ]
+            }
+        ];
+
+        // Use the proper JournalEntry.createEntry method instead of directly manipulating storage
+        // This ensures proper balance updates and data integrity
+        testEntries.forEach(entry => {
+            JournalEntry.createEntry(entry);
+        });
+
+        alert('Test data berhasil ditambahkan! Silakan refresh halaman untuk melihat perubahan.');
+        return true;
+    },
+    // ==========================================
+    // Master Data CRUD Helper Methods
+    // ==========================================
 
     // --- CHART OF ACCOUNTS ---
         getChartOfAccounts() {
@@ -3772,27 +4315,8 @@ const Storage = {
     },
 
     // --- EMPLOYEES ---
-    getEmployees() {
-        const raw = this.get(this.KEYS.EMPLOYEES) || [];
-        const filtered = raw.filter(e => {
-            if (!e) return false;
-            const name = String(e.name || '').toLowerCase();
-            const id = String(e.id || '').toLowerCase();
-            const nik = String(e.nik || '').toLowerCase();
-            const isDummy = name.includes('andi pratama') || 
-                            name.includes('siti aminah') || 
-                            name.includes('budi baru') || 
-                            name.includes('cici baru') || 
-                            id.includes('emp-2024-00') ||
-                            nik.includes('emp-2024-00') ||
-                            id === 'emp-001' || id === 'emp-002' || id === 'emp-003' ||
-                            nik === '001' || nik === '002' || nik === '003';
-            return !isDummy;
-        });
-        if (filtered.length !== raw.length) {
-            this.set(this.KEYS.EMPLOYEES, filtered);
-        }
-        return filtered;
+        getEmployees() {
+        return this.get(this.KEYS.EMPLOYEES) || [];
     },
     async addEmployee(employee) {
         const employees = this.getEmployees();
@@ -3810,13 +4334,71 @@ const Storage = {
         }
         return false;
     },
-    async deleteEmployee(id) {
+    
+    getActiveEmployees() {
+        const employees = this.getEmployees();
+        return employees.filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive');
+    },
+
+    async deleteEmployee(id, resignationDate = null, reason = 'Resign') {
+        const employees = this.getEmployees();
+        const index = employees.findIndex(e => String(e.id) === String(id));
+        if (index !== -1) {
+            const resDate = resignationDate || new Date().toISOString().split('T')[0];
+            employees[index] = {
+                ...employees[index],
+                status: 'NON-AKTIF',
+                resignation_date: resDate,
+                resignation_reason: reason,
+                updatedAt: new Date().toISOString()
+            };
+            await this.set(this.KEYS.EMPLOYEES, employees);
+            if (typeof this.trackDeletion === 'function') this.trackDeletion(id);
+            return true;
+        }
+        return false;
+    },
+
+    async softDeleteEmployee(id, resignationDate = null, reason = 'Resign') {
+        return this.deleteEmployee(id, resignationDate, reason);
+    },
+
+    hasEmployeeTransactions(id) {
+        const employees = this.getEmployees();
+        const emp = employees.find(e => String(e.id) === String(id));
+        if (!emp) return false;
+
+        const nik = String(emp.nik || '').trim();
+        const empIdStr = String(emp.id);
+
+        const attendance = this.getAttendance ? this.getAttendance() : [];
+        const hasAtd = attendance.some(a => (nik && String(a.nik || '').trim() === nik) || String(a.employee_id || a.id) === empIdStr);
+        if (hasAtd) return true;
+
+        const payroll = this.getPayroll ? this.getPayroll() : [];
+        const hasPay = payroll.some(p => (nik && String(p.nik || '').trim() === nik) || String(p.employee_id) === empIdStr);
+        if (hasPay) return true;
+
+        return false;
+    },
+
+    async hardDeleteEmployee(id) {
         const employees = this.getEmployees();
         const filtered = employees.filter(e => String(e.id) !== String(id));
         await this.set(this.KEYS.EMPLOYEES, filtered);
-        this.trackDeletion(id);
+        if (typeof this.trackDeletion === 'function') this.trackDeletion(id);
+
+        // Also remove from Firestore so the record doesn't re-appear on cloud pull
+        if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled()) {
+            await FirebaseSync.deleteFromCloud(this.KEYS.EMPLOYEES, String(id)).catch(e =>
+                console.warn('[Employee] Cloud hard-delete failed (will retry on next sync):', e)
+            );
+        }
+
         return true;
     },
+
+
 
     // --- ATTENDANCE ---
     getAttendance() {
@@ -4690,13 +5272,13 @@ const Storage = {
         // Probation & Tenure Restriction: 0 annual leave during first year
         if (targetYear <= hireYear) return 0;
 
-        const collectiveLeaveDays = this.getCollectiveLeaveDays(targetYear);
-        const baseEntitlement = Math.max(0, 12 - collectiveLeaveDays);
+        // Policy Update: Full 12 days without deduction for collective leave (Cuti Bersama abolished)
+        const baseEntitlement = 12;
 
         if (targetYear > hireYear + 1) return baseEntitlement;
 
         let monthsWorked = hireDay <= 15 ? (12 - hireMonth + 1) : (12 - hireMonth);
-        return Math.max(0, Math.min(baseEntitlement, monthsWorked - collectiveLeaveDays));
+        return Math.max(0, Math.min(baseEntitlement, monthsWorked));
     },
 
     deductMasterCuti(nik, days, year = new Date().getFullYear()) {
@@ -4714,10 +5296,73 @@ const Storage = {
         const empIndex = employees.findIndex(e => String(e.nik) === String(nik));
         if (empIndex !== -1) {
             employees[empIndex].leave_balance = record.remainingLeave;
-            employees[empIndex].annual_leave_quota = record.remainingLeave;
+            employees[empIndex].annual_leave_quota = record.annualLeaveQuota;
             this.set(this.KEYS.EMPLOYEES, employees);
         }
         return record;
+    },
+
+    setManualLeaveQuotaOverride(nik, year = new Date().getFullYear(), overrideQuota = null, reason = "Penyesuaian Manual HR") {
+        let balances = this.getLeaveBalances();
+        let record = balances.find(b => String(b.employeeNik) === String(nik) && b.year === year);
+        const employees = this.getEmployees();
+        const emp = employees.find(e => String(e.nik) === String(nik));
+        const currentUser = typeof Auth !== "undefined" && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+
+        const defaultQuota = this.calculateLeaveEntitlement(emp ? emp.start_date : null, year);
+        const hasOverride = overrideQuota !== null && overrideQuota !== '' && overrideQuota !== undefined && !isNaN(overrideQuota);
+        const effectiveQuota = hasOverride ? Number(overrideQuota) : defaultQuota;
+
+        const oldQuota = record ? (record.annualLeaveQuota || 0) : defaultQuota;
+
+        if (!record) {
+            record = {
+                employeeNik: nik,
+                year: year,
+                annualLeaveQuota: effectiveQuota,
+                usedLeave: 0,
+                remainingLeave: effectiveQuota,
+                current_year_override: hasOverride ? effectiveQuota : null,
+                is_manual_override: hasOverride,
+                override_reason: reason,
+                override_by: currentUser ? currentUser.username : "Admin",
+                override_at: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            balances.push(record);
+        } else {
+            record.annualLeaveQuota = effectiveQuota;
+            record.current_year_override = hasOverride ? effectiveQuota : null;
+            record.is_manual_override = hasOverride;
+            record.remainingLeave = effectiveQuota - (record.usedLeave || 0);
+            record.override_reason = reason;
+            record.override_by = currentUser ? currentUser.username : "Admin";
+            record.override_at = new Date().toISOString();
+            record.updatedAt = new Date().toISOString();
+        }
+
+        this.saveLeaveBalances(balances);
+
+        if (emp) {
+            emp.leave_balance = record.remainingLeave;
+            emp.annual_leave_quota = record.annualLeaveQuota;
+            this.set(this.KEYS.EMPLOYEES, employees);
+        }
+
+        if (typeof AuditLog !== "undefined" && AuditLog.log) {
+            AuditLog.log('leave_balance_override', 'update', nik, {
+                adminId: currentUser ? currentUser.username : 'Admin',
+                employeeNik: nik,
+                year: year,
+                oldQuota: oldQuota,
+                newQuota: effectiveQuota,
+                isManualOverride: hasOverride,
+                reason: reason,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        return { success: true, record };
     },
 
     setOpeningLeaveBalance(nik, year = new Date().getFullYear(), annualLeaveQuota = 12, usedLeave = 0, notes = "Migrasi Saldo Awal") {
@@ -4757,6 +5402,172 @@ const Storage = {
             this.set(this.KEYS.EMPLOYEES, employees);
         }
         return record;
+    },
+
+    addLeaveCredit(nik, year = new Date().getFullYear(), days = 1, reason = "Kompensasi Lembur / Comp-Off") {
+        let balances = this.getLeaveBalances();
+        let record = balances.find(b => String(b.employeeNik) === String(nik) && b.year === year);
+        const employees = this.getEmployees();
+        const emp = employees.find(e => String(e.nik) === String(nik));
+        const currentUser = typeof Auth !== "undefined" && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+
+        const defaultQuota = this.calculateLeaveEntitlement(emp ? emp.start_date : null, year);
+        const creditDays = Number(days) || 0;
+
+        if (!record) {
+            record = {
+                employeeNik: nik,
+                year: year,
+                annualLeaveQuota: defaultQuota,
+                extraCredits: creditDays,
+                usedLeave: 0,
+                remainingLeave: defaultQuota + creditDays,
+                updatedAt: new Date().toISOString()
+            };
+            balances.push(record);
+        } else {
+            record.extraCredits = (Number(record.extraCredits) || 0) + creditDays;
+            record.remainingLeave = (Number(record.annualLeaveQuota) || 0) + record.extraCredits - (Number(record.usedLeave) || 0);
+            record.updatedAt = new Date().toISOString();
+        }
+
+        this.saveLeaveBalances(balances);
+
+        if (emp) {
+            emp.leave_balance = record.remainingLeave;
+            emp.annual_leave_quota = record.annualLeaveQuota;
+            emp.extra_credits = record.extraCredits;
+            this.set(this.KEYS.EMPLOYEES, employees);
+        }
+
+        if (typeof AuditLog !== "undefined" && AuditLog.log) {
+            AuditLog.log('leave_credit_addition', 'create', nik, {
+                adminId: currentUser ? currentUser.username : 'Admin',
+                employeeNik: nik,
+                year: year,
+                creditDays: creditDays,
+                totalExtraCredits: record.extraCredits,
+                remainingLeave: record.remainingLeave,
+                reason: reason,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        return { success: true, record };
+    },
+
+    syncApprovedLeaveToAttendance(request) {
+        if (!request || !request.employeeNik || !request.dateFrom) return;
+        const period = request.dateFrom.substring(0, 7); // YYYY-MM
+        const attendanceList = this.getAttendance ? this.getAttendance() : [];
+        let record = attendanceList.find(a => a.nik === request.employeeNik && a.period === period);
+
+        if (!record) {
+            record = {
+                nik: request.employeeNik,
+                name: request.employeeName,
+                period: period,
+                work_days: 0,
+                overtime_hours: 0,
+                night_days: 0,
+                extra_days: 0,
+                late_count: 0,
+                absence_days: 0,
+                half_day_izin: 0,
+                production_grams: 0,
+                late_deduction: 0,
+                leave_records: []
+            };
+            attendanceList.push(record);
+        }
+
+        if (!record.leave_records) record.leave_records = [];
+        const existingIdx = record.leave_records.findIndex(l => l.id === request.id);
+        const leaveSummary = {
+            id: request.id,
+            dateFrom: request.dateFrom,
+            dateTo: request.dateTo || request.dateFrom,
+            totalDays: request.totalDays || 1,
+            type: request.leaveTypeName || request.leaveTypeCode,
+            isPaid: request.isPaid !== false,
+            isPartial: Boolean(request.isPartial),
+            partialTime: request.partialTime || null,
+            notes: request.notes || ''
+        };
+
+        if (existingIdx !== -1) {
+            record.leave_records[existingIdx] = leaveSummary;
+        } else {
+            record.leave_records.push(leaveSummary);
+        }
+
+        if (this.saveAttendance) {
+            this.saveAttendance(attendanceList);
+        } else {
+            this.set(this.KEYS.ATTENDANCE, attendanceList);
+        }
+    },
+
+    // Company Emergency Day-offs (Libur Khusus Perusahaan - Pemadaman Listrik PLN, Force Majeure, dsb)
+    getCompanyDayoffs() {
+        return this.get(this.KEYS.COMPANY_DAYOFFS) || [];
+    },
+
+    saveCompanyDayoffs(dayoffs) {
+        return this.set(this.KEYS.COMPANY_DAYOFFS, dayoffs);
+    },
+
+    isCompanyDayoff(dateStr) {
+        if (!dateStr) return false;
+        const dayoffs = this.getCompanyDayoffs();
+        return dayoffs.some(d => d.date === dateStr);
+    },
+
+    getCompanyDayoffRecord(dateStr) {
+        if (!dateStr) return null;
+        const dayoffs = this.getCompanyDayoffs();
+        return dayoffs.find(d => d.date === dateStr) || null;
+    },
+
+    addCompanyDayoff(data) {
+        const dayoffs = this.getCompanyDayoffs();
+        const id = data.id || `DAYOFF-${Date.now()}`;
+        const newRecord = {
+            id,
+            date: data.date,
+            name: data.name || 'Libur Khusus Perusahaan',
+            reason: data.reason || 'Pemadaman / Keadaan Darurat Operasional',
+            isPaid: data.isPaid !== false, // Default: Paid
+            type: data.type || 'emergency_dayoff',
+            createdAt: new Date().toISOString(),
+            createdBy: (typeof Auth !== 'undefined' && Auth.getCurrentUser) ? Auth.getCurrentUser()?.username : 'Admin'
+        };
+
+        const existingIdx = dayoffs.findIndex(d => d.date === data.date);
+        if (existingIdx >= 0) {
+            dayoffs[existingIdx] = newRecord;
+        } else {
+            dayoffs.push(newRecord);
+        }
+
+        this.saveCompanyDayoffs(dayoffs);
+
+        if (typeof AuditLog !== 'undefined' && AuditLog.log) {
+            AuditLog.log('company_dayoff', 'create', data.date, newRecord);
+        }
+        return newRecord;
+    },
+
+    deleteCompanyDayoff(idOrDate) {
+        let dayoffs = this.getCompanyDayoffs();
+        const removed = dayoffs.find(d => d.id === idOrDate || d.date === idOrDate);
+        dayoffs = dayoffs.filter(d => d.id !== idOrDate && d.date !== idOrDate);
+        this.saveCompanyDayoffs(dayoffs);
+
+        if (removed && typeof AuditLog !== 'undefined' && AuditLog.log) {
+            AuditLog.log('company_dayoff', 'delete', removed.date, removed);
+        }
+        return true;
     }
 };
 

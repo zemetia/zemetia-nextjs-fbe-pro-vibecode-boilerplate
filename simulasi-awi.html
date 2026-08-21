@@ -319,6 +319,13 @@
                         <option value="melted">Berat Kotor Ref / Setelah Lebur (simulasi_awi)</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Kategori / Opsi PPh 23</label>
+                    <select id="pph23-option" class="form-control" onchange="RefinerySimulationAwi.calculate()">
+                        <option value="pph23">Badan Usaha (Potong PPh 23 2%)</option>
+                        <option value="non_pph23">Orang Pribadi (Non PPh 23 / 0%)</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -375,33 +382,50 @@
             <h2 class="card-title">🪙 Kalkulator Cetak Emas Murni</h2>
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
                 <div>
-                    <p class="subtitle" style="margin-bottom: 15px;">Tentukan jumlah batang emas murni yang ingin dicetak dari hasil pemurnian:</p>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;">
-                            <label class="form-label">Ukuran 1.000 gr (Tarif Rp 2.000.000/pcs)</label>
-                            <input type="number" id="qty-1000g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()">
-                            <span id="cost-1000g" style="font-weight: bold;">Rp 0</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;">
-                            <label class="form-label">Ukuran 500 gr (Tarif Rp 1.050.000/pcs)</label>
-                            <input type="number" id="qty-500g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()">
-                            <span id="cost-500g" style="font-weight: bold;">Rp 0</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;">
-                            <label class="form-label">Ukuran 250 gr (Tarif Rp 575.000/pcs)</label>
-                            <input type="number" id="qty-250g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()">
-                            <span id="cost-250g" style="font-weight: bold;">Rp 0</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;">
-                            <label class="form-label">Ukuran 50 gr (Tarif Rp 130.000/pcs)</label>
-                            <input type="number" id="qty-50g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()">
-                            <span id="cost-50g" style="font-weight: bold;">Rp 0</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;">
-                            <label class="form-label">Ukuran 10 gr (Tarif Rp 30.000/pcs)</label>
-                            <input type="number" id="qty-10g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()">
-                            <span id="cost-10g" style="font-weight: bold;">Rp 0</span>
-                        </div>
+                    <p class="subtitle" style="margin-bottom: 15px;">Tentukan jumlah batang emas murni yang ingin dicetak dari hasil pemurnian beserta nomor sertifikat:</p>
+                    <div class="table-responsive">
+                        <table class="table-custom" style="text-align: left;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; width: 32%;">Ukuran &amp; Tarif Cetak</th>
+                                    <th style="width: 18%;">Jumlah (Pcs)</th>
+                                    <th style="width: 32%;">Nomor Sertifikat</th>
+                                    <th style="text-align: right; width: 18%;">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Ukuran 1.000 gr</strong><br><small style="color: var(--text-muted);">Rp 2.000.000 / pcs</small></td>
+                                    <td><input type="number" id="qty-1000g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()" style="text-align: center;"></td>
+                                    <td><input type="text" id="cert-1000g" class="form-control" placeholder="Contoh: GAR-001 s/d 003" oninput="RefinerySimulationAwi.updateCertificates()"></td>
+                                    <td style="text-align: right; font-weight: bold;"><span id="cost-1000g">Rp 0</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Ukuran 500 gr</strong><br><small style="color: var(--text-muted);">Rp 1.050.000 / pcs</small></td>
+                                    <td><input type="number" id="qty-500g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()" style="text-align: center;"></td>
+                                    <td><input type="text" id="cert-500g" class="form-control" placeholder="Contoh: GAR-500-01" oninput="RefinerySimulationAwi.updateCertificates()"></td>
+                                    <td style="text-align: right; font-weight: bold;"><span id="cost-500g">Rp 0</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Ukuran 250 gr</strong><br><small style="color: var(--text-muted);">Rp 575.000 / pcs</small></td>
+                                    <td><input type="number" id="qty-250g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()" style="text-align: center;"></td>
+                                    <td><input type="text" id="cert-250g" class="form-control" placeholder="Contoh: GAR-250-01" oninput="RefinerySimulationAwi.updateCertificates()"></td>
+                                    <td style="text-align: right; font-weight: bold;"><span id="cost-250g">Rp 0</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Ukuran 50 gr</strong><br><small style="color: var(--text-muted);">Rp 130.000 / pcs</small></td>
+                                    <td><input type="number" id="qty-50g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()" style="text-align: center;"></td>
+                                    <td><input type="text" id="cert-50g" class="form-control" placeholder="Contoh: GAR-50-01" oninput="RefinerySimulationAwi.updateCertificates()"></td>
+                                    <td style="text-align: right; font-weight: bold;"><span id="cost-50g">Rp 0</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Ukuran 10 gr</strong><br><small style="color: var(--text-muted);">Rp 30.000 / pcs</small></td>
+                                    <td><input type="number" id="qty-10g" class="form-control" value="0" min="0" oninput="RefinerySimulationAwi.calculate()" style="text-align: center;"></td>
+                                    <td><input type="text" id="cert-10g" class="form-control" placeholder="Contoh: GAR-10-01" oninput="RefinerySimulationAwi.updateCertificates()"></td>
+                                    <td style="text-align: right; font-weight: bold;"><span id="cost-10g">Rp 0</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -549,6 +573,7 @@ var RefinerySimulationAwi = {
         reportNumber: '',
         date: new Date().toISOString().split('T')[0],
         feeBasis: 'gross_received',
+        isNonPph23: false,
         petugasName: '',
         petugasPeleburan: '',
         petugasLab: '',
@@ -562,6 +587,13 @@ var RefinerySimulationAwi = {
         qty250g: 0,
         qty50g: 0,
         qty10g: 0
+    },
+    mintingCerts: {
+        cert1000g: '',
+        cert500g: '',
+        cert250g: '',
+        cert50g: '',
+        cert10g: ''
     },
     historyList: [],
     activeRecordId: null,
@@ -638,6 +670,7 @@ var RefinerySimulationAwi = {
             reportNumber: '',
             date: new Date().toISOString().split('T')[0],
             feeBasis: 'gross_received',
+            isNonPph23: false,
             petugasName: 'admin',
             petugasPeleburan: 'User Peleburan',
             petugasLab: 'User Lab',
@@ -666,6 +699,13 @@ var RefinerySimulationAwi = {
             qty250g: 0,
             qty50g: 0,
             qty10g: 0
+        };
+        this.mintingCerts = {
+            cert1000g: '',
+            cert500g: '',
+            cert250g: '',
+            cert50g: '',
+            cert10g: ''
         };
 
         this.syncInputsToForm();
@@ -745,6 +785,8 @@ var RefinerySimulationAwi = {
         document.getElementById('report-number').value = this.metadata.reportNumber;
         document.getElementById('trans-date').value = this.metadata.date;
         document.getElementById('fee-basis').value = this.metadata.feeBasis;
+        const pph23El = document.getElementById('pph23-option');
+        if (pph23El) pph23El.value = this.metadata.isNonPph23 ? 'non_pph23' : 'pph23';
         document.getElementById('petugas-name').value = this.metadata.petugasName;
         document.getElementById('petugas-peleburan').value = this.metadata.petugasPeleburan || 'User Peleburan';
         document.getElementById('petugas-lab').value = this.metadata.petugasLab || 'User Lab';
@@ -756,6 +798,13 @@ var RefinerySimulationAwi = {
         document.getElementById('qty-250g').value = this.mintingQty.qty250g;
         document.getElementById('qty-50g').value = this.mintingQty.qty50g;
         document.getElementById('qty-10g').value = this.mintingQty.qty10g;
+
+        const certs = this.mintingCerts || {};
+        if (document.getElementById('cert-1000g')) document.getElementById('cert-1000g').value = certs.cert1000g || '';
+        if (document.getElementById('cert-500g')) document.getElementById('cert-500g').value = certs.cert500g || '';
+        if (document.getElementById('cert-250g')) document.getElementById('cert-250g').value = certs.cert250g || '';
+        if (document.getElementById('cert-50g')) document.getElementById('cert-50g').value = certs.cert50g || '';
+        if (document.getElementById('cert-10g')) document.getElementById('cert-10g').value = certs.cert10g || '';
     },
 
     updateMetadata() {
@@ -765,11 +814,23 @@ var RefinerySimulationAwi = {
         this.metadata.reportNumber = document.getElementById('report-number').value;
         this.metadata.date = document.getElementById('trans-date').value;
         this.metadata.feeBasis = document.getElementById('fee-basis').value;
+        const pph23El = document.getElementById('pph23-option');
+        if (pph23El) this.metadata.isNonPph23 = (pph23El.value === 'non_pph23');
         this.metadata.petugasName = document.getElementById('petugas-name').value;
         this.metadata.petugasPeleburan = document.getElementById('petugas-peleburan').value;
         this.metadata.petugasLab = document.getElementById('petugas-lab').value;
         this.metadata.ttbDescription = document.getElementById('ttb-description').value;
         this.metadata.ttbNotes = document.getElementById('ttb-notes').value;
+    },
+
+    updateCertificates() {
+        this.mintingCerts = {
+            cert1000g: document.getElementById('cert-1000g')?.value || '',
+            cert500g: document.getElementById('cert-500g')?.value || '',
+            cert250g: document.getElementById('cert-250g')?.value || '',
+            cert50g: document.getElementById('cert-50g')?.value || '',
+            cert10g: document.getElementById('cert-10g')?.value || ''
+        };
     },
 
     addRow() {
@@ -949,12 +1010,13 @@ var RefinerySimulationAwi = {
     calculate() {
         this.updateMetadata();
 
-        // 1. Gather Minting Qty
+        // 1. Gather Minting Qty & Certs
         this.mintingQty.qty1000g = parseInt(document.getElementById('qty-1000g').value) || 0;
         this.mintingQty.qty500g = parseInt(document.getElementById('qty-500g').value) || 0;
         this.mintingQty.qty250g = parseInt(document.getElementById('qty-250g').value) || 0;
         this.mintingQty.qty50g = parseInt(document.getElementById('qty-50g').value) || 0;
         this.mintingQty.qty10g = parseInt(document.getElementById('qty-10g').value) || 0;
+        this.updateCertificates();
 
         let totDecl = 0;
         let totLebur = 0;
@@ -1039,15 +1101,16 @@ var RefinerySimulationAwi = {
         document.getElementById('tot-delivered').textContent = totDelivered.toFixed(2);
 
         // 2. Refinery Invoice Calculations
+        const isNonPph23 = this.metadata.isNonPph23 === true;
         const refDpp = totRefineryFee;
         const refPpn = Math.round(refDpp * 0.11);
         const refTotal = refDpp + refPpn;
-        const refPph = Math.round(refDpp * 0.02);
+        const refPph = isNonPph23 ? 0 : Math.round(refDpp * 0.02);
         const refNet = refTotal - refPph;
 
         document.getElementById('ref-dpp').textContent = this.formatCurrency(refDpp);
         document.getElementById('ref-ppn').textContent = this.formatCurrency(refPpn);
-        document.getElementById('ref-pph').textContent = '- ' + this.formatCurrency(refPph);
+        document.getElementById('ref-pph').textContent = isNonPph23 ? 'Rp 0' : ('- ' + this.formatCurrency(refPph));
         document.getElementById('ref-net').textContent = this.formatCurrency(refNet);
 
         // 3. Minting Invoice Calculations
@@ -1087,13 +1150,13 @@ var RefinerySimulationAwi = {
         const totalMintingCost = cost1000 + cost500 + cost250 + cost50 + cost10;
         const mintDpp = Math.round((totalMintingCost * 100) / 111);
         const mintPpn = totalMintingCost - mintDpp;
-        const mintPph = Math.round(mintDpp * 0.02);
+        const mintPph = isNonPph23 ? 0 : Math.round(mintDpp * 0.02);
         const mintNet = totalMintingCost - mintPph;
 
         document.getElementById('mint-total').textContent = this.formatCurrency(totalMintingCost);
         document.getElementById('mint-dpp').textContent = this.formatCurrency(mintDpp);
         document.getElementById('mint-ppn').textContent = this.formatCurrency(mintPpn);
-        document.getElementById('mint-pph').textContent = '- ' + this.formatCurrency(mintPph);
+        document.getElementById('mint-pph').textContent = isNonPph23 ? 'Rp 0' : ('- ' + this.formatCurrency(mintPph));
         document.getElementById('mint-net').textContent = this.formatCurrency(mintNet);
     },
 
@@ -1119,6 +1182,7 @@ var RefinerySimulationAwi = {
                 metadata: this.metadata,
                 items: this.items,
                 mintingQty: this.mintingQty,
+                mintingCerts: this.mintingCerts || {},
                 updatedAt: new Date().toISOString()
             };
 
@@ -1225,9 +1289,11 @@ var RefinerySimulationAwi = {
                 totRefineryFee += basisWeight * item.biayaRef;
             });
 
+            const isNonPph23 = h.metadata?.isNonPph23 === true;
             const refDpp = totRefineryFee;
             const refTotal = refDpp + Math.round(refDpp * 0.11);
-            const refNet = refTotal - Math.round(refDpp * 0.02);
+            const refPph = isNonPph23 ? 0 : Math.round(refDpp * 0.02);
+            const refNet = refTotal - refPph;
 
             const cost1000 = (h.mintingQty.qty1000g || 0) * 2000000;
             const cost500 = (h.mintingQty.qty500g || 0) * 1050000;
@@ -1236,7 +1302,8 @@ var RefinerySimulationAwi = {
             const cost10 = (h.mintingQty.qty10g || 0) * 30000;
             const totalMintingCost = cost1000 + cost500 + cost250 + cost50 + cost10;
             const mintDpp = Math.round((totalMintingCost * 100) / 111);
-            const mintNet = totalMintingCost - Math.round(mintDpp * 0.02);
+            const mintPph = isNonPph23 ? 0 : Math.round(mintDpp * 0.02);
+            const mintNet = totalMintingCost - mintPph;
 
             return `
                 <tr>
@@ -1260,6 +1327,9 @@ var RefinerySimulationAwi = {
         if (!record) return;
 
         this.metadata = { ...record.metadata };
+        if (typeof this.metadata.isNonPph23 === 'undefined') {
+            this.metadata.isNonPph23 = false;
+        }
         
         // Backward compatibility
         if (!this.metadata.petugasPeleburan) {
@@ -1271,6 +1341,7 @@ var RefinerySimulationAwi = {
 
         this.items = [ ...record.items ];
         this.mintingQty = { ...record.mintingQty };
+        this.mintingCerts = { ...(record.mintingCerts || { cert1000g: '', cert500g: '', cert250g: '', cert50g: '', cert10g: '' }) };
 
         this.syncInputsToForm();
         this.renderRows();
@@ -1525,10 +1596,11 @@ var RefinerySimulationAwi = {
             totRefineryFee += rowFee;
         });
 
+        const isNonPph23 = meta.isNonPph23 === true;
         const refDpp = totRefineryFee;
         const refPpn = Math.round(refDpp * 0.11);
         const refTotal = refDpp + refPpn;
-        const refPph = Math.round(refDpp * 0.02);
+        const refPph = isNonPph23 ? 0 : Math.round(refDpp * 0.02);
         const refNet = refTotal - refPph;
 
         const refInvoiceNumber = this.normalizeReportNumber(meta.reportNumber, 'REF');
@@ -1863,9 +1935,10 @@ var RefinerySimulationAwi = {
         const cost10 = this.mintingQty.qty10g * 30000;
 
         const totalMintingCost = cost1000 + cost500 + cost250 + cost50 + cost10;
+        const isNonPph23 = meta.isNonPph23 === true;
         const mintDpp = Math.round((totalMintingCost * 100) / 111);
         const mintPpn = totalMintingCost - mintDpp;
-        const mintPph = Math.round(mintDpp * 0.02);
+        const mintPph = isNonPph23 ? 0 : Math.round(mintDpp * 0.02);
         const mintNet = totalMintingCost - mintPph;
 
         const totalPrinted = (this.mintingQty.qty1000g * 1000) + 
@@ -2615,17 +2688,18 @@ var RefinerySimulationAwi = {
         let totalPcs = 0;
         let totalGr = 0;
 
-        const addRow = (desc, qty, weight) => {
+        const addRow = (desc, qty, weight, certNo) => {
             if (qty > 0) {
                 itemIndex++;
                 totalPcs += qty;
                 const itemTotalWeight = qty * weight;
                 totalGr += itemTotalWeight;
+                const displayCert = certNo && certNo.trim() !== '' ? certNo.trim() : '—';
                 rowsHtml += `
                     <tr>
                         <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">${itemIndex}</td>
                         <td style="border: 1px solid #000; padding-left: 8px; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">${desc}</td>
-                        <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">99.99%</td>
+                        <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">${displayCert}</td>
                         <td style="border: 1px solid #000; text-align: center; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">${qty} Pcs</td>
                         <td style="border: 1px solid #000; text-align: right; padding-right: 3mm; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">${itemTotalWeight.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gr</td>
                         <td style="border: 1px solid #000; padding-left: 8px; vertical-align: middle; padding: 2mm 3mm; font-size: 9pt; font-weight: normal;">Hasil cetak diserahkan</td>
@@ -2634,11 +2708,12 @@ var RefinerySimulationAwi = {
             }
         };
 
-        addRow("Fine Gold Bar 1.000 gr", this.mintingQty.qty1000g, 1000);
-        addRow("Fine Gold Bar 500 gr", this.mintingQty.qty500g, 500);
-        addRow("Fine Gold Bar 250 gr", this.mintingQty.qty250g, 250);
-        addRow("Fine Gold Bar 50 gr", this.mintingQty.qty50g, 50);
-        addRow("Fine Gold Bar 10 gr", this.mintingQty.qty10g, 10);
+        const certs = this.mintingCerts || {};
+        addRow("Fine Gold Bar 1.000 gr", this.mintingQty.qty1000g, 1000, certs.cert1000g);
+        addRow("Fine Gold Bar 500 gr", this.mintingQty.qty500g, 500, certs.cert500g);
+        addRow("Fine Gold Bar 250 gr", this.mintingQty.qty250g, 250, certs.cert250g);
+        addRow("Fine Gold Bar 50 gr", this.mintingQty.qty50g, 50, certs.cert50g);
+        addRow("Fine Gold Bar 10 gr", this.mintingQty.qty10g, 10, certs.cert10g);
 
         let totDelivered = 0;
         const isMelted = this.metadata.feeBasis === 'melted';
@@ -2782,11 +2857,11 @@ var RefinerySimulationAwi = {
                     <table style="width: 100%; border: 1px solid #000; margin-bottom: 5mm;">
                         <thead>
                             <tr style="height: 10mm;">
-                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 8%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">No</th>
-                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 37%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Deskripsi Barang</th>
-                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 12%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Kadar</th>
-                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 13%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Jumlah</th>
-                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 15%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Total Berat</th>
+                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 7%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">No</th>
+                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 33%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Deskripsi Barang</th>
+                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 20%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Nomor Sertifikat</th>
+                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 11%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Jumlah</th>
+                                <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 14%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Total Berat</th>
                                 <th style="border: 1px solid #000; height: 10mm; text-align: center; vertical-align: middle; width: 15%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Informasi</th>
                             </tr>
                         </thead>
@@ -3092,9 +3167,11 @@ var RefinerySimulationAwi = {
                 </tr>
             `;
         });
+
+        const isNonPph23 = meta.isNonPph23 === true;
         const refDpp = refTotFee;
         const refPpn = Math.round(refDpp * 0.11);
-        const refPph = Math.round(refDpp * 0.02);
+        const refPph = isNonPph23 ? 0 : Math.round(refDpp * 0.02);
         const refNet = refDpp + refPpn - refPph;
         const refInvoiceNumber = this.normalizeReportNumber(meta.reportNumber, 'REF');
 
@@ -3141,7 +3218,7 @@ var RefinerySimulationAwi = {
                         ${refRowsHtml}
                         <tr class="sum-row"><td class="spacer" colspan="3" style="border:none; border-left:1px solid #000;"></td><td class="lbl">Subtotal</td><td class="val">Rp ${refDpp.toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
                         <tr class="sum-row"><td class="spacer" colspan="3" style="border:none; border-left:1px solid #000;"></td><td class="lbl">PPN (11%)</td><td class="val">Rp ${refPpn.toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
-                        <tr class="sum-row pph"><td class="spacer" colspan="3" style="border:none; border-left:1px solid #000;"></td><td class="lbl">PPh 23 (−)</td><td class="val">Rp ${refPph.toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
+                        <tr class="sum-row pph"><td class="spacer" colspan="3" style="border:none; border-left:1px solid #000;"></td><td class="lbl">PPh 23 (−)</td><td class="val">${isNonPph23 ? 'Rp 0,00' : ('Rp ' + refPph.toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2}))}</td></tr>
                         <tr class="sum-row total"><td class="spacer" colspan="3" style="border:none; border-left:1px solid #000; border-bottom:1px solid #000;"></td><td class="lbl" style="border-top:2px solid #000;">TOTAL TAGIHAN</td><td class="val" style="border-top:2px solid #000;">Rp ${refNet.toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
                     </tbody>
                 </table>
@@ -3174,7 +3251,7 @@ var RefinerySimulationAwi = {
         const totalMintingCost = cost1000 + cost500 + cost250 + cost50 + cost10;
         const mintDpp = Math.round((totalMintingCost * 100) / 111);
         const mintPpn = totalMintingCost - mintDpp;
-        const mintPph = Math.round(mintDpp * 0.02);
+        const mintPph = isNonPph23 ? 0 : Math.round(mintDpp * 0.02);
         const mintNet = totalMintingCost - mintPph;
 
         const totalPrinted = (this.mintingQty.qty1000g * 1000) + 
@@ -3255,7 +3332,7 @@ var RefinerySimulationAwi = {
                         <tr style="height: 7mm; font-weight: bold; border-top: 2px solid #000;"><td colspan="4" style="border: 1px solid #000; text-align: left; padding-left: 15px; font-size: 9.5pt; font-weight: bold;">Total</td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm;">${totalPrinted}</td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm;">Rp ${totalMintingCost.toLocaleString('id-ID')}</td></tr>
                         <tr style="height: 7mm;"><td colspan="6" style="border: 1px solid #000; text-align: left; padding-left: 15px; font-size: 9.5pt; font-weight: bold;">DPP</td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm;">Rp ${mintDpp.toLocaleString('id-ID')}</td></tr>
                         <tr style="height: 7mm;"><td colspan="6" style="border: 1px solid #000; text-align: left; padding-left: 15px; font-size: 9.5pt; font-weight: bold;">PPN</td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm;">Rp ${mintPpn.toLocaleString('id-ID')}</td></tr>
-                        <tr style="height: 7mm;"><td colspan="6" style="border: 1px solid #000; text-align: left; padding-left: 15px; font-size: 9.5pt; font-weight: bold;">PPh 23</td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm; color: red;">Rp ${mintPph.toLocaleString('id-ID')}</td></tr>
+                        <tr style="height: 7mm;"><td colspan="6" style="border: 1px solid #000; text-align: left; padding-left: 15px; font-size: 9.5pt; font-weight: bold;">PPh 23</td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm; ${mintPph > 0 ? 'color: red;' : ''}">Rp ${mintPph.toLocaleString('id-ID')}</td></tr>
                         <tr style="background: #fafafa; font-size: 10.5pt; height: 7mm;"><td colspan="6" style="border: 1px solid #000; text-align: left; padding-left: 15px; font-size: 10.5pt; font-weight: bold;">NETT</td><td style="border: 1px solid #000; text-align: right; padding-right: 3mm; font-size: 10.5pt; font-weight: bold; color: #0b1c3d;">Rp ${mintNet.toLocaleString('id-ID')}</td></tr>
                     </tbody>
                 </table>
@@ -3286,17 +3363,18 @@ var RefinerySimulationAwi = {
         let tpTotalPcs = 0;
         let tpTotalGr = 0;
 
-        const addTpRow = (desc, qty, weight) => {
+        const addTpRow = (desc, qty, weight, certNo) => {
             if (qty > 0) {
                 tpItemIndex++;
                 tpTotalPcs += qty;
                 const itemTotalWeight = qty * weight;
                 tpTotalGr += itemTotalWeight;
+                const displayCert = certNo && certNo.trim() !== '' ? certNo.trim() : '—';
                 tpRowsHtml += `
                     <tr>
                         <td style="border: 1px solid #000; text-align: center; padding: 2mm 3mm;">${tpItemIndex}</td>
                         <td style="border: 1px solid #000; padding-left: 8px;">${desc}</td>
-                        <td style="border: 1px solid #000; text-align: center;">99.99%</td>
+                        <td style="border: 1px solid #000; text-align: center;">${displayCert}</td>
                         <td style="border: 1px solid #000; text-align: center;">${qty} Pcs</td>
                         <td style="border: 1px solid #000; text-align: right; padding-right: 3mm;">${itemTotalWeight.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gr</td>
                         <td style="border: 1px solid #000; padding-left: 8px;">Hasil cetak diserahkan</td>
@@ -3305,11 +3383,12 @@ var RefinerySimulationAwi = {
             }
         };
 
-        addTpRow("Fine Gold Bar 1.000 gr", this.mintingQty.qty1000g, 1000);
-        addTpRow("Fine Gold Bar 500 gr", this.mintingQty.qty500g, 500);
-        addTpRow("Fine Gold Bar 250 gr", this.mintingQty.qty250g, 250);
-        addTpRow("Fine Gold Bar 50 gr", this.mintingQty.qty50g, 50);
-        addTpRow("Fine Gold Bar 10 gr", this.mintingQty.qty10g, 10);
+        const certs = this.mintingCerts || {};
+        addTpRow("Fine Gold Bar 1.000 gr", this.mintingQty.qty1000g, 1000, certs.cert1000g);
+        addTpRow("Fine Gold Bar 500 gr", this.mintingQty.qty500g, 500, certs.cert500g);
+        addTpRow("Fine Gold Bar 250 gr", this.mintingQty.qty250g, 250, certs.cert250g);
+        addTpRow("Fine Gold Bar 50 gr", this.mintingQty.qty50g, 50, certs.cert50g);
+        addTpRow("Fine Gold Bar 10 gr", this.mintingQty.qty10g, 10, certs.cert10g);
 
         if (leftoverGold > 0.005) {
             tpItemIndex++;
@@ -3347,7 +3426,7 @@ var RefinerySimulationAwi = {
                         <td style="border-right: 1px solid #000; padding: 2.5mm 3.5mm; width: 60%; vertical-align: top;">
                             <table style="width: 100%; border: none;">
                                 <tr style="border: none;"><td style="width: 25%; font-size: 9.5pt; font-weight: bold; border: none; padding: 0 0 2.5mm 0;">Nama Customer</td><td style="font-size: 9.5pt; font-weight: normal; border: none; padding: 0 0 2.5mm 0;">: ${meta.customerName}</td></tr>
-                                <tr style="border: none;"><td style="font-size: 9.5pt; font-weight: bold; border: none; padding: 0; vertical-align: top;">Alamat</td><td style="font-size: 9.5pt; font-weight: normal; border: none; padding: 0; vertical-align: top;">: ${meta.customerAddress}</td></tr>
+                                <tr style="border: none;"><td style="font-size: 9.5pt; font-weight: bold; border: none; padding: 0 0 2.5mm 0; vertical-align: top;">Alamat</td><td style="font-size: 9.5pt; font-weight: normal; border: none; padding: 0 0 2.5mm 0; vertical-align: top;">: ${meta.customerAddress}</td></tr>
                             </table>
                         </td>
                         <td style="padding: 2.5mm 3.5mm; width: 40%; vertical-align: top;">
@@ -3361,11 +3440,11 @@ var RefinerySimulationAwi = {
                 <table style="width: 100%; border: 1px solid #000; margin-bottom: 5mm;">
                     <thead>
                         <tr style="height: 10mm;">
-                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 8%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">No</th>
-                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 37%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Deskripsi Barang</th>
-                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 12%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Kadar</th>
-                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 13%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Jumlah</th>
-                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 15%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Total Berat</th>
+                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 7%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">No</th>
+                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 33%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Deskripsi Barang</th>
+                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 20%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Nomor Sertifikat</th>
+                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 11%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Jumlah</th>
+                            <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 14%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Total Berat</th>
                             <th style="border: 1px solid #000; text-align: center; vertical-align: middle; width: 15%; font-size: 9.5pt; font-weight: bold; background: #fafafa;">Informasi</th>
                         </tr>
                     </thead>

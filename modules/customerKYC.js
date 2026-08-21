@@ -1460,7 +1460,7 @@ const CustomerKYC = {
         const kyc = this.getKYCByCustomer(customerId);
 
         if (!kyc) {
-            return { approved: false, reason: 'No KYC record found' };
+            return { approved: false, status: 'unregistered', reason: 'No KYC record found' };
         }
 
         if (kyc.status !== 'approved') {

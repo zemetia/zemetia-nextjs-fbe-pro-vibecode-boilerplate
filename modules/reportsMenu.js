@@ -77,6 +77,14 @@ const ReportsMenu = {
           { id: 'inventory-custody', name: 'Inventory vs Custody', desc: 'Pemisahan Aset Perusahaan (On-Balance) dengan Titipan Pelanggan (Off-Balance)', status: 'active' },
           { id: 'swap-analysis', name: 'Direct Swap Analysis', desc: 'Physical grammage comparison (In vs Out)', status: 'active' }
         ]
+      },
+      {
+        title: '📑 Statutory & HR Compliance Reports',
+        icon: '📑',
+        reports: [
+          { id: 'bpjs-tax-compliance', name: 'BPJS & Tax Compliance', desc: 'Rekonsiliasi Iuran BPJS Kes, BPJS TK, dan Pajak PPh 21 TER', status: 'active' },
+          { id: 'payroll-simulation', name: 'Payroll Simulation & Audit', desc: 'Simulasi dan audit penggajian pra-closing', status: 'active' }
+        ]
       }
     ];
 

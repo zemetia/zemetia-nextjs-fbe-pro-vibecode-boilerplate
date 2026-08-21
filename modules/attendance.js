@@ -115,15 +115,39 @@ const Attendance = {
     this.render();
   },
 
+  getEligibleEmployees(cutoffStartStr, cutoffEndStr) {
+    const startStr = cutoffStartStr || this.getPeriodCutoffRange(this.activePeriod).startDateStr;
+    const endStr = cutoffEndStr || this.getPeriodCutoffRange(this.activePeriod).endDateStr;
+
+    return this.employees.filter(emp => {
+      const isPastOrCurrentJoin = !emp.start_date || emp.start_date <= endStr;
+      if (!isPastOrCurrentJoin) return false;
+
+      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+      const resDate = emp.resignation_date || emp.resign_date;
+
+      if (!isInactive) {
+        return true;
+      }
+      // If inactive, include if resignation date falls within or after cutoff start
+      if (isInactive && resDate && resDate >= startStr) {
+        return true;
+      }
+      return false;
+    });
+  },
+
   getFilteredRecords() {
     return this.records.filter(r => r.period === this.activePeriod);
   },
 
   renderTable() {
     const filtered = this.getFilteredRecords();
+    const cutoff = this.getPeriodCutoffRange(this.activePeriod);
+    const eligibleEmployees = this.getEligibleEmployees(cutoff.startDateStr, cutoff.endDateStr);
 
-    // Combine employees with attendance records
-    const tableData = this.employees.filter(e => e.status === 'active').map(emp => {
+    // Combine eligible employees with attendance records
+    const tableData = eligibleEmployees.map(emp => {
       const record = filtered.find(r => String(r.nik) === String(emp.nik)) || {
         nik: emp.nik,
         name: emp.name,
@@ -137,7 +161,7 @@ const Attendance = {
       return record;
     });
 
-    if (tableData.length === 0) return '<p class="text-center text-gray">Belum ada data karyawan aktif.</p>';
+    if (tableData.length === 0) return '<p class="text-center text-gray">Belum ada data karyawan aktif untuk periode cut-off ini.</p>';
 
     return `
       <div class="table-container">
@@ -163,13 +187,20 @@ const Attendance = {
               const rowStyle = hasWarning ? 'background-color: rgba(255, 193, 7, 0.2);' : '';
               const warningBadge = hasWarning ? `<br><span class="badge badge-warning" style="font-size:0.6rem; cursor:help; margin-top:4px; display:inline-block;" title="Ada ${row.missing_taps} hari dengan 1x tap saja (lupa absen pulang).">⚠️ Lupa Absen (${row.missing_taps})</span>` : '';
               
+              const leaveBadges = (row.leave_records && row.leave_records.length > 0)
+                ? `<div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">${row.leave_records.map(l => `<span class="badge badge-info" style="font-size: 9px; padding: 1px 4px;" title="${l.dateFrom}: ${l.notes || l.type}">${l.isPartial ? '⏱️ ' + (l.partialTime || 'Dispensasi') : '🏖️ ' + l.type}</span>`).join('')}</div>`
+                : '';
+
               return `
               <tr style="${rowStyle}">
                 <td>
                   <span class="badge badge-secondary">${row.nik}</span>
                   ${warningBadge}
                 </td>
-                <td><strong>${row.name}</strong></td>
+                <td>
+                  <strong>${row.name}</strong>
+                  ${leaveBadges}
+                </td>
                 <td>
                   <input type="number" class="form-input text-center" value="${row.work_days}" 
                          onchange="Attendance.updateCell('${row.nik}', 'work_days', this.value)">
@@ -443,9 +474,10 @@ const Attendance = {
 
     const calendarData = Storage.getWorkCalendar() || {};
     const shifts = Storage.getMasterShifts() || [];
+    const eligibleEmployees = this.getEligibleEmployees(cutoffInfo.startDateStr, cutoffInfo.endDateStr);
 
     // 1. Generate Sheet 1: Summary with Real Overtime Calculations
-    const summaryData = this.employees.filter(e => e.status === 'active').map(emp => {
+    const summaryData = eligibleEmployees.map(emp => {
       const row = filtered.find(r => String(r.nik) === String(emp.nik)) || {};
 
       const deptTarget = `DEPT:${emp.department}`;
@@ -477,6 +509,14 @@ const Attendance = {
       });
 
       cutoffInfo.dates.forEach(dateKey => {
+        const startDate = emp.start_date || emp.join_date;
+        const resDate = emp.resignation_date || emp.resign_date;
+        const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+        
+        const isPreJoin = startDate && (dateKey < startDate);
+        const isPostResign = isInactive && resDate && (dateKey > resDate);
+        if (isPreJoin || isPostResign) return;
+
         const dayStr = dateKey.split('-')[2];
         const datePeriod = dateKey.substring(0, 7);
         const periodCalData = calendarData[datePeriod] || {};
@@ -535,16 +575,26 @@ const Attendance = {
       };
     });
 
-    // 2. Generate Sheet 2: Attendance Matrix (H vs Blank)
-    const matrixData = this.employees.filter(e => e.status === 'active').map(emp => {
+    // 2. Generate Sheet 2: Attendance Matrix (H vs Blank vs -)
+    const matrixData = eligibleEmployees.map(emp => {
       const rowObj = {
         'NIK': emp.nik,
         'Nama': emp.name
       };
 
+      const startDate = emp.start_date || emp.join_date;
+      const resDate = emp.resignation_date || emp.resign_date;
+      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+
       cutoffInfo.dates.forEach(dateKey => {
-        const dayLogs = logs.filter(l => String(l.nik) === String(emp.nik) && l.date === dateKey);
-        rowObj[dateKey] = dayLogs.length > 0 ? 'H' : '';
+        const isPreJoin = startDate && (dateKey < startDate);
+        const isPostResign = isInactive && resDate && (dateKey > resDate);
+        if (isPreJoin || isPostResign) {
+          rowObj[dateKey] = '-';
+        } else {
+          const dayLogs = logs.filter(l => String(l.nik) === String(emp.nik) && l.date === dateKey);
+          rowObj[dateKey] = dayLogs.length > 0 ? 'H' : '';
+        }
       });
       return rowObj;
     });
@@ -554,7 +604,7 @@ const Attendance = {
     const daysIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const holidaysList = Storage.getHolidays ? Storage.getHolidays() : [];
 
-    this.employees.filter(e => e.status === 'active').forEach(emp => {
+    eligibleEmployees.forEach(emp => {
       const deptTarget = `DEPT:${emp.department}`;
       const empTarget = `EMP:${emp.id || emp.nik}`;
 
@@ -581,6 +631,14 @@ const Attendance = {
       });
 
       cutoffInfo.dates.forEach(dateKey => {
+        const startDate = emp.start_date || emp.join_date;
+        const resDate = emp.resignation_date || emp.resign_date;
+        const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+        
+        const isPreJoin = startDate && (dateKey < startDate);
+        const isPostResign = isInactive && resDate && (dateKey > resDate);
+        const isWithinContract = !isPreJoin && !isPostResign;
+
         const dayStr = dateKey.split('-')[2];
         const dow = new Date(dateKey + 'T12:00:00').getDay();
         const dayName = daysIndo[dow];
@@ -629,7 +687,12 @@ const Attendance = {
 
         // Determine Status Kehadiran (H, I, C, S, A, -)
         let statusKehadiran = "-";
-        if (actualIn !== "-" || actualOut !== "-") {
+        if (!isWithinContract) {
+          statusKehadiran = "-";
+          statusHari = isPreJoin ? "Pre-Join" : "Post-Resign";
+          schedIn = "-";
+          schedOut = "-";
+        } else if (actualIn !== "-" || actualOut !== "-") {
           statusKehadiran = "H";
         } else if (statusHari === 'W' || statusHari === 'HD') {
           statusKehadiran = "A";
@@ -1039,20 +1102,54 @@ const Attendance = {
   },
 
   applyOvertimeToSummary(nik) {
-    const totalWorkDays = parseInt(document.getElementById('modal-total-work')?.textContent) || 0;
-    const totalOT = parseInt(document.getElementById('modal-total-ot')?.textContent) || 0;
-    const totalNight = parseInt(document.getElementById('modal-total-night')?.textContent) || 0;
-    const totalLateCount = parseInt(document.getElementById('modal-total-late')?.textContent) || 0;
+    let totalWorkDays = 0;
+    let totalOT = 0;
+    let totalNight = 0;
+    let totalLateCount = 0;
+
+    document.querySelectorAll('.daily-clock-in').forEach(inInput => {
+      const day = inInput.dataset.day;
+      const outInput = document.querySelector(`.daily-clock-out[data-day="${day}"]`);
+      const shiftStart = inInput.dataset.start;
+      const shiftEnd = outInput ? outInput.dataset.end : null;
+
+      const clockIn = inInput.value;
+      const clockOut = outInput ? outInput.value : '';
+
+      if (clockIn && clockIn !== '-') {
+        totalWorkDays++;
+        if (shiftStart) {
+          const [hIn, mIn] = clockIn.split(':').map(Number);
+          const [hStart, mStart] = shiftStart.split(':').map(Number);
+          const inTotal = hIn * 60 + mIn;
+          const startTotal = hStart * 60 + mStart;
+          if (inTotal > startTotal) totalLateCount++;
+        }
+      }
+
+      if (clockOut && clockOut !== '-' && shiftEnd) {
+        const [hOut, mOut] = clockOut.split(':').map(Number);
+        const [hEnd, mEnd] = shiftEnd.split(':').map(Number);
+        let outTotal = hOut * 60 + mOut;
+        let endTotal = hEnd * 60 + mEnd;
+        if (outTotal > endTotal) {
+          totalOT += Math.floor((outTotal - endTotal) / 60);
+        }
+        if (outInput && outInput.dataset.night === 'true') {
+          totalNight += 1;
+        }
+      }
+    });
 
     this.updateCell(nik, 'work_days', totalWorkDays);
-    this.updateCell(nik, 'overtime_hours', totalOT);
+    this.updateCell(nik, 'overtime_hours', Math.floor(totalOT));
     this.updateCell(nik, 'night_days', totalNight);
     this.updateCell(nik, 'late_count', totalLateCount);
 
     const container = document.getElementById('attendance-table-container');
     if (container) container.innerHTML = this.renderTable();
 
-    alert(`Update berhasil: Hadir ${totalWorkDays} hari, Lembur ${totalOT} jam, ${totalLateCount} kali telat, ${totalNight} shift malam.`);
+    alert(`Update berhasil: Hadir ${totalWorkDays} hari, Lembur ${Math.floor(totalOT)} jam, ${totalLateCount} kali telat, ${totalNight} shift malam.`);
     document.querySelector('.modal-overlay')?.remove();
   },
 

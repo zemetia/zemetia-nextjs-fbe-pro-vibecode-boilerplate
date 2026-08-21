@@ -1137,10 +1137,10 @@ const PDFExporter = {
 
         y = doc.lastAutoTable.finalY + 12;
 
-        // Analis Laboratorium Section
+        // Staff QC Section
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        doc.text("Analis Laboratorium", 14, y);
+        doc.text("Staff QC", 14, y);
         y += 18;
 
         // Signatures area (Prepared By, Approved By)
@@ -1336,10 +1336,10 @@ const PDFExporter = {
 
         y = doc.lastAutoTable.finalY + 12;
 
-        // Analis Laboratorium Section
+        // Staff QC Section
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        doc.text("Analis Laboratorium (ICP Spec),", 14, y);
+        doc.text("Staff QC (ICP Spec),", 14, y);
         y += 18;
 
         // Signatures area (Prepared By, Approved By)
@@ -1636,7 +1636,25 @@ const PDFExporter = {
         const leftBoxW = (pageWidth - 28) * 0.55;
         const rightBoxX = 14 + leftBoxW + 3;
         const rightBoxW = (pageWidth - 28) - leftBoxW - 3;
-        const boxH = 22;
+
+        const notesText = order.notes || (order.prfNumber ? `Catatan PRF ${order.prfNumber}` : '');
+        let splitNotes = [];
+        let calculatedBoxH = 22;
+
+        doc.setFont('RobotoMono', 'normal');
+        doc.setFontSize(7.5);
+
+        if (notesText && notesText.trim() !== '') {
+            splitNotes = doc.splitTextToSize(notesText, leftBoxW - 6);
+            calculatedBoxH = 8.5 + (splitNotes.length * 4) + 2.5;
+        }
+
+        const boxH = Math.max(22, calculatedBoxH);
+
+        if (y + boxH + 35 > pageHeight - 10) {
+            doc.addPage();
+            y = 15;
+        }
 
         // Left Box: Catatan (Note copied from PRF or user entered)
         doc.setLineWidth(0.3);
@@ -1648,17 +1666,16 @@ const PDFExporter = {
         doc.setFont('RobotoMono', 'normal');
         doc.setFontSize(7.5);
 
-        const notesText = order.notes || (order.prfNumber ? `Catatan PRF ${order.prfNumber}` : '');
-        if (notesText && notesText.trim() !== '') {
-            const splitNotes = doc.splitTextToSize(notesText, leftBoxW - 6);
+        if (splitNotes.length > 0) {
             let noteY = y + 8.5;
-            splitNotes.slice(0, 3).forEach(nLine => {
+            splitNotes.forEach(nLine => {
                 doc.text(nLine, 17, noteY);
                 noteY += 4;
             });
         } else {
             doc.setLineDashPattern([1, 1], 0);
-            for (let i = 1; i <= 3; i++) {
+            const numDashedLines = Math.max(3, Math.floor((boxH - 7) / 4.5));
+            for (let i = 1; i <= numDashedLines; i++) {
                 doc.line(17, y + 4.5 + (i * 4.5), 14 + leftBoxW - 4, y + 4.5 + (i * 4.5));
             }
             doc.setLineDashPattern([], 0);
@@ -1666,25 +1683,26 @@ const PDFExporter = {
 
         // Right Box: Totals
         doc.rect(rightBoxX, y, rightBoxW, boxH);
-        doc.line(rightBoxX, y + boxH / 3, rightBoxX + rightBoxW, y + boxH / 3);
-        doc.line(rightBoxX, y + (boxH / 3) * 2, rightBoxX + rightBoxW, y + (boxH / 3) * 2);
+        const rowH = boxH / 3;
+        doc.line(rightBoxX, y + rowH, rightBoxX + rightBoxW, y + rowH);
+        doc.line(rightBoxX, y + rowH * 2, rightBoxX + rightBoxW, y + rowH * 2);
         const vLineX = rightBoxX + rightBoxW - 35;
         doc.line(vLineX, y, vLineX, y + boxH);
 
         doc.setFont('RobotoMono', 'bold');
         doc.setFontSize(8);
-        doc.text('SUBTOTAL', rightBoxX + 3, y + boxH / 3 - 2.5);
-        doc.text(`PPN (${order.taxRate || 0}%)`, rightBoxX + 3, y + (boxH / 3) * 2 - 2.5);
+        doc.text('SUBTOTAL', rightBoxX + 3, y + (rowH * 0.5) + 1.2);
+        doc.text(`PPN (${order.taxRate || 0}%)`, rightBoxX + 3, y + (rowH * 1.5) + 1.2);
         doc.setFontSize(9);
-        doc.text('TOTAL', rightBoxX + 3, y + boxH - 2.5);
+        doc.text('TOTAL', rightBoxX + 3, y + (rowH * 2.5) + 1.2);
 
         doc.setFont('RobotoMono', 'normal');
         doc.setFontSize(8);
-        doc.text(subtotal.toLocaleString('id-ID'), rightBoxX + rightBoxW - 3, y + boxH / 3 - 2.5, { align: 'right' });
-        doc.text(taxAmount.toLocaleString('id-ID'), rightBoxX + rightBoxW - 3, y + (boxH / 3) * 2 - 2.5, { align: 'right' });
+        doc.text(subtotal.toLocaleString('id-ID'), rightBoxX + rightBoxW - 3, y + (rowH * 0.5) + 1.2, { align: 'right' });
+        doc.text(taxAmount.toLocaleString('id-ID'), rightBoxX + rightBoxW - 3, y + (rowH * 1.5) + 1.2, { align: 'right' });
         doc.setFontSize(9);
         doc.setFont('RobotoMono', 'bold');
-        doc.text(grandTotal.toLocaleString('id-ID'), rightBoxX + rightBoxW - 3, y + boxH - 2.5, { align: 'right' });
+        doc.text(grandTotal.toLocaleString('id-ID'), rightBoxX + rightBoxW - 3, y + (rowH * 2.5) + 1.2, { align: 'right' });
 
         y += boxH + 8;
 

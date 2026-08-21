@@ -524,6 +524,12 @@ const FirebaseSync = {
                 }
             } catch (error) { console.error(`[Sync] Pull error for ${key}:`, error); }
         }
+
+        // 🛡️ Post-pull hygiene: Purge target dummy employees if any returned from old cloud state
+        if (window.Storage && typeof Storage.purgeTargetDummyEmployees === 'function') {
+            await Storage.purgeTargetDummyEmployees();
+        }
+
         return totalPulled;
     },
 

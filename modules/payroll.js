@@ -23,11 +23,12 @@ const Payroll = {
   },
 
   getPeriodDates(period) {
-    const [year, month] = period.split('-').map(Number);
+    const p = period || this.period || new Date().toISOString().substring(0, 7);
+    const [year, month] = p.split('-').map(Number);
     const customPeriods = Storage.getPayrollPeriods ? Storage.getPayrollPeriods() : [];
-    const currentCustom = customPeriods.find(p => p.period === period);
+    const currentCustom = customPeriods.find(cp => cp.period === p);
     
-    let endDateStr = `${period}-25`;
+    let endDateStr = `${p}-25`;
     if (currentCustom && currentCustom.endDate) {
         endDateStr = currentCustom.endDate;
     }
@@ -263,9 +264,11 @@ const Payroll = {
 
           let isLeaver = false;
           let daysWorkedBeforeResign = 0;
-          if (emp.status === 'inactive' && emp.resign_date && emp.resign_date >= startDateStr && emp.resign_date <= endDateStr) {
+          const resDate = emp.resignation_date || emp.resign_date;
+          const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+          if (isInactive && resDate && resDate >= startDateStr && resDate <= endDateStr) {
               isLeaver = true;
-              daysWorkedBeforeResign = this.countWorkingDaysMonSat(startDateStr, emp.resign_date);
+              daysWorkedBeforeResign = this.countWorkingDaysMonSat(startDateStr, resDate);
           }
 
           let calculatedBaseSalary = masterBaseSalary;
@@ -515,6 +518,7 @@ const Payroll = {
               <button class="btn btn-success" onclick="document.getElementById('payroll-import-file').click()">📥 Import Excel</button>
               <input type="file" id="payroll-import-file" style="display: none;" accept=".xlsx,.xls" onchange="Payroll.handleImportExcel(event)">
               <button class="btn btn-secondary" onclick="Payroll.exportToExcel()">📥 Unduh Rekap Excel</button>
+              <button class="btn btn-info" onclick="App.navigateTo('bpjs-tax-compliance')" style="background: linear-gradient(135deg, #059669 0%, #0d9488 100%); border: none; color: white; font-weight: bold;">📑 Rekonsiliasi BPJS & PPh 21</button>
               <button class="btn btn-info" id="btn-send-email-bulk" onclick="Payroll.confirmSendEmailBulk()">📧 KIRIM EMAIL KE SEMUA FILTER (0 KARYAWAN)</button>
               <button class="btn btn-primary" id="btn-download-zip-bulk" onclick="Payroll.downloadAllPayslipsZIP()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: white;">📦 Download All Payslips (ZIP) (0 KARYAWAN)</button>
               <button class="btn btn-success" id="btn-send-wa-bulk" onclick="Payroll.confirmSendWhatsAppBulk()" style="background: #25D366; border: none; color: white;">💬 KIRIM WA KE SEMUA FILTER (0 KARYAWAN)</button>
@@ -710,6 +714,7 @@ const Payroll = {
         let nightDays = 0;
         let extraDays = 0;
         let lateDeductionAmount = 0;
+        let halfDayIzinCount = 0;
         
         const start = new Date(startDateStr + 'T12:00:00');
         const end = new Date(endDateStr + 'T12:00:00');
@@ -736,74 +741,108 @@ const Payroll = {
             
             const isSunday = cur.getDay() === 0;
             const isHoliday = holidays.some(h => h.date === dateStr);
+            const isCompanyDayoff = Storage.isCompanyDayoff ? Storage.isCompanyDayoff(dateStr) : false;
+            const companyDayoffRec = isCompanyDayoff && Storage.getCompanyDayoffRecord ? Storage.getCompanyDayoffRecord(dateStr) : null;
+            const isPaidCompanyDayoff = isCompanyDayoff && (!companyDayoffRec || companyDayoffRec.isPaid !== false);
             
-            if (shift) {
+            // Contract Active Date Validation (Pre-Join & Post-Resign Guard)
+            const startDate = emp.start_date || emp.join_date;
+            const resDate = emp.resignation_date || emp.resign_date;
+            const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+            
+            const isPreJoin = startDate && (dateStr < startDate);
+            const isPostResign = isInactive && resDate && (dateStr > resDate);
+            const isWithinContract = !isPreJoin && !isPostResign;
+
+            if (shift && !isPaidCompanyDayoff && isWithinContract) {
                 scheduledWorkDays++;
             }
             
-            const dayLog = empLogs[dateStr];
-            const isFirstDay = emp.start_date && (dateStr === emp.start_date);
-            if (dayLog || isFirstDay) {
-                let isPresent = false;
-                if (isFirstDay) {
-                    workDays++;
-                    isPresent = true;
-                } else {
-                    const hasIn = dayLog.in !== null;
-                    const hasOut = dayLog.out !== null;
-                    const totalLogs = dayLog.raw.length;
-                    
-                    if ((hasIn && hasOut) || totalLogs >= 2) {
+            if (isWithinContract) {
+                const dayLog = empLogs[dateStr];
+                const isFirstDay = emp.start_date && (dateStr === emp.start_date);
+                if (dayLog || isFirstDay) {
+                    let isPresent = false;
+                    if (isFirstDay) {
                         workDays++;
                         isPresent = true;
-                    } else if (totalLogs === 1) {
-                        missingTaps++;
-                        isPresent = true;
+                    } else {
+                        const hasIn = dayLog.in !== null;
+                        const hasOut = dayLog.out !== null;
+                        const totalLogs = dayLog.raw.length;
+                        
+                        if ((hasIn && hasOut) || totalLogs >= 2) {
+                            workDays++;
+                            isPresent = true;
+                        } else if (totalLogs === 1) {
+                            missingTaps++;
+                            isPresent = true;
+                        }
                     }
-                }
-                
-                if (isPresent) {
-                    const isRedDay = isSunday || isHoliday;
-                    if (isRedDay) {
-                        extraDays++;
-                    }
-                    if (shift && shift.isNight) {
-                        nightDays++;
-                    }
-                    let dailyLateDeduction = 0;
-                    if (!isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
-                        const inTime = dayLog.in.split(' ')[1].substring(0, 5);
-                        const [ih, im] = inTime.split(':').map(Number);
-                        const [sh, sm] = shift.startTime.split(':').map(Number);
-                        const inTotal = ih * 60 + im;
-                        const startTotal = sh * 60 + sm;
-                        if (inTotal > startTotal) {
-                            lateCount++;
-                            const lateMinutes = inTotal - startTotal;
-                            if (lateMinutes > 5 && lateMinutes <= 60) {
-                                dailyLateDeduction = 10000;
-                            } else if (lateMinutes > 60 && lateMinutes <= 120) {
-                                dailyLateDeduction = 20000;
-                            } else if (lateMinutes > 120) {
-                                const baseSalary = parseFloat(emp.base_salary) || 0;
-                                dailyLateDeduction = 0.5 * (baseSalary / 25);
+                    
+                    if (isPresent) {
+                        const isRedDay = isSunday || isHoliday;
+                        if (isRedDay) {
+                            extraDays++;
+                        }
+
+                        const clockOutTime = (dayLog && dayLog.out) ? dayLog.out.split(' ')[1].substring(0, 5) : '';
+
+                        // Night meal allowance trigger: shift is night OR clock-out >= 19:00 WIB
+                        if ((shift && shift.isNight) || (clockOutTime && clockOutTime >= '19:00')) {
+                            nightDays++;
+                        }
+
+                        let dailyLateDeduction = 0;
+                        if (!isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
+                            const inTime = dayLog.in.split(' ')[1].substring(0, 5);
+                            const [ih, im] = inTime.split(':').map(Number);
+                            const [sh, sm] = shift.startTime.split(':').map(Number);
+                            const inTotal = ih * 60 + im;
+                            const startTotal = sh * 60 + sm;
+                            if (inTotal > startTotal) {
+                                lateCount++;
+                                const lateMinutes = inTotal - startTotal;
+                                if (lateMinutes > 5 && lateMinutes <= 60) {
+                                    dailyLateDeduction = 10000;
+                                } else if (lateMinutes > 60 && lateMinutes <= 120) {
+                                    dailyLateDeduction = 20000;
+                                } else if (lateMinutes > 120) {
+                                    const baseSalary = parseFloat(emp.base_salary) || 0;
+                                    dailyLateDeduction = 0.5 * (baseSalary / 25);
+                                }
+                                lateDeductionAmount += dailyLateDeduction;
                             }
-                            lateDeductionAmount += dailyLateDeduction;
                         }
-                    }
-                    if (dayLog && dayLog.out !== null && shift && shift.endTime) {
-                        const outTime = dayLog.out.split(' ')[1].substring(0, 5);
-                        const [oh, om] = outTime.split(':').map(Number);
-                        const [eh, em] = shift.endTime.split(':').map(Number);
-                        let outTotal = oh * 60 + om;
-                        let endTotal = eh * 60 + em;
-                        if (outTotal < 12 * 60 && endTotal > 12 * 60) {
-                            outTotal += 24 * 60;
-                        }
-                        if (outTotal > endTotal) {
-                            const extraMin = outTotal - endTotal;
-                            if (extraMin >= 60) {
-                                overtimeHours += Math.floor(extraMin / 60);
+
+                        if (dayLog && dayLog.out !== null && shift && shift.endTime) {
+                            const outTime = clockOutTime;
+                            const [oh, om] = outTime.split(':').map(Number);
+                            const [eh, em] = shift.endTime.split(':').map(Number);
+                            let outTotal = oh * 60 + om;
+                            let endTotal = eh * 60 + em;
+                            if (outTotal < 12 * 60 && endTotal > 12 * 60) {
+                                outTotal += 24 * 60;
+                            }
+
+                            // Overtime with role-based capping
+                            if (outTotal > endTotal) {
+                                const extraMin = outTotal - endTotal;
+                                if (extraMin >= 60) {
+                                    const rawOt = Math.floor(extraMin / 60);
+                                    const otCap = this.getOvertimeCapHours(emp);
+                                    overtimeHours += Math.min(rawOt, otCap);
+                                }
+                            }
+
+                            // Zero tolerance for early departure (pulang cepat)
+                            if (outTotal < endTotal) {
+                                const earlyMin = endTotal - outTotal;
+                                if (earlyMin > 120) {
+                                    halfDayIzinCount += 1;
+                                } else if (earlyMin > 5) {
+                                    lateDeductionAmount += (earlyMin <= 60 ? 10000 : 20000);
+                                }
                             }
                         }
                     }
@@ -823,11 +862,42 @@ const Payroll = {
             extra_days: extraDays,
             late_count: lateCount,
             absence_days: absenceDays,
-            half_day_izin: 0,
+            half_day_izin: halfDayIzinCount,
             production_grams: 0,
             late_deduction: Math.round(lateDeductionAmount)
         };
     });
+  },
+
+  getOvertimeCapHours(emp) {
+    if (!emp) return 1;
+    if (emp.overtime_enabled === false) return 0;
+
+    // Explicit override from master employee
+    if (emp.overtime_cap_hours !== undefined && emp.overtime_cap_hours !== null && emp.overtime_cap_hours !== '' && emp.overtime_cap_hours !== 'default') {
+      if (emp.overtime_cap_hours === 'uncapped') return 24;
+      const parsed = parseFloat(emp.overtime_cap_hours);
+      if (!isNaN(parsed)) return parsed;
+    }
+
+    const dept = String(emp.department || '').toLowerCase();
+    const pos = String(emp.position || '').toLowerCase();
+    const div = String(emp.division || emp.job_level || '').toLowerCase();
+
+    // Security: Fixed 4 hours / day
+    if (dept.includes('security') || pos.includes('security') || pos.includes('satpam')) {
+      return 4;
+    }
+    // 1. Operator Produksi: Max 2 hours / day
+    if (pos.includes('operator') || div.includes('production process') || div.includes('finishing')) {
+      return 2;
+    }
+    // 2. Staff Produksi / Lab / Gudang / QC: Max 3 hours / day
+    if (dept.includes('production') || div.includes('laboratory') || div.includes('warehouse') || div.includes('qc')) {
+      return 3;
+    }
+    // 3. Staff Non-Produksi (HR, Legal, Finance, Marketing, IT, etc.): Max 1 hour / day
+    return 1;
   },
 
   async calculatePayrollSimulation(employeesList, periodStr, customComponentsInject, checkedNiks = []) {
@@ -852,10 +922,13 @@ const Payroll = {
       const isPastOrCurrentJoin = !emp.start_date || emp.start_date <= endDateStr;
       if (!isPastOrCurrentJoin) return false;
 
-      if (!emp.status || emp.status === 'active') {
+      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+      const resDate = emp.resignation_date || emp.resign_date;
+
+      if (!isInactive) {
           return true;
       }
-      if (emp.status === 'inactive' && emp.resign_date && emp.resign_date >= startDateStr && emp.resign_date <= endDateStr) {
+      if (isInactive && resDate && resDate >= startDateStr) {
           return true;
       }
       return false;
@@ -889,7 +962,7 @@ const Payroll = {
       if (emp.start_date && emp.start_date >= startDateStr && emp.start_date <= endDateStr) {
           isNewHire = true;
           const joinDate = new Date(emp.start_date + 'T12:00:00');
-          const dayBeforeJoin = new Date(joinDate);
+          dayBeforeJoin = new Date(joinDate);
           dayBeforeJoin.setDate(joinDate.getDate() - 1);
           const dayBeforeStr = dayBeforeJoin.toISOString().substring(0, 10);
           if (dayBeforeStr >= startDateStr) {
@@ -899,9 +972,11 @@ const Payroll = {
 
       let isLeaver = false;
       let daysWorkedBeforeResign = 0;
-      if (emp.status === 'inactive' && emp.resign_date && emp.resign_date >= startDateStr && emp.resign_date <= endDateStr) {
+      const resDate = emp.resignation_date || emp.resign_date;
+      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+      if (isInactive && resDate && resDate >= startDateStr && resDate <= endDateStr) {
           isLeaver = true;
-          daysWorkedBeforeResign = this.countWorkingDaysMonSat(startDateStr, emp.resign_date);
+          daysWorkedBeforeResign = this.countWorkingDaysMonSat(startDateStr, resDate);
       }
 
       let calculatedBaseSalary = base;
@@ -913,10 +988,33 @@ const Payroll = {
       calculatedBaseSalary = Math.max(0, calculatedBaseSalary);
 
       const dailyRate = base / 25;
-      const mealPay = (atd.work_days || 0) * 20000;
-      const nightMealPay = (atd.night_days || 0) * 20000;
+
+      const isFixedAllowanceEnabled = emp.fixed_allowance_enabled !== false;
+      const fixedAllowance = isFixedAllowanceEnabled ? (parseFloat(emp.fixed_allowance) || 0) : 0;
+
+      const isLunchEnabled = emp.lunch_allowance_enabled !== false;
+      const lunchRate = emp.lunch_allowance_rate !== undefined && emp.lunch_allowance_rate !== '' ? parseFloat(emp.lunch_allowance_rate) : 20000;
+      const mealPay = isLunchEnabled ? (atd.work_days || 0) * lunchRate : 0;
+
+      const isNightMealEnabled = emp.night_meal_enabled !== false && emp.night_meal_category !== 'disabled';
+      const nightMealRate = emp.night_meal_rate !== undefined && emp.night_meal_rate !== '' ? parseFloat(emp.night_meal_rate) : 20000;
+      const nightMealPay = isNightMealEnabled ? (atd.night_days || 0) * nightMealRate : 0;
+
       const presencePay = dailyRate * (atd.extra_days || 0);
-      const overtimePay = (atd.overtime_hours || 0) * 20000;
+
+      const isOvertimeEnabled = emp.overtime_enabled !== false;
+      let overtimePay = 0;
+      if (isOvertimeEnabled) {
+        let otRate = 20000;
+        if (emp.overtime_hourly_rate) {
+          otRate = parseFloat(emp.overtime_hourly_rate) || 20000;
+        } else if (emp.overtime_rate_type === '10000') {
+          otRate = 10000;
+        } else if (emp.overtime_rate_type === '20000') {
+          otRate = 20000;
+        }
+        overtimePay = (atd.overtime_hours || 0) * otRate;
+      }
 
       let productionPay = 0;
       if (emp.payroll_level && emp.payroll_level !== 'N/A') {
@@ -985,14 +1083,46 @@ const Payroll = {
       }
 
       const paySettings = Storage.getOvertimeSettings();
-      const bpjsBase = emp.bpjs_wage_basis !== undefined && emp.bpjs_wage_basis !== '' ? parseFloat(emp.bpjs_wage_basis) : base;
-      const bpjsHealthDeduction = (bpjsBase * (paySettings.bpjs_health_emp || 0)) / 100;
-      const jhtDeduction = (bpjsBase * (paySettings.jht_emp || 0)) / 100;
+      const isBpjsHealthEnabled = emp.bpjs_health_enabled !== false;
+      const isBpjsTkEnabled = emp.bpjs_tk_enabled !== false;
 
-      const bpjsHealthBenefit = (bpjsBase * (paySettings.bpjs_health_comp || 0)) / 100;
-      const jhtBenefit = (bpjsBase * (paySettings.jht_comp || 0)) / 100;
-      const jkkBenefit = (bpjsBase * (paySettings.jkk_comp || 0)) / 100;
-      const jkmBenefit = (bpjsBase * (paySettings.jkm_comp || 0)) / 100;
+      const rawBpjsTkBase = emp.basic_salary_bpjs_tk !== undefined && emp.basic_salary_bpjs_tk !== '' 
+        ? parseFloat(emp.basic_salary_bpjs_tk) 
+        : (emp.bpjs_wage_basis !== undefined && emp.bpjs_wage_basis !== '' ? parseFloat(emp.bpjs_wage_basis) : base);
+      const bpjsBase = isBpjsTkEnabled ? rawBpjsTkBase : 0;
+
+      const rawBpjsKesBase = emp.basic_salary_bpjs_kes !== undefined && emp.basic_salary_bpjs_kes !== ''
+        ? parseFloat(emp.basic_salary_bpjs_kes)
+        : (emp.bpjs_wage_basis !== undefined && emp.bpjs_wage_basis !== '' ? parseFloat(emp.bpjs_wage_basis) : base);
+
+      const UMK_SURABAYA_2026 = 5288796;
+      const enforceUmkFloor = paySettings.enforce_umk_floor !== false;
+      const bpjsHealthBase = (!isBpjsHealthEnabled || rawBpjsKesBase <= 0) 
+        ? 0 
+        : (enforceUmkFloor ? Math.max(rawBpjsKesBase, UMK_SURABAYA_2026) : rawBpjsKesBase);
+
+      const bpjsHealthDeduction = (isBpjsHealthEnabled && bpjsHealthBase > 0 && paySettings.bpjs_health_emp) 
+        ? Math.round((bpjsHealthBase * parseFloat(paySettings.bpjs_health_emp)) / 100) 
+        : 0;
+      const jhtDeduction = (isBpjsTkEnabled && bpjsBase > 0 && paySettings.jht_emp) 
+        ? Math.round((bpjsBase * parseFloat(paySettings.jht_emp)) / 100) 
+        : 0;
+
+      const bpjsHealthBenefit = (isBpjsHealthEnabled && bpjsHealthBase > 0 && paySettings.bpjs_health_comp) 
+        ? Math.round((bpjsHealthBase * parseFloat(paySettings.bpjs_health_comp)) / 100) 
+        : 0;
+      const jhtBenefit = (isBpjsTkEnabled && bpjsBase > 0 && paySettings.jht_comp) 
+        ? Math.round((bpjsBase * parseFloat(paySettings.jht_comp)) / 100) 
+        : 0;
+      const jkkRate = (emp.jkk_risk_rate !== undefined && emp.jkk_risk_rate !== null && emp.jkk_risk_rate !== '') 
+        ? parseFloat(emp.jkk_risk_rate) 
+        : (parseFloat(paySettings.jkk_comp) || 0.89);
+      const jkkBenefit = (isBpjsTkEnabled && bpjsBase > 0) 
+        ? Math.round((bpjsBase * jkkRate) / 100) 
+        : 0;
+      const jkmBenefit = (isBpjsTkEnabled && bpjsBase > 0 && paySettings.jkm_comp) 
+        ? Math.round((bpjsBase * parseFloat(paySettings.jkm_comp)) / 100) 
+        : 0;
 
       let customEarningsSum = 0;
       let customDeductionsSum = 0;
@@ -1001,7 +1131,7 @@ const Payroll = {
           if (comp.type === 'deduction') customDeductionsSum += (comp.amount || 0);
       });
 
-      const totalEarnings = calculatedBaseSalary + mealPay + nightMealPay + presencePay + overtimePay + productionPay + customEarningsSum;
+      const totalEarnings = calculatedBaseSalary + fixedAllowance + mealPay + nightMealPay + presencePay + overtimePay + productionPay + customEarningsSum;
 
       let pph21_deduction = 0;
       let ter_rate = 0;
@@ -1026,6 +1156,7 @@ const Payroll = {
         npwp: emp.npwp || '-',
         period: periodStr,
         base_salary: Math.round(calculatedBaseSalary),
+        fixed_allowance: fixedAllowance,
         daily_rate: Math.round(dailyRate),
         work_days: atd.work_days,
         meal_pay: mealPay,
@@ -1052,6 +1183,7 @@ const Payroll = {
         jkm_benefit: Math.round(jkmBenefit),
         bpjs_tk_benefit: Math.round(jhtBenefit + jkkBenefit + jkmBenefit),
         custom_components: customComponents,
+        total_earnings: Math.round(totalEarnings),
         total_salary: Math.round(totalSalary),
         leave_notes: leaveNotes.join(', ') || '-',
       };
@@ -1094,10 +1226,14 @@ const Payroll = {
       const isPastOrCurrentJoin = !emp.start_date || emp.start_date <= endDateStr;
       if (!isPastOrCurrentJoin) return false;
 
-      if (!emp.status || emp.status === 'active') {
+      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+      const resDate = emp.resignation_date || emp.resign_date;
+
+      if (!isInactive) {
           return true;
       }
-      if (emp.status === 'inactive' && emp.resign_date && emp.resign_date >= startDateStr && emp.resign_date <= endDateStr) {
+      // If non-active, include if resignation date falls within or after period start (for pro-rata or post-25th rollover)
+      if (isInactive && resDate && resDate >= startDateStr) {
           return true;
       }
       return false;
@@ -1122,6 +1258,12 @@ const Payroll = {
       };
 
       const base = emp.base_salary || 0;
+      const isFixedAllowanceEnabled = emp.fixed_allowance_enabled !== false;
+      const fixedAllowance = isFixedAllowanceEnabled 
+        ? (emp.fixed_allowance !== undefined && emp.fixed_allowance !== '' 
+            ? (parseFloat(emp.fixed_allowance) || 0) 
+            : (emp.tunj_tetap !== undefined ? (parseFloat(emp.tunj_tetap) || 0) : (existingRecord ? (parseFloat(existingRecord.tunj_tetap) || 0) : 0)))
+        : 0;
       const dept = emp.department || 'OTHER';
 
       // Check if New Hire in this period
@@ -1141,9 +1283,11 @@ const Payroll = {
       // Check if Leaver in this period
       let isLeaver = false;
       let daysWorkedBeforeResign = 0;
-      if (emp.status === 'inactive' && emp.resign_date && emp.resign_date >= startDateStr && emp.resign_date <= endDateStr) {
+      const resDate = emp.resignation_date || emp.resign_date;
+      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+      if (isInactive && resDate && resDate >= startDateStr && resDate <= endDateStr) {
           isLeaver = true;
-          daysWorkedBeforeResign = this.countWorkingDaysMonSat(startDateStr, emp.resign_date);
+          daysWorkedBeforeResign = this.countWorkingDaysMonSat(startDateStr, resDate);
       }
 
       // Prorated fixed components using 25-day basis (Mon-Sat)
@@ -1157,9 +1301,14 @@ const Payroll = {
 
       const dailyRate = base / 25; // Basis 25 hari
 
-      // 2. Meal Allowance (20k/day)
-      const mealPay = (atd.work_days || 0) * 20000;
-      const nightMealPay = (atd.night_days || 0) * 20000;
+      // 2. Meal Allowance
+      const isLunchEnabled = emp.lunch_allowance_enabled !== false;
+      const lunchRate = emp.lunch_allowance_rate !== undefined && emp.lunch_allowance_rate !== '' ? parseFloat(emp.lunch_allowance_rate) : 20000;
+      const mealPay = isLunchEnabled ? (atd.work_days || 0) * lunchRate : 0;
+
+      const isNightMealEnabled = emp.night_meal_enabled !== false && emp.night_meal_category !== 'disabled';
+      const nightMealRate = emp.night_meal_rate !== undefined && emp.night_meal_rate !== '' ? parseFloat(emp.night_meal_rate) : 20000;
+      const nightMealPay = isNightMealEnabled ? (atd.night_days || 0) * nightMealRate : 0;
 
       const isSecurity = (Storage.isSecurityEmployee && Storage.isSecurityEmployee(emp)) || (
           String(emp.department || '').toLowerCase().includes('security') ||
@@ -1172,10 +1321,22 @@ const Payroll = {
       // 3. Presence Allowance (Red Day Work for office staff; Security handled via surplusWorkPay)
       const presencePay = isSecurity ? 0 : dailyRate * (atd.extra_days || 0);
 
-      // 4. Overtime (Flat 20k/hour for office staff; configured rate e.g. 10k/hour for Security)
-      const overtimePay = isSecurity 
-        ? (atd.overtime_hours || 0) * securityOtRate
-        : (atd.overtime_hours || 0) * 20000;
+      // 4. Overtime
+      const isOvertimeEnabled = emp.overtime_enabled !== false;
+      let overtimePay = 0;
+      if (isOvertimeEnabled) {
+        let otRate = 20000;
+        if (emp.overtime_hourly_rate) {
+          otRate = parseFloat(emp.overtime_hourly_rate) || 20000;
+        } else if (emp.overtime_rate_type === '10000') {
+          otRate = 10000;
+        } else if (emp.overtime_rate_type === '20000') {
+          otRate = 20000;
+        } else if (isSecurity) {
+          otRate = securityOtRate;
+        }
+        overtimePay = (atd.overtime_hours || 0) * otRate;
+      }
 
       // 5. Production Bonus (20k / kg)
       let productionPay = 0;
@@ -1220,9 +1381,23 @@ const Payroll = {
         ? Math.max(0, targetWorkingDays - (atd.work_days || 0)) 
         : (atd.absence_days || 0);
 
-      let annualLeaveQuota = emp.annual_leave_quota !== undefined && emp.annual_leave_quota !== null 
-        ? parseFloat(emp.annual_leave_quota) 
-        : (emp.leave_balance !== undefined && emp.leave_balance !== null ? parseFloat(emp.leave_balance) : 12);
+      // Leave balance retrieval honoring current_year_override from Storage
+      const [calcYearStr] = this.period.split('-');
+      const calcYear = parseInt(calcYearStr, 10) || new Date().getFullYear();
+      let leaveBalRecord = null;
+      if (typeof Storage !== 'undefined' && Storage.getLeaveBalances) {
+        const balances = Storage.getLeaveBalances();
+        leaveBalRecord = balances.find(b => String(b.employeeNik) === String(emp.nik) && b.year === calcYear);
+      }
+
+      let annualLeaveQuota = 12;
+      if (leaveBalRecord && leaveBalRecord.annualLeaveQuota !== undefined && leaveBalRecord.annualLeaveQuota !== null) {
+        annualLeaveQuota = parseFloat(leaveBalRecord.annualLeaveQuota);
+      } else if (emp.annual_leave_quota !== undefined && emp.annual_leave_quota !== null) {
+        annualLeaveQuota = parseFloat(emp.annual_leave_quota);
+      } else if (emp.leave_balance !== undefined && emp.leave_balance !== null) {
+        annualLeaveQuota = parseFloat(emp.leave_balance);
+      }
 
       let coveredByQuotaDays = Math.min(totalAbsenceDays, Math.max(0, annualLeaveQuota));
       let unpaidAbsenceDays = Math.max(0, totalAbsenceDays - coveredByQuotaDays);
@@ -1267,14 +1442,51 @@ const Payroll = {
 
       // 7. BPJS & JHT Logic (based on full contract base or separate BPJS Wage Basis)
       const paySettings = Storage.getOvertimeSettings();
-      const bpjsBase = emp.bpjs_wage_basis !== undefined && emp.bpjs_wage_basis !== '' ? parseFloat(emp.bpjs_wage_basis) : base;
-      const bpjsHealthDeduction = (bpjsBase * (paySettings.bpjs_health_emp || 0)) / 100;
-      const jhtDeduction = (bpjsBase * (paySettings.jht_emp || 0)) / 100;
+      const isBpjsHealthEnabled = emp.bpjs_health_enabled !== false;
+      const isBpjsTkEnabled = emp.bpjs_tk_enabled !== false;
 
-      const bpjsHealthBenefit = (bpjsBase * (paySettings.bpjs_health_comp || 0)) / 100;
-      const jhtBenefit = (bpjsBase * (paySettings.jht_comp || 0)) / 100;
-      const jkkBenefit = (bpjsBase * (paySettings.jkk_comp || 0)) / 100;
-      const jkmBenefit = (bpjsBase * (paySettings.jkm_comp || 0)) / 100;
+      const rawBpjsTkBase = emp.basic_salary_bpjs_tk !== undefined && emp.basic_salary_bpjs_tk !== '' 
+        ? parseFloat(emp.basic_salary_bpjs_tk) 
+        : (emp.bpjs_wage_basis !== undefined && emp.bpjs_wage_basis !== '' ? parseFloat(emp.bpjs_wage_basis) : base);
+      const bpjsBase = isBpjsTkEnabled ? rawBpjsTkBase : 0;
+
+      const rawBpjsKesBase = emp.basic_salary_bpjs_kes !== undefined && emp.basic_salary_bpjs_kes !== ''
+        ? parseFloat(emp.basic_salary_bpjs_kes)
+        : (emp.bpjs_wage_basis !== undefined && emp.bpjs_wage_basis !== '' ? parseFloat(emp.bpjs_wage_basis) : base);
+
+      // Enforcement of Regional Minimum Wage (UMK Surabaya 2026: Rp 5.288.796) Floor for BPJS Kesehatan
+      const UMK_SURABAYA_2026 = 5288796;
+      const enforceUmkFloor = paySettings.enforce_umk_floor !== false;
+      const bpjsHealthBase = (!isBpjsHealthEnabled || rawBpjsKesBase <= 0) 
+        ? 0 
+        : (enforceUmkFloor ? Math.max(rawBpjsKesBase, UMK_SURABAYA_2026) : rawBpjsKesBase);
+
+      const bpjsHealthDeduction = (isBpjsHealthEnabled && bpjsHealthBase > 0 && paySettings.bpjs_health_emp !== undefined && paySettings.bpjs_health_emp !== null)
+        ? Math.round((bpjsHealthBase * parseFloat(paySettings.bpjs_health_emp)) / 100)
+        : 0;
+
+      const jhtDeduction = (isBpjsTkEnabled && bpjsBase > 0 && paySettings.jht_emp !== undefined && paySettings.jht_emp !== null)
+        ? Math.round((bpjsBase * parseFloat(paySettings.jht_emp)) / 100)
+        : 0;
+
+      const bpjsHealthBenefit = (isBpjsHealthEnabled && bpjsHealthBase > 0 && paySettings.bpjs_health_comp !== undefined && paySettings.bpjs_health_comp !== null)
+        ? Math.round((bpjsHealthBase * parseFloat(paySettings.bpjs_health_comp)) / 100)
+        : 0;
+
+      const jhtBenefit = (isBpjsTkEnabled && bpjsBase > 0 && paySettings.jht_comp !== undefined && paySettings.jht_comp !== null)
+        ? Math.round((bpjsBase * parseFloat(paySettings.jht_comp)) / 100)
+        : 0;
+
+      const jkkRate = (emp.jkk_risk_rate !== undefined && emp.jkk_risk_rate !== null && emp.jkk_risk_rate !== '') 
+        ? parseFloat(emp.jkk_risk_rate) 
+        : (parseFloat(paySettings.jkk_comp) || 0.89);
+      const jkkBenefit = (isBpjsTkEnabled && bpjsBase > 0) 
+        ? Math.round((bpjsBase * jkkRate) / 100) 
+        : 0;
+
+      const jkmBenefit = (isBpjsTkEnabled && bpjsBase > 0 && paySettings.jkm_comp !== undefined && paySettings.jkm_comp !== null)
+        ? Math.round((bpjsBase * parseFloat(paySettings.jkm_comp)) / 100)
+        : 0;
 
       let customEarningsSum = 0;
       let customDeductionsSum = 0;
@@ -1286,14 +1498,16 @@ const Payroll = {
       const surplusWorkDays = isSecurity ? Math.max(0, (atd.work_days || 0) - targetWorkingDays) : 0;
       const surplusWorkPay = Math.round(surplusWorkDays * (base / 25));
 
-      const totalEarnings = calculatedBaseSalary + mealPay + nightMealPay + presencePay + overtimePay + productionPay + variableAllowance + bonus + previousMonthDeficiency + surplusWorkPay + customEarningsSum;
+      const totalEarnings = calculatedBaseSalary + fixedAllowance + mealPay + nightMealPay + presencePay + overtimePay + productionPay + variableAllowance + bonus + previousMonthDeficiency + surplusWorkPay + customEarningsSum;
 
-      // PPh 21 TER
+      // PPh 21 TER: Taxable Gross includes cash earnings + employer-paid taxable insurance benefits (JKK, JKM, BPJS Kes)
+      const taxableGrossForTER = totalEarnings + jkkBenefit + jkmBenefit + bpjsHealthBenefit;
+
       let pph21_deduction = 0;
       let ter_rate = 0;
       let ter_category = 'A';
       if (typeof TaxEngineTER !== 'undefined') {
-        const terResult = TaxEngineTER.calculatePPh21(emp.ptkp, totalEarnings);
+        const terResult = TaxEngineTER.calculatePPh21(emp.ptkp, taxableGrossForTER);
         pph21_deduction = terResult.taxAmount;
         ter_rate = terResult.ratePct;
         ter_category = terResult.category;
@@ -1344,6 +1558,8 @@ const Payroll = {
         jht_benefit: Math.round(jhtBenefit),
         jkk_benefit: Math.round(jkkBenefit),
         jkm_benefit: Math.round(jkmBenefit),
+        tunj_tetap: Math.round(fixedAllowance),
+        fixed_allowance: Math.round(fixedAllowance),
         variable_allowance: variableAllowance,
         bonus: bonus,
         other_deductions: otherDeductions,
@@ -1368,8 +1584,103 @@ const Payroll = {
     });
 
     await Storage.set(Storage.KEYS.PAYROLL, this.payrollRecords);
-    alert(`Berhasil meng-generate ${newRecords.length} slip gaji.\n\n📅 Rentang Periode: ${startDateStr} s/d ${endDateStr}`);
+    if (typeof window !== 'undefined' && window.document && !this._isHeadlessRunning) {
+      alert(`Berhasil meng-generate ${newRecords.length} slip gaji.\n\n📅 Rentang Periode: ${startDateStr} s/d ${endDateStr}`);
+    }
+    if (!this._isHeadlessRunning) {
+      this.render();
+    }
+    return newRecords;
+  },
+
+  async runHeadlessSimulation(periodStr = '2026-08') {
+    console.log(`🚀 Running Automated Headless Payroll Simulation for Period: ${periodStr}`);
+    this._isHeadlessRunning = true;
+    this.period = periodStr;
+    const employees = Storage.getEmployees().filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive');
+    const results = await this.calculatePayrollSimulation(employees, periodStr, {});
+    this._isHeadlessRunning = false;
+    console.log(`✅ Automated Simulation Complete! Processed ${results.length} active employee records.`);
+    return results;
+  },
+
+  isDetailedAllowanceView: false,
+
+  toggleAllowanceView() {
+    this.isDetailedAllowanceView = !this.isDetailedAllowanceView;
     this.render();
+  },
+
+  calculateTotals(records) {
+    return (records || []).reduce((acc, row) => {
+      let customEarningsSum = 0;
+      Object.entries(row.custom_components || {}).forEach(([name, data]) => {
+        if (data && data.type === 'earnings' && data.amount > 0) {
+          customEarningsSum += Number(data.amount || 0);
+        }
+      });
+
+      const rowMealPay = Number(row.meal_pay || row.meal_allowance || 0);
+      const rowNightMealPay = Number(row.night_meal_pay || 0);
+      const rowPresencePay = Number(row.presence_pay || row.tunj_kehadiran || 0);
+      const rowProdPay = Number(row.production_pay || row.bonus_produksi || 0);
+      const rowOtPay = Number(row.overtime_pay || row.uang_lembur || 0);
+      const rowFixedAllowance = Number(row.fixed_allowance || row.tunj_tetap || 0);
+      const rowVarAllowance = Number(row.variable_allowance || row.tunj_variabel || 0);
+      const rowTransport = Number(row.transport_allowance || row.tunj_transport || 0);
+      const rowLuarKota = Number(row.tunj_luar_kota || row.dinas_luar_kota || 0);
+      const rowBonus = Number(row.bonus || row.thr || 0);
+      const rowDeficiency = Number(row.previous_month_deficiency || row.selisih_kurang_gaji || 0);
+      const rowAdhoc = Number(row.adhoc_allowance || 0);
+
+      const rowTotalTunjangan = rowMealPay + 
+                                rowNightMealPay + 
+                                rowPresencePay + 
+                                rowProdPay + 
+                                rowOtPay + 
+                                rowFixedAllowance + 
+                                rowVarAllowance + 
+                                rowTransport +
+                                rowLuarKota + 
+                                rowBonus + 
+                                rowDeficiency + 
+                                rowAdhoc +
+                                customEarningsSum;
+
+      const lateDed = Number(row.late_deduction || 0);
+      const absDed = Number(row.absence_deduction || 0) + Number(row.half_day_deduction || 0);
+      const taxBpjs = Number(row.bpjs_health_deduction || 0) + Number(row.jht_deduction || 0) + Number(row.pph21_deduction || 0);
+      const otherDed = Number(row.other_deductions || 0) + Number(row.adhoc_deduction || 0);
+
+      acc.count += 1;
+      acc.totalBaseSalary += Number(row.base_salary || 0);
+      acc.totalFixed += rowFixedAllowance;
+      acc.totalMeal += (rowMealPay + rowNightMealPay + rowPresencePay);
+      acc.totalBonusProd += rowProdPay;
+      acc.totalLembur += rowOtPay;
+      acc.totalVarAllowance += rowVarAllowance;
+      acc.totalBonus += rowBonus;
+      acc.totalTunjangan += rowTotalTunjangan;
+      acc.totalLateAbsence += (lateDed + absDed);
+      acc.totalBpjsPph += taxBpjs;
+      acc.totalOtherDeductions += otherDed;
+      acc.totalSalary += Number(row.total_salary || 0);
+      return acc;
+    }, {
+      count: 0,
+      totalBaseSalary: 0,
+      totalFixed: 0,
+      totalMeal: 0,
+      totalBonusProd: 0,
+      totalLembur: 0,
+      totalVarAllowance: 0,
+      totalBonus: 0,
+      totalTunjangan: 0,
+      totalLateAbsence: 0,
+      totalBpjsPph: 0,
+      totalOtherDeductions: 0,
+      totalSalary: 0
+    });
   },
 
   renderTable() {
@@ -1382,24 +1693,29 @@ const Payroll = {
       return '<p class="text-center text-gray">Tidak ada data payroll yang cocok dengan filter pencarian.</p>';
     }
 
-    const totalAll = list.reduce((sum, r) => sum + r.total_salary, 0);
+    // Pure Mathematical Calculations (Independent of DOM/viewport)
+    const allTotals = this.calculateTotals(allPeriodRecords);
+    const filteredTotals = this.calculateTotals(list);
+    const isFiltered = list.length !== allPeriodRecords.length;
+
     const dates = this.getPeriodDates(this.period);
     const workingDays = this.countWorkingDaysMonSat(dates.startDate, dates.endDate);
 
-    // Scan for active dynamic components (amount > 0 for at least one record)
-    const showMeal = list.some(r => r.meal_pay > 0 || r.night_meal_pay > 0 || r.presence_pay > 0);
-    const showBonusProd = list.some(r => r.production_pay > 0);
-    const showLembur = list.some(r => r.overtime_pay > 0);
-    const showVarAllowance = list.some(r => r.variable_allowance > 0);
-    const showBonus = list.some(r => r.bonus > 0);
-    const showOtherDeductions = list.some(r => r.other_deductions > 0);
+    // Scan for active dynamic components
+    const showMeal = list.some(r => (r.meal_pay || r.meal_allowance || 0) > 0 || (r.night_meal_pay || 0) > 0 || (r.presence_pay || 0) > 0);
+    const showBonusProd = list.some(r => (r.production_pay || r.bonus_produksi || 0) > 0);
+    const showLembur = list.some(r => (r.overtime_pay || r.uang_lembur || 0) > 0);
+    const showFixed = list.some(r => (r.fixed_allowance || r.tunj_tetap || 0) > 0);
+    const showVarAllowance = list.some(r => (r.variable_allowance || r.tunj_variabel || 0) > 0);
+    const showBonus = list.some(r => (r.bonus || r.thr || 0) > 0);
+    const showOtherDeductions = list.some(r => (r.other_deductions || 0) > 0);
 
     const activeCustomEarnings = new Set();
     const activeCustomDeductions = new Set();
 
     list.forEach(r => {
       Object.entries(r.custom_components || {}).forEach(([name, data]) => {
-        if (data.amount > 0) {
+        if (data && data.amount > 0) {
           if (data.type === 'earnings') activeCustomEarnings.add(name);
           if (data.type === 'deduction') activeCustomDeductions.add(name);
         }
@@ -1411,23 +1727,27 @@ const Payroll = {
 
     // Build Headers
     let headersHTML = `
-      <th>Nama</th>
+      <th class="sticky-col sticky-col-shadow">Nama / NIK</th>
       <th class="text-right">Gaji Pokok</th>
     `;
-    if (showMeal) headersHTML += `<th class="text-right">Meal/Allowance</th>`;
-    if (showBonusProd) headersHTML += `<th class="text-right">Bonus Prod</th>`;
-    if (showLembur) headersHTML += `<th class="text-right">Lembur</th>`;
-    if (showVarAllowance) headersHTML += `<th class="text-right">Tunj. Variabel</th>`;
-    if (showBonus) headersHTML += `<th class="text-right">Bonus</th>`;
-    
-    // Custom Earnings Headers
-    customEarningsArr.forEach(name => {
-      headersHTML += `<th class="text-right">${name}</th>`;
-    });
 
-    // Default Deductions
-    headersHTML += `<th class="text-right">Potongan Absensi/Late</th>`;
-    headersHTML += `<th class="text-right">BPJS/PPh21</th>`;
+    if (this.isDetailedAllowanceView) {
+      if (showFixed) headersHTML += `<th class="text-right">Tunj. Tetap</th>`;
+      if (showMeal) headersHTML += `<th class="text-right">Meal/Allowance</th>`;
+      if (showBonusProd) headersHTML += `<th class="text-right">Bonus Prod</th>`;
+      if (showLembur) headersHTML += `<th class="text-right">Lembur</th>`;
+      if (showVarAllowance) headersHTML += `<th class="text-right">Tunj. Variabel</th>`;
+      if (showBonus) headersHTML += `<th class="text-right">Bonus</th>`;
+      customEarningsArr.forEach(name => {
+        headersHTML += `<th class="text-right">${name}</th>`;
+      });
+    }
+
+    headersHTML += `
+      <th class="text-right" style="background: rgba(16, 185, 129, 0.08);">Total Tunjangan</th>
+      <th class="text-right">Potongan Absensi/Late</th>
+      <th class="text-right">BPJS/PPh21</th>
+    `;
     if (showOtherDeductions) headersHTML += `<th class="text-right">Pot. Lain-lain</th>`;
 
     // Custom Deductions Headers
@@ -1443,45 +1763,91 @@ const Payroll = {
 
     // Build Rows
     let rowsHTML = '';
-    list.forEach(row => {
+
+    list.forEach((row, idx) => {
+      let customEarningsSum = 0;
+      Object.entries(row.custom_components || {}).forEach(([name, data]) => {
+        if (data && data.type === 'earnings' && data.amount > 0) {
+          customEarningsSum += Number(data.amount || 0);
+        }
+      });
+
+      const rowMealPay = Number(row.meal_pay || row.meal_allowance || 0);
+      const rowNightMealPay = Number(row.night_meal_pay || 0);
+      const rowPresencePay = Number(row.presence_pay || row.tunj_kehadiran || 0);
+      const rowProdPay = Number(row.production_pay || row.bonus_produksi || 0);
+      const rowOtPay = Number(row.overtime_pay || row.uang_lembur || 0);
+      const rowFixedAllowance = Number(row.fixed_allowance || row.tunj_tetap || 0);
+      const rowVarAllowance = Number(row.variable_allowance || row.tunj_variabel || 0);
+      const rowTransport = Number(row.transport_allowance || row.tunj_transport || 0);
+      const rowLuarKota = Number(row.tunj_luar_kota || row.dinas_luar_kota || 0);
+      const rowBonus = Number(row.bonus || row.thr || 0);
+      const rowDeficiency = Number(row.previous_month_deficiency || row.selisih_kurang_gaji || 0);
+      const rowAdhoc = Number(row.adhoc_allowance || 0);
+
+      const rowTotalTunjangan = rowMealPay + 
+                                rowNightMealPay + 
+                                rowPresencePay + 
+                                rowProdPay + 
+                                rowOtPay + 
+                                rowFixedAllowance + 
+                                rowVarAllowance + 
+                                rowTransport +
+                                rowLuarKota + 
+                                rowBonus + 
+                                rowDeficiency + 
+                                rowAdhoc +
+                                customEarningsSum;
+
+      const taxBpjs = Number(row.bpjs_health_deduction || 0) + Number(row.jht_deduction || 0) + Number(row.pph21_deduction || 0);
+
       let rowHTML = `
         <tr>
-          <td>
+          <td class="sticky-col sticky-col-shadow">
             <strong>${row.name}</strong>
-            ${row.is_first_day ? `<br><span class="badge badge-info" style="font-size: 10px; margin-top: 4px; display: inline-block; text-transform: none;">[Hari Pertama - Onboarding]</span>` : ''}
             <br><small class="text-gray">${row.nik}</small>
           </td>
           <td class="text-right">${(typeof App !== 'undefined' && typeof App.formatSalary === 'function' ? App.formatSalary(row.base_salary) : App.formatCurrency(row.base_salary))}</td>
       `;
-      
-      if (showMeal) {
-        rowHTML += `
-          <td class="text-right">
-            Meal: ${App.formatCurrency(row.meal_pay)}<br>
-            ${row.night_meal_pay > 0 ? `<small class="text-success">Night: ${App.formatCurrency(row.night_meal_pay)}</small><br>` : ''}
-            ${row.presence_pay > 0 ? `<small class="text-info">Extra: ${App.formatCurrency(row.presence_pay)}</small>` : ''}
-          </td>
-        `;
-      }
-      
-      if (showBonusProd) rowHTML += `<td class="text-right">${row.production_pay > 0 ? App.formatCurrency(row.production_pay) : '-'}</td>`;
-      if (showLembur) {
-        rowHTML += `
-          <td class="text-right">
-            ${App.formatCurrency(row.overtime_pay)}<br>
-            <small class="text-gray">${row.overtime_hours}h @ 20k</small>
-          </td>
-        `;
+
+      if (this.isDetailedAllowanceView) {
+        if (showFixed) rowHTML += `<td class="text-right">${rowFixedAllowance > 0 ? App.formatCurrency(rowFixedAllowance) : '-'}</td>`;
+        if (showMeal) {
+          rowHTML += `
+            <td class="text-right">
+              ${rowMealPay > 0 ? `Meal: ${App.formatCurrency(rowMealPay)}<br>` : ''}
+              ${rowNightMealPay > 0 ? `<small class="text-success">Night: ${App.formatCurrency(rowNightMealPay)}</small><br>` : ''}
+              ${rowPresencePay > 0 ? `<small class="text-info">Extra: ${App.formatCurrency(rowPresencePay)}</small>` : ''}
+              ${rowMealPay === 0 && rowNightMealPay === 0 && rowPresencePay === 0 ? '-' : ''}
+            </td>
+          `;
+        }
+        if (showBonusProd) rowHTML += `<td class="text-right">${rowProdPay > 0 ? App.formatCurrency(rowProdPay) : '-'}</td>`;
+        if (showLembur) {
+          rowHTML += `
+            <td class="text-right">
+              ${rowOtPay > 0 ? `${App.formatCurrency(rowOtPay)}<br><small class="text-gray">${row.overtime_hours || 0}h @ 20k</small>` : '-'}
+            </td>
+          `;
+        }
+        if (showVarAllowance) rowHTML += `<td class="text-right">${rowVarAllowance > 0 ? App.formatCurrency(rowVarAllowance) : '-'}</td>`;
+        if (showBonus) rowHTML += `<td class="text-right">${rowBonus > 0 ? App.formatCurrency(rowBonus) : '-'}</td>`;
+        customEarningsArr.forEach(name => {
+          const comp = (row.custom_components || {})[name];
+          rowHTML += `<td class="text-right">${comp && comp.amount > 0 ? App.formatCurrency(comp.amount) : '-'}</td>`;
+        });
       }
 
-      if (showVarAllowance) rowHTML += `<td class="text-right">${row.variable_allowance > 0 ? App.formatCurrency(row.variable_allowance) : '-'}</td>`;
-      if (showBonus) rowHTML += `<td class="text-right">${row.bonus > 0 ? App.formatCurrency(row.bonus) : '-'}</td>`;
-
-      // Custom Earnings values
-      customEarningsArr.forEach(name => {
-        const comp = (row.custom_components || {})[name];
-        rowHTML += `<td class="text-right">${comp && comp.amount > 0 ? App.formatCurrency(comp.amount) : '-'}</td>`;
-      });
+      rowHTML += `
+          <td class="text-right" style="vertical-align: middle; background: rgba(16, 185, 129, 0.04);">
+            <button class="btn btn-sm" onclick="Payroll.openAllowanceDrawer('${row.id}', ${idx})"
+                    style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+                    title="Klik untuk melihat rincian transparan tunjangan & lembur">
+              <span>${App.formatCurrency(rowTotalTunjangan)}</span>
+              <span style="font-size: 11px; opacity: 0.9;">🔍 Detail</span>
+            </button>
+          </td>
+      `;
 
       // Attendance Deductions (Late Deduction is now an editable override input)
       rowHTML += `
@@ -1489,30 +1855,29 @@ const Payroll = {
           <input type="text" 
                  class="form-input text-right late-deduction-input" 
                  style="width: 100px; display: inline-block; padding: 4px 8px; font-size: 13px; text-align: right;"
-                 value="${row.late_deduction.toLocaleString('id-ID')}"
+                 value="${(row.late_deduction || 0).toLocaleString('id-ID')}"
                  data-calculated="${row.calculated_late_deduction || 0}"
                  onfocus="this.select()"
                  oninput="Payroll.maskLateInput(this)"
-                 onblur="Payroll.handleLateBlur(this, '${row.id}')"
+                 onblur="Payroll.handleLateBlur(this, '${row.id || row.nik}')"
                  ${row.status === 'paid' ? 'disabled' : ''}>
           ${row.keterangan_override_late ? `<br><small class="text-success" style="font-size: 9px; display: block; text-align: right;" title="${row.keterangan_override_late}">✏️ Override: ${row.keterangan_override_late}</small>` : ''}
-          ${(row.absence_deduction > 0 || row.half_day_deduction > 0) ? `
+          ${((row.absence_deduction || 0) > 0 || (row.half_day_deduction || 0) > 0) ? `
             <small class="text-error" style="font-size: 9px; display: block; text-align: right;">
-              Absen: -${App.formatCurrency(row.absence_deduction + row.half_day_deduction)}
+              Absen: -${App.formatCurrency((row.absence_deduction || 0) + (row.half_day_deduction || 0))}
             </small>
           ` : ''}
         </td>
       `;
 
       // BPJS & PPh21 Deductions
-      const taxBpjs = row.bpjs_health_deduction + row.jht_deduction + (row.pph21_deduction || 0);
       rowHTML += `
         <td class="text-right">
           ${taxBpjs > 0 ? `<span class="text-error">-${App.formatCurrency(taxBpjs)}</span>` : '-'}
         </td>
       `;
 
-      if (showOtherDeductions) rowHTML += `<td class="text-right">${row.other_deductions > 0 ? `<span class="text-error">-${App.formatCurrency(row.other_deductions)}</span>` : '-'}</td>`;
+      if (showOtherDeductions) rowHTML += `<td class="text-right">${(row.other_deductions || 0) > 0 ? `<span class="text-error">-${App.formatCurrency(row.other_deductions)}</span>` : '-'}</td>`;
 
       // Custom Deductions values
       customDeductionsArr.forEach(name => {
@@ -1536,31 +1901,51 @@ const Payroll = {
              ` : ''}
           </td>
           <td class="text-center" style="white-space: nowrap;">
-             <button class="btn btn-sm btn-secondary" onclick="Payroll.viewPayslip('${row.id}')">📄 Slip</button>
+             <button class="btn btn-sm btn-secondary" onclick="Payroll.viewPayslip('${row.id || row.nik}')">📄 Slip</button>
              ${(row.status || 'draft') === 'draft' ? `
-                 <button class="btn btn-sm btn-primary" onclick="Payroll.showEditModal('${row.id}')">✏️ Edit</button>
-                 <button class="btn btn-sm btn-info" onclick="Payroll.markAsPaid('${row.id}')">💳 Bayar</button>
+                 <button class="btn btn-sm btn-primary" onclick="Payroll.showEditModal('${row.id || row.nik}')">✏️ Edit</button>
+                 <button class="btn btn-sm btn-info" onclick="Payroll.markAsPaid('${row.id || row.nik}')">💳 Bayar</button>
              ` : '✅ Lunas'}
-             <button class="btn btn-sm btn-info" onclick="Payroll.sendEmailIndividual('${row.id}', this)" title="Kirim Email Slip Gaji" style="margin-left: 4px;">📧 Kirim</button>
-             <button class="btn btn-sm btn-success" onclick="Payroll.sendWhatsAppIndividual('${row.id}', this)" title="Kirim WhatsApp Slip Gaji" style="margin-left: 4px; background: #25D366; border-color: #25D366; color: white;">💬 WA</button>
+             <button class="btn btn-sm btn-info" onclick="Payroll.sendEmailIndividual('${row.id || row.nik}', this)" title="Kirim Email Slip Gaji" style="margin-left: 4px;">📧 Kirim</button>
+             <button class="btn btn-sm btn-success" onclick="Payroll.sendWhatsAppIndividual('${row.id || row.nik}', this)" title="Kirim WhatsApp Slip Gaji" style="margin-left: 4px; background: #25D366; border-color: #25D366; color: white;">💬 WA</button>
           </td>
         </tr>
       `;
       rowsHTML += rowHTML;
     });
 
-    // Build Totals Footer Row
-    const totalCols = 2 + (showMeal ? 1 : 0) + (showBonusProd ? 1 : 0) + (showLembur ? 1 : 0) + (showVarAllowance ? 1 : 0) + (showBonus ? 1 : 0) + customEarningsArr.length + 2 + (showOtherDeductions ? 1 : 0) + customDeductionsArr.length;
-    
     return `
-      <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+      <!-- PURE MATHEMATICAL SUMMARY METRIC CARDS (GLOBAL DATASET) -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+        <div class="card" style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 8px; padding: 12px 14px;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">💼 Total Gaji Pokok</div>
+          <div style="font-size: 1.25rem; font-weight: 800; color: #f8fafc; margin-top: 4px;">${App.formatCurrency(allTotals.totalBaseSalary)}</div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${allTotals.count} Karyawan Terdaftar</div>
+        </div>
+
+        <div class="card" style="background: linear-gradient(135deg, #064e3b, #047857); border: 1px solid #059669; border-radius: 8px; padding: 12px 14px; color: white;">
+          <div style="font-size: 11px; text-transform: uppercase; opacity: 0.9; font-weight: 600;">🎁 Total Tunjangan & Lembur</div>
+          <div style="font-size: 1.25rem; font-weight: 800; margin-top: 4px;">${App.formatCurrency(allTotals.totalTunjangan)}</div>
+          <div style="font-size: 11px; opacity: 0.85; margin-top: 2px;">Makan, Lembur, Produksi, dll</div>
+        </div>
+
+        <div class="card" style="background: linear-gradient(135deg, #7c2d12, #991b1b); border: 1px solid #dc2626; border-radius: 8px; padding: 12px 14px; color: white;">
+          <div style="font-size: 11px; text-transform: uppercase; opacity: 0.9; font-weight: 600;">📉 Total Potongan</div>
+          <div style="font-size: 1.25rem; font-weight: 800; margin-top: 4px;">-${App.formatCurrency(allTotals.totalLateAbsence + allTotals.totalBpjsPph + allTotals.totalOtherDeductions)}</div>
+          <div style="font-size: 11px; opacity: 0.85; margin-top: 2px;">Absen + BPJS + PPh 21 TER</div>
+        </div>
+
+        <div class="card" style="background: linear-gradient(135deg, #1e3a8a, #1d4ed8); border: 1px solid #3b82f6; border-radius: 8px; padding: 12px 14px; color: white;">
+          <div style="font-size: 11px; text-transform: uppercase; opacity: 0.9; font-weight: 600;">💰 Grand Total Take Home Pay</div>
+          <div style="font-size: 1.25rem; font-weight: 800; margin-top: 4px; color: #67e8f9;">${App.formatCurrency(allTotals.totalSalary)}</div>
+          <div style="font-size: 11px; opacity: 0.85; margin-top: 2px;">Total Payroll Periode ${this.period}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 12px; border-radius: 8px; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: center;">
             <div>
-                <span class="text-gray small">Periode:</span><br>
-                <strong>${this.period}</strong>
-            </div>
-            <div>
-                <span class="text-gray small">Rentang Tanggal:</span><br>
+                <span class="text-gray small">Periode Cut-Off:</span><br>
                 <strong style="color: #1e3a8a;">${dates.startDate} s.d ${dates.endDate}</strong>
             </div>
             <div>
@@ -1568,13 +1953,20 @@ const Payroll = {
                 <span class="badge badge-info">${workingDays} Hari</span>
             </div>
             <div>
-                <span class="text-gray small">Karyawan:</span><br>
-                <strong>${list.length} Orang</strong>
+                <span class="text-gray small">Tampilan Baris:</span><br>
+                <strong>${list.length} / ${allTotals.count} Karyawan</strong>
+            </div>
+            <div>
+                <button class="btn btn-sm ${this.isDetailedAllowanceView ? 'btn-primary' : 'btn-secondary'}" 
+                        onclick="Payroll.toggleAllowanceView()" 
+                        style="font-size: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;">
+                  ${this.isDetailedAllowanceView ? '📊 Mode Ringkas (Total Tunjangan)' : '🔍 Tampilkan Rincian Kolom Tabel'}
+                </button>
             </div>
         </div>
         <div style="text-align: right;">
-            <span class="text-gray small">Total Take Home Pay:</span><br>
-            <strong style="font-size: 1.2rem; color: var(--color-primary);">Rp ${totalAll.toLocaleString('id-ID')}</strong>
+            <span class="text-gray small">${isFiltered ? 'Subtotal Filter Saat Ini:' : 'Total Take Home Pay:'}</span><br>
+            <strong style="font-size: 1.2rem; color: var(--color-primary);">${App.formatCurrency(filteredTotals.totalSalary)}</strong>
         </div>
       </div>
 
@@ -1590,8 +1982,23 @@ const Payroll = {
           </tbody>
           <tfoot>
             <tr style="background: var(--bg-secondary); font-weight: bold;">
-               <td colspan="${totalCols}">TOTAL KESELURUHAN</td>
-               <td class="text-right">${App.formatCurrency(totalAll)}</td>
+               <td class="sticky-col sticky-col-shadow">${isFiltered ? `SUBTOTAL (${list.length} Karyawan)` : 'TOTAL KESELURUHAN'}</td>
+               <td class="text-right">${App.formatCurrency(filteredTotals.totalBaseSalary)}</td>
+               ${this.isDetailedAllowanceView ? `
+                 ${showFixed ? `<td class="text-right">${App.formatCurrency(filteredTotals.totalFixed)}</td>` : ''}
+                 ${showMeal ? `<td class="text-right">${App.formatCurrency(filteredTotals.totalMeal)}</td>` : ''}
+                 ${showBonusProd ? `<td class="text-right">${App.formatCurrency(filteredTotals.totalBonusProd)}</td>` : ''}
+                 ${showLembur ? `<td class="text-right">${App.formatCurrency(filteredTotals.totalLembur)}</td>` : ''}
+                 ${showVarAllowance ? `<td class="text-right">${App.formatCurrency(filteredTotals.totalVarAllowance)}</td>` : ''}
+                 ${showBonus ? `<td class="text-right">${App.formatCurrency(filteredTotals.totalBonus)}</td>` : ''}
+                 ${customEarningsArr.map(() => '<td></td>').join('')}
+               ` : ''}
+               <td class="text-right" style="color: #10b981; background: rgba(16, 185, 129, 0.08);">${App.formatCurrency(filteredTotals.totalTunjangan)}</td>
+               <td class="text-right" style="color: #ef4444;">-${App.formatCurrency(filteredTotals.totalLateAbsence)}</td>
+               <td class="text-right" style="color: #ef4444;">-${App.formatCurrency(filteredTotals.totalBpjsPph)}</td>
+               ${showOtherDeductions ? `<td class="text-right">-${App.formatCurrency(filteredTotals.totalOtherDeductions)}</td>` : ''}
+               ${customDeductionsArr.map(() => '<td></td>').join('')}
+               <td class="text-right" style="color: var(--color-primary); font-size: 13px;">${App.formatCurrency(filteredTotals.totalSalary)}</td>
                <td colspan="2"></td>
             </tr>
           </tfoot>
@@ -2404,6 +2811,295 @@ const Payroll = {
     return workingDays;
   },
 
+  openAllowanceDrawer(id, idx) {
+    let row = null;
+    if (idx !== undefined && idx !== null && this.payrollRecords && this.payrollRecords[idx]) {
+      row = this.payrollRecords[idx];
+    } else if (id && this.payrollRecords) {
+      row = this.payrollRecords.find(r => String(r.id) === String(id)) ||
+            this.payrollRecords.find(r => String(r.nik) === String(id));
+    }
+    
+    if (!row && typeof Storage !== 'undefined' && Storage.getPayroll) {
+      const allPay = Storage.getPayroll() || [];
+      row = allPay.find(r => (this.period ? r.period === this.period : true) && (String(r.id) === String(id) || String(r.nik) === String(id))) ||
+            allPay.find(r => String(r.id) === String(id) || String(r.nik) === String(id));
+    }
+
+    if (!row && typeof BPJSTaxCompliance !== 'undefined' && BPJSTaxCompliance.reconciliationData) {
+      row = BPJSTaxCompliance.reconciliationData.find(r => r.id === id || String(r.nik) === String(id) || String(r._id) === String(id));
+    }
+
+    if (!row && typeof Storage !== 'undefined' && Storage.getEmployees) {
+      const emp = Storage.getEmployees().find(e => e.id === id || String(e.nik) === String(id));
+      if (emp) {
+        row = {
+          name: emp.name,
+          nik: emp.nik,
+          fixed_allowance: Number(emp.fixed_allowance || 0),
+          variable_allowance: Number(emp.variable_allowance || 0),
+          meal_pay: emp.lunch_allowance_enabled !== false ? 25 * 20000 : 0,
+          transport_allowance: Number(emp.transport_allowance || 0),
+          position_allowance: Number(emp.position_allowance || 0),
+          work_days: 25
+        };
+      }
+    }
+
+    if (!row) {
+      alert('Data rincian karyawan tidak ditemukan.');
+      return;
+    }
+
+    this.closeAllowanceDrawer();
+
+    let customEarningsSum = 0;
+    const customEarningsList = [];
+    Object.entries(row.custom_components || {}).forEach(([name, comp]) => {
+      if (comp && comp.type === 'earnings' && comp.amount > 0) {
+        customEarningsSum += comp.amount;
+        customEarningsList.push({ name, amount: comp.amount });
+      }
+    });
+
+    const mealPay = row.meal_pay || row.meal_allowance || row.tunj_makan || 0;
+    const nightMealPay = row.night_meal_pay || row.night_meal_allowance || 0;
+    const presencePay = row.presence_pay || row.presence_allowance || row.tunj_kehadiran || 0;
+    const prodPay = row.production_pay || row.production_bonus || row.bonus_produksi || 0;
+    const otPay = row.overtime_pay || row.uang_lembur || 0;
+    const otHours = row.overtime_hours || 0;
+    const tunjTetap = row.fixed_allowance || row.tunj_tetap || row.tunjangan_tetap || 0;
+    const varAllowance = row.variable_allowance || row.tunj_variabel || 0;
+    const transportPay = row.transport_allowance || row.tunj_transport || row.transport_pay || 0;
+    const positionPay = row.position_allowance || row.tunj_jabatan || 0;
+    const tunjLuarKota = row.tunj_luar_kota || row.dinas_luar_kota || 0;
+    const bonus = row.bonus || row.thr || 0;
+    const deficiency = row.previous_month_deficiency || row.selisih_kurang_gaji || 0;
+    const adhocAllowance = row.adhoc_allowance || row.allowance_override || 0;
+
+    const totalTunjangan = mealPay + nightMealPay + presencePay + prodPay + otPay + tunjTetap + varAllowance + transportPay + positionPay + tunjLuarKota + bonus + deficiency + adhocAllowance + customEarningsSum;
+
+    const drawerOverlay = document.createElement('div');
+    drawerOverlay.id = 'allowance-detail-drawer';
+    drawerOverlay.style = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px);
+      z-index: 10050; display: flex; justify-content: flex-end;
+      animation: fadeIn 0.2s ease-out;
+    `;
+    drawerOverlay.onclick = (e) => {
+      if (e.target === drawerOverlay) Payroll.closeAllowanceDrawer();
+    };
+
+    const hasAnyActiveAllowance = totalTunjangan > 0;
+
+    drawerOverlay.innerHTML = `
+      <div style="
+        width: 460px; max-width: 92vw; height: 100%;
+        background: #0f172a; border-left: 1px solid #334155;
+        box-shadow: -10px 0 30px rgba(0,0,0,0.6);
+        display: flex; flex-direction: column;
+        animation: slideInRight 0.25s ease-out;
+      ">
+        <!-- HEADER -->
+        <div style="padding: 18px 20px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 style="margin: 0; font-size: 1.1rem; color: #f8fafc; font-weight: 700;">Rincian Komponen Tunjangan</h3>
+            <span style="font-size: 12px; color: #94a3b8;">${row.name} (${row.nik})</span>
+          </div>
+          <button class="btn btn-sm" onclick="Payroll.closeAllowanceDrawer()" style="background: rgba(255,255,255,0.08); border: 1px solid #475569; color: #cbd5e1; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 14px;">✕</button>
+        </div>
+
+        <!-- TOTAL BANNER -->
+        <div style="padding: 18px 20px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.22)); border-bottom: 1px solid rgba(16, 185, 129, 0.3); text-align: center;">
+          <div style="font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #34d399; font-weight: 600;">Total Tunjangan & Lembur Periode ${this.period}</div>
+          <div style="font-size: 1.85rem; font-weight: 800; color: #10b981; margin-top: 4px;">${App.formatCurrency(totalTunjangan)}</div>
+          <div style="font-size: 11.5px; color: #94a3b8; margin-top: 4px;">Diakumulasikan ke dalam Bruto TER PPh 21 & Total THP</div>
+        </div>
+
+        <!-- SCROLLABLE BREAKDOWN -->
+        <div style="padding: 18px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+          ${tunjTetap > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">💼 Tunjangan Tetap (Fixed)</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Tunjangan tetap bulanan karyawan</div>
+              </div>
+              <span style="font-weight: 700; color: #10b981; font-size: 14px;">${App.formatCurrency(tunjTetap)}</span>
+            </div>
+          ` : ''}
+
+          ${mealPay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🍱 Uang Makan (Meal)</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Kehadiran reguler siang (${row.work_days || 0} hari)</div>
+              </div>
+              <span style="font-weight: 700; color: #10b981; font-size: 14px;">${App.formatCurrency(mealPay)}</span>
+            </div>
+          ` : ''}
+
+          ${nightMealPay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🌙 Uang Makan Malam</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Shift malam / lembur pulang &ge; 19:00</div>
+              </div>
+              <span style="font-weight: 700; color: #34d399; font-size: 14px;">${App.formatCurrency(nightMealPay)}</span>
+            </div>
+          ` : ''}
+
+          ${presencePay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🌟 Tunjangan Kehadiran (Red Day)</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Kerja di hari Minggu / Libur Nasional</div>
+              </div>
+              <span style="font-weight: 700; color: #38bdf8; font-size: 14px;">${App.formatCurrency(presencePay)}</span>
+            </div>
+          ` : ''}
+
+          ${otPay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">⏱️ Uang Lembur (Overtime)</strong>
+                <div style="font-size: 11px; color: #94a3b8;">${otHours} Jam Terverifikasi @ 20k/jam</div>
+              </div>
+              <span style="font-weight: 700; color: #fbbf24; font-size: 14px;">${App.formatCurrency(otPay)}</span>
+            </div>
+          ` : ''}
+
+          ${prodPay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🏭 Bonus Produksi</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Insentif output produksi kilang</div>
+              </div>
+              <span style="font-weight: 700; color: #a78bfa; font-size: 14px;">${App.formatCurrency(prodPay)}</span>
+            </div>
+          ` : ''}
+
+          ${varAllowance > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">📈 Tunjangan Variabel</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Tunjangan operasional & kinerja</div>
+              </div>
+              <span style="font-weight: 700; color: #f8fafc; font-size: 14px;">${App.formatCurrency(varAllowance)}</span>
+            </div>
+          ` : ''}
+
+          ${transportPay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🚗 Tunjangan Transport</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Transport harian operasional</div>
+              </div>
+              <span style="font-weight: 700; color: #f8fafc; font-size: 14px;">${App.formatCurrency(transportPay)}</span>
+            </div>
+          ` : ''}
+
+          ${positionPay > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🎖️ Tunjangan Jabatan</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Tanggung jawab struktural</div>
+              </div>
+              <span style="font-weight: 700; color: #f8fafc; font-size: 14px;">${App.formatCurrency(positionPay)}</span>
+            </div>
+          ` : ''}
+
+          ${tunjLuarKota > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">✈️ Dinas Luar Kota</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Transport & akomodasi luar kota</div>
+              </div>
+              <span style="font-weight: 700; color: #f8fafc; font-size: 14px;">${App.formatCurrency(tunjLuarKota)}</span>
+            </div>
+          ` : ''}
+
+          ${bonus > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🎁 Bonus / THR</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Bonus apresiasi performa</div>
+              </div>
+              <span style="font-weight: 700; color: #f43f5e; font-size: 14px;">${App.formatCurrency(bonus)}</span>
+            </div>
+          ` : ''}
+
+          ${adhocAllowance > 0 ? `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">➕ Penyesuaian / Ad-hoc Allowance</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Penyesuaian manual periode berjalan</div>
+              </div>
+              <span style="font-weight: 700; color: #34d399; font-size: 14px;">${App.formatCurrency(adhocAllowance)}</span>
+            </div>
+          ` : ''}
+
+          ${deficiency > 0 ? `
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #60a5fa; font-size: 13px;">⚖️ Selisih Kurang Gaji</strong>
+                <div style="font-size: 11px; color: #93c5fd;">Kompensasi kekurangan periode lalu</div>
+              </div>
+              <span style="font-weight: 700; color: #60a5fa; font-size: 14px;">${App.formatCurrency(deficiency)}</span>
+            </div>
+          ` : ''}
+
+          ${customEarningsList.map(c => `
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #f1f5f9; font-size: 13px;">🏷️ ${c.name}</strong>
+                <div style="font-size: 11px; color: #94a3b8;">Komponen Tambahan Kustom</div>
+              </div>
+              <span style="font-weight: 700; color: #34d399; font-size: 14px;">${App.formatCurrency(c.amount)}</span>
+            </div>
+          `).join('')}
+
+          ${!hasAnyActiveAllowance ? `
+            <div style="text-align: center; padding: 30px 20px; color: #94a3b8; background: #1e293b; border: 1px dashed #334155; border-radius: 8px;">
+              <span style="font-size: 32px; display: block; margin-bottom: 8px;">ℹ️</span>
+              <strong>Tidak ada tunjangan tambahan aktif</strong>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Karyawan ini hanya menerima Gaji Pokok (Total Tunjangan: Rp 0).</div>
+            </div>
+          ` : ''}
+
+          <!-- AUDIT TABLE OF ALL TRACKED ALLOWANCES -->
+          <div style="margin-top: 10px; background: #182234; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px;">
+            <div style="font-size: 11.5px; font-weight: 700; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Ringkasan Audit Semua Komponen:</div>
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+              <tbody>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Tunjangan Tetap</td><td style="text-align: right; font-weight: 600; color: ${tunjTetap > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(tunjTetap)}</td></tr>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Uang Makan Siang</td><td style="text-align: right; font-weight: 600; color: ${mealPay > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(mealPay)}</td></tr>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Uang Makan Malam</td><td style="text-align: right; font-weight: 600; color: ${nightMealPay > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(nightMealPay)}</td></tr>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Uang Lembur</td><td style="text-align: right; font-weight: 600; color: ${otPay > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(otPay)}</td></tr>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Bonus Produksi</td><td style="text-align: right; font-weight: 600; color: ${prodPay > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(prodPay)}</td></tr>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Tunj. Kehadiran (Red Day)</td><td style="text-align: right; font-weight: 600; color: ${presencePay > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(presencePay)}</td></tr>
+                <tr style="border-bottom: 1px solid #23354d;"><td style="padding: 4px 0; color: #cbd5e1;">Tunjangan Variabel</td><td style="text-align: right; font-weight: 600; color: ${varAllowance > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(varAllowance)}</td></tr>
+                <tr><td style="padding: 4px 0; color: #cbd5e1;">Bonus / THR / Lainnya</td><td style="text-align: right; font-weight: 600; color: ${(bonus + tunjLuarKota + adhocAllowance + deficiency) > 0 ? '#10b981' : '#64748b'};">${App.formatCurrency(bonus + tunjLuarKota + adhocAllowance + deficiency)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div style="padding: 14px 20px; background: #1e293b; border-top: 1px solid #334155; display: flex; justify-content: flex-end;">
+          <button class="btn btn-secondary" onclick="Payroll.closeAllowanceDrawer()" style="width: 100%;">Tutup Rincian</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(drawerOverlay);
+  },
+
+  closeAllowanceDrawer() {
+    const el = document.getElementById('allowance-detail-drawer');
+    if (el) el.remove();
+  },
+
   viewPayslip(id) {
     const record = this.payrollRecords.find(r => r.id === id);
     if (!record) return;
@@ -2461,7 +3157,7 @@ const Payroll = {
     const dates = this.getPeriodDates(record.period);
 
     // Build dynamic earnings list (Hide if zero)
-    let earningsRows = `<tr><td>Basic Salary (100% Flat)</td><td style="text-align: right;">${record.base_salary.toLocaleString('id-ID')}</td></tr>`;
+    let earningsRows = `<tr><td>Basic Salary</td><td style="text-align: right;">${record.base_salary.toLocaleString('id-ID')}</td></tr>`;
     if (tunjTetap > 0) earningsRows += `<tr><td>Tunj. Tetap</td><td style="text-align: right;">${tunjTetap.toLocaleString('id-ID')}</td></tr>`;
     if (mealPay > 0) earningsRows += `<tr><td>Tunjangan Makan</td><td style="text-align: right;">${mealPay.toLocaleString('id-ID')}</td></tr>`;
     if (nightMealPay > 0) earningsRows += `<tr><td>Tunjangan Makan Malam</td><td style="text-align: right;">${nightMealPay.toLocaleString('id-ID')}</td></tr>`;
@@ -2563,7 +3259,7 @@ const Payroll = {
             <div class="ps-grid">
                 <div>
                     <div><span class="ps-label">Payroll Cut Off</span> : <span class="ps-value">${dates.startDate} s.d ${dates.endDate}</span></div>
-                    <div><span class="ps-label">ID / Name</span> : <span class="ps-value">${record.nik} / ${record.name} ${record.is_first_day ? `<span class="badge badge-info" style="font-size: 10px; margin-left: 8px; display: inline-block; text-transform: none; background: rgba(79, 172, 254, 0.2); color: #4facfe; border: 1px solid rgba(79, 172, 254, 0.3); padding: 2px 6px; border-radius: 4px;">[Hari Pertama - Onboarding]</span>` : ''}</span></div>
+                    <div><span class="ps-label">ID / Name</span> : <span class="ps-value">${record.nik} / ${record.name}</span></div>
                     <div><span class="ps-label">Job Position</span> : <span class="ps-value">${record.position}</span></div>
                     <div><span class="ps-label">Organization</span> : <span class="ps-value">${record.department}</span></div>
                 </div>
@@ -2748,7 +3444,7 @@ const Payroll = {
     const deficiency = record.previous_month_deficiency || record.selisih_kurang_gaji || 0;
     const overtimePay = record.overtime_pay || 0;
 
-    if (record.base_salary > 0) earnings.push(['Basic Salary (100% Flat)', record.base_salary]);
+    if (record.base_salary > 0) earnings.push(['Basic Salary', record.base_salary]);
     if (tunjTetap > 0) earnings.push(['Tunj. Tetap', tunjTetap]);
     if (mealPay > 0) earnings.push(['Tunjangan Makan', mealPay]);
     if (nightMealPay > 0) earnings.push(['Tunjangan Makan Malam', nightMealPay]);

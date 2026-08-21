@@ -488,5 +488,143 @@ const TTB = {
             `Created TTB ${ttb.ttbNumber} from Direct Swap ${swapTrx.id}`);
 
         return ttb;
+    },
+
+    /**
+     * Create TTB directly from Evelyn's Simulasi Awi
+     * @param {Object} sim - Simulation data from simulasi-awi.html
+     */
+    async createTTBFromSimulation(sim) {
+        let summary;
+        if (typeof RefinerySimulationImport !== 'undefined' && RefinerySimulationImport.computeSimSummary) {
+            summary = RefinerySimulationImport.computeSimSummary(sim);
+        } else {
+            const rawMeta = sim.metadata || {};
+            const rawItems = (sim.items || []).map((i, idx) => {
+                const rw = parseFloat(i.beratAwal ?? i.beratDeklarasi ?? i.beratTerima ?? i.rawWeight ?? 0);
+                const mw = parseFloat(i.beratLebur ?? i.meltedWeight ?? 0);
+                const p = parseFloat(i.kadarRef ?? i.purity ?? i.kadarLab ?? 0);
+                return {
+                    rawWeight: rw,
+                    meltedWeight: mw,
+                    purityAu: p,
+                    description: i.description || `Scrap Emas Lot ${idx + 1} (${p}%)`,
+                    notes: i.notes || ''
+                };
+            });
+            summary = {
+                meta: {
+                    customerName: rawMeta.customerName || 'Pelanggan Refinery',
+                    reportNumber: rawMeta.reportNumber || sim.id,
+                    transactionDate: rawMeta.date || rawMeta.transactionDate || '',
+                    operatorName: rawMeta.petugasName || rawMeta.operatorName || '-',
+                    ttbDescription: rawMeta.ttbDescription || ''
+                },
+                items: rawItems
+            };
+        }
+
+        const meta = summary.meta;
+        const items = summary.items;
+        const ttbNumber = await this.generateTTBNumber();
+
+        const currentUser = (typeof Auth !== 'undefined' && Auth.getCurrentUser) ? Auth.getCurrentUser() : { id: 'admin', name: 'Admin ERP' };
+
+        const ttbItems = items.map((item, idx) => {
+            const rawWeight = item.rawWeight || 0;
+            return {
+                code: `SCRAP-LOT-${idx + 1}`,
+                name: item.description || `Scrap Emas Lot ${idx + 1} (${item.purityAu || 0}%)`,
+                receivedQty: rawWeight,
+                acceptedQty: rawWeight,
+                rejectedQty: 0,
+                unitPrice: 0,
+                uom: 'gram',
+                notes: `Kadar: ${item.purityAu || 0}% Au | Lebur: ${item.meltedWeight || 0}g | ${item.notes || ''}`
+            };
+        });
+
+        // Fallback if no items
+        if (ttbItems.length === 0) {
+            ttbItems.push({
+                code: 'SCRAP-AWI',
+                name: meta.ttbDescription || 'Scrap Emas Refinery',
+                receivedQty: 0,
+                acceptedQty: 0,
+                rejectedQty: 0,
+                unitPrice: 0,
+                uom: 'gram',
+                notes: 'Dari Simulasi Awi'
+            });
+        }
+
+        const ttb = {
+            id: Date.now(),
+            ttbNumber: ttbNumber,
+            grId: null,
+            grNumber: 'SIMULASI-AWI',
+            poId: null,
+            poNumber: meta.reportNumber || sim.id,
+            supplierId: meta.customerName || 'CUSTOMER',
+            supplierName: meta.customerName || 'Pelanggan Refinery',
+            date: meta.transactionDate || new Date().toISOString().split('T')[0],
+
+            items: ttbItems,
+            status: 'draft',
+            approvalHistory: [
+                {
+                    level: 'system',
+                    userId: currentUser.id,
+                    userName: `${currentUser.name || currentUser.fullName} (Simulasi Awi)`,
+                    approved: true,
+                    timestamp: new Date().toISOString(),
+                    notes: `Dibuat dari Simulasi Awi Ref: ${meta.reportNumber || sim.id}`
+                }
+            ],
+
+            postedToInventory: false,
+            postedAt: null,
+            journalEntryId: null,
+
+            notes: `[SIMULASI AWI: ${meta.reportNumber || 'SPK'}] Penerima: ${meta.operatorName || '-'} | Keterangan: ${meta.ttbDescription || '-'}`,
+            createdBy: currentUser.id,
+            createdByName: currentUser.name || currentUser.fullName,
+            createdAt: new Date().toISOString()
+        };
+
+        this.documents.push(ttb);
+        this.saveDocuments();
+
+        if (typeof AuditLog !== 'undefined') {
+            AuditLog.log('create', 'ttb', ttb.id, `Created TTB ${ttb.ttbNumber} from Simulasi Awi [${meta.reportNumber || sim.id}]`);
+        }
+
+        if (typeof RefinerySimulationImport !== 'undefined') {
+            await RefinerySimulationImport.markSimulationAsProcessed(sim.id, ttb.ttbNumber, ttb.id);
+        }
+
+        // Navigate to TTB page
+        if (typeof App !== 'undefined' && App.navigateTo) {
+            App.navigateTo('ttb');
+        } else if (document.querySelector('[data-page="ttb"]')) {
+            document.querySelector('[data-page="ttb"]').click();
+        }
+
+        setTimeout(() => {
+            if (typeof App !== 'undefined' && App.showAlert) {
+                App.showAlert('success', `Dokumen TTB [${ttb.ttbNumber}] berhasil diterbitkan dari Simulasi Awi!`);
+            } else {
+                alert(`✅ Dokumen TTB [${ttb.ttbNumber}] berhasil diterbitkan untuk ${meta.customerName}!`);
+            }
+        }, 150);
+
+        return ttb;
     }
 };
+
+if (typeof window !== 'undefined') {
+    window.TTB = TTB;
+}
+if (typeof global !== 'undefined') {
+    global.TTB = TTB;
+}

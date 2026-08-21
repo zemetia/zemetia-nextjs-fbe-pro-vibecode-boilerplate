@@ -307,11 +307,21 @@ const FixedAssets = {
             return { success: false, errors: { validation: 'Name, purchase price, and useful life are required' } };
         }
 
+        const condition = assetData.condition || 'new';
+
+        // POIN 1: Alur pembelian aset baru WAJIB melalui PO
+        if (condition === 'new' && !assetData.poId && !assetData.poNumber) {
+            return {
+                success: false,
+                errors: { validation: 'Pembelian aset baru wajib melalui Purchase Order (PO). Silakan pilih atau buat PO terlebih dahulu.' }
+            };
+        }
+
         const asset = {
-            id: Date.now(),
-            assetNumber: assetData.assetNumber || this.generateAssetNumber(),
+            id: assetData.id || Date.now(),
+            assetNumber: assetData.assetNumber || this.generateAssetNumber(condition, assetData.purchaseDate),
             name: assetData.name,
-            condition: assetData.condition || 'new', // added condition field
+            condition: condition, // added condition field
             category: assetData.category,
             purchaseDate: assetData.purchaseDate,
             purchasePrice: parseFloat(assetData.purchasePrice),
@@ -323,10 +333,15 @@ const FixedAssets = {
             deprExpenseAccountCode: assetData.deprExpenseAccountCode,
             location: assetData.location || '',
             serialNumber: assetData.serialNumber || '',
+            vendor: assetData.vendor || assetData.sourceSupplierName || '',
+            poId: assetData.poId || null,
+            poNumber: assetData.poNumber || '',
+            poItemId: assetData.poItemId || assetData.sourceItemId || null,
+            source: assetData.source || (assetData.poId ? 'purchase_order' : 'legacy'),
             notes: assetData.notes || '',
-            status: 'active', // active, disposed, sold
+            status: assetData.status || 'active', // active, disposed, sold, draft_from_po
             createdBy: Auth?.getCurrentUser?.()?.username || 'system',
-            createdAt: new Date().toISOString(),
+            createdAt: assetData.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
 
@@ -675,47 +690,102 @@ const FixedAssets = {
         return badges[status] || status;
     },
 
-    showCreateModal() {
-        console.log('FixedAssets Modal v2.0 - With Payment Method'); // Debug marker
+    showCreateModal(initialPOId = null, initialItemId = null) {
         const accounts = ChartOfAccounts?.getDetailAccounts?.() || [];
         const today = new Date().toISOString().split('T')[0];
+        const allPOs = (typeof Storage !== 'undefined' && Storage.get ? (Storage.get(Storage.KEYS.PURCHASE_ORDERS) || []) : []);
+        // Prefer approved/received POs, but list all non-cancelled POs
+        const availablePOs = allPOs.filter(po => po && po.status !== 'cancelled');
 
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
+        modal.id = 'asset-create-modal';
         modal.innerHTML = `
-            <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-content" style="max-width: 950px; width: 95%;">
                 <div class="modal-header">
-                    <h2>➕ Add New Fixed Asset</h2>
+                    <h2>➕ Tambah Aset Tetap (Fixed Asset)</h2>
                     <button onclick="this.closest('.modal-overlay').remove()" class="close-btn">×</button>
                 </div>
                 <form id="create-asset-form" onsubmit="FixedAssets.handleCreateSubmit(event)">
                     <div class="modal-body">
+                        <!-- Source Selection (Poin 1: Wajib PO untuk Pembelian Baru) -->
+                        <div class="form-group" style="background: rgba(59, 130, 246, 0.06); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2); margin-bottom: 16px;">
+                            <label class="form-label" style="font-weight: bold; color: #1d4ed8; margin-bottom: 6px;">Sumber Perolehan Aset *</label>
+                            <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; cursor: pointer; font-size: 1.05rem;">
+                                    <input type="radio" name="sourceType" value="po" ${!initialPOId || initialPOId ? 'checked' : ''} onchange="FixedAssets.toggleSourceType('po')">
+                                    <span style="margin-left: 8px; font-weight: 600;">🏢 Pembelian Baru (Dari Purchase Order)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; cursor: pointer; font-size: 1.05rem;">
+                                    <input type="radio" name="sourceType" value="legacy" onchange="FixedAssets.toggleSourceType('legacy')">
+                                    <span style="margin-left: 8px;">📜 Saldo Awal / Aset Legacy (Sebelum ERP)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- PO Selection Section (Poin 1 & 4) -->
+                        <div id="po-source-section" style="background: rgba(0, 0, 0, 0.02); padding: 16px; border-radius: 8px; border: 1px dashed #cbd5e1; margin-bottom: 16px;">
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1;">
+                                    <label class="form-label required">Pilih Purchase Order (PO) *</label>
+                                    <select id="asset-po-select" class="form-select" onchange="FixedAssets.onPOSelected(this.value)">
+                                        <option value="">-- Pilih Purchase Order --</option>
+                                        ${availablePOs.map(po => `
+                                            <option value="${po.id}" ${initialPOId && String(initialPOId) === String(po.id) ? 'selected' : ''}>
+                                                ${po.poNumber} - ${po.supplierName} (${po.status ? po.status.toUpperCase() : 'PO'}) - ${new Date(po.orderDate).toLocaleDateString('id-ID')}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                    <small class="text-gray">Pilih PO yang sudah disetujui / diterima.</small>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label class="form-label required">Pilih Item Barang dari PO *</label>
+                                    <select id="asset-po-item-select" class="form-select" onchange="FixedAssets.onPOItemSelected(this.value)">
+                                        <option value="">-- Pilih Item dari PO --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="batch-asset-container" style="display: none; margin-top: 10px; padding: 10px 14px; background: rgba(16, 185, 129, 0.08); border-radius: 6px; border-left: 4px solid #10b981;">
+                                <label class="form-label" style="color: #065f46; font-weight: 600; margin-bottom: 4px;">Jumlah Unit Aset yang Didaftarkan:</label>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <input type="number" id="asset-count" name="assetCount" min="1" max="1" value="1" class="form-input" style="width: 100px;">
+                                    <small id="batch-asset-hint" class="text-gray" style="font-size: 0.95rem;"></small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hidden PO Reference Fields -->
+                        <input type="hidden" name="poId" id="asset-po-id" value="">
+                        <input type="hidden" name="poNumber" id="asset-po-number" value="">
+                        <input type="hidden" name="poItemId" id="asset-po-item-id" value="">
+                        <input type="hidden" name="vendor" id="asset-vendor" value="">
+
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label required">Asset Condition (Internal Category)</label>
+                                <label class="form-label required">Asset Condition</label>
                                 <select name="condition" id="asset-condition" class="form-select" required onchange="FixedAssets.updateAssetCodePreview()">
                                     <option value="new">Aset Baru (N)</option>
                                     <option value="used">Aset Bekas (U)</option>
-                                    <option value="legacy">Aset Legacy/Sudah Ada (Obfuscated U-MM)</option>
+                                    <option value="legacy">Aset Legacy / Saldo Awal (U-MM)</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Reg. Number (Auto-Generated)</label>
+                                <label class="form-label">Nomor Aset (Auto-Generated)</label>
                                 <input type="text" id="asset-code-preview" class="form-input" readonly 
                                        style="background: var(--color-gray-100); font-weight: bold; color: var(--primary-color);">
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label required">Asset Name</label>
-                            <input type="text" name="name" class="form-input" required 
-                                   placeholder="e.g., Office Building, Company Vehicle">
+                            <label class="form-label required">Nama Aset</label>
+                            <input type="text" name="name" id="asset-name" class="form-input" required 
+                                   placeholder="Contoh: Laptop Dell XPS 15, Mesin Cetak, Mobil Operasional">
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label required">Category</label>
-                                <select name="category" class="form-select" required>
+                                <select name="category" id="asset-category" class="form-select" required>
                                     <option value="">Select Category...</option>
                                     <option value="Tanah">Tanah (Land)</option>
                                     <option value="Bangunan">Bangunan (Building)</option>
@@ -727,7 +797,7 @@ const FixedAssets = {
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label required">Account Code</label>
+                                <label class="form-label required">Account Code (Akun Aset 12xx)</label>
                                 <select name="accountCode" class="form-select" required id="asset-account-code"
                                         onchange="FixedAssets.handleAccountCodeChange(this.value)">
                                     <option value="">Select Account...</option>
@@ -764,99 +834,66 @@ const FixedAssets = {
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label required">Purchase Date</label>
+                                <label class="form-label required">Tanggal Perolehan</label>
                                 <input type="date" name="purchaseDate" id="asset-purchase-date" class="form-input" 
                                        value="${today}" required onchange="FixedAssets.updateAssetCodePreview()">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label required">Purchase Price (Rp)</label>
-                                <input type="number" name="purchasePrice" class="form-input" 
+                                <label class="form-label required">Harga Perolehan Satuan (Rp)</label>
+                                <input type="number" name="purchasePrice" id="asset-purchase-price" class="form-input" 
                                        min="0" step="1" required placeholder="0">
                             </div>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">Salvage Value (Rp)</label>
-                                <input type="number" name="salvageValue" class="form-input" 
+                                <label class="form-label">Nilai Residu / Salvage Value (Rp)</label>
+                                <input type="number" name="salvageValue" id="asset-salvage-value" class="form-input" 
                                        min="0" step="1" value="0" placeholder="0">
-                                <small class="text-gray">Estimated value at end of useful life</small>
+                                <small class="text-gray">Estimasi nilai sisa di akhir masa manfaat</small>
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label required">Useful Life (Years)</label>
-                                <input type="number" name="usefulLife" class="form-input" 
+                                <label class="form-label required">Masa Manfaat (Tahun)</label>
+                                <input type="number" name="usefulLife" id="asset-useful-life" class="form-input" 
                                        min="1" max="50" required value="5">
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label required">Depreciation Method</label>
+                            <label class="form-label required">Metode Penyusutan</label>
                             <select name="depreciationMethod" class="form-select" required>
                                 <option value="straight-line">Straight-Line (Garis Lurus)</option>
                                 <option value="declining-balance">Declining Balance (Saldo Menurun)</option>
                             </select>
                         </div>
 
-                        <div class="form-group">
-                            <label class="form-label required">Payment Method</label>
-                            <select name="paymentMethod" class="form-select" required id="paymentMethod" 
-                                    onchange="FixedAssets.togglePaymentFields()">
-                                <option value="">Select Payment Method...</option>
-                                <option value="cash">💵 Cash (Tunai)</option>
-                                <option value="bank">🏦 Bank Transfer</option>
-                                <option value="credit">🧾 Credit/Hutang</option>
-                                <option value="partial">💳 Partial Payment (DP + Hutang)</option>
-                            </select>
-                            <small class="text-gray">Pilih metode pembayaran sesuai transaksi</small>
-                        </div>
-
-                        <div id="partialPaymentFields" style="display: none;">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="form-label">Down Payment (DP) - Rp</label>
-                                    <input type="number" name="downPayment" class="form-input" 
-                                           min="0" step="1" value="0" placeholder="0">
-                                    <small class="text-gray">Pembayaran awal tunai/bank</small>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Sisa (Hutang)</label>
-                                    <input type="number" name="remainingPayment" class="form-input" 
-                                           disabled placeholder="Otomatis terhitung">
-                                </div>
-                            </div>
-                        </div>
-
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">Location</label>
-                                <input type="text" name="location" class="form-input" 
-                                       placeholder="e.g., Head Office, Branch A">
+                                <label class="form-label">Lokasi Aset</label>
+                                <input type="text" name="location" id="asset-location" class="form-input" 
+                                       placeholder="e.g., Head Office, Workshop, Lantai 2">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">Serial Number</label>
-                                <input type="text" name="serialNumber" class="form-input" 
+                                <label class="form-label">Nomor Seri / SN</label>
+                                <input type="text" name="serialNumber" id="asset-serial-number" class="form-input" 
                                        placeholder="Optional">
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Notes</label>
-                            <textarea name="notes" class="form-textarea" rows="3" 
-                                      placeholder="Additional information about this asset"></textarea>
-                        </div>
-
-                        <div class="alert alert-info" style="margin-top: 16px;">
-                            <strong>ℹ️ Info:</strong> A journal entry will be automatically created for this asset purchase.
+                            <label class="form-label">Spesifikasi / Catatan</label>
+                            <textarea name="notes" id="asset-notes" class="form-textarea" rows="3" 
+                                      placeholder="Spesifikasi atau informasi detail aset"></textarea>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" onclick="this.closest('.modal-overlay').remove()" 
-                                class="btn btn-secondary">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
-                            💾 Create Asset
+                                class="btn btn-secondary">Batal</button>
+                        <button type="submit" class="btn btn-primary" id="btn-submit-asset">
+                            💾 Simpan Aset
                         </button>
                     </div>
                 </form>
@@ -864,149 +901,241 @@ const FixedAssets = {
         `;
 
         document.body.appendChild(modal);
+        this.updateAssetCodePreview();
+
+        // If initial PO is passed, trigger selection
+        if (initialPOId) {
+            this.onPOSelected(initialPOId, initialItemId);
+        }
+    },
+
+    showCreateFromPOModal(poId, itemId = null) {
+        this.showCreateModal(poId, itemId);
+    },
+
+    toggleSourceType(type) {
+        const poSection = document.getElementById('po-source-section');
+        const conditionSelect = document.getElementById('asset-condition');
+
+        if (type === 'po') {
+            if (poSection) poSection.style.display = 'block';
+            if (conditionSelect) {
+                conditionSelect.value = 'new';
+                conditionSelect.disabled = false;
+            }
+        } else {
+            if (poSection) poSection.style.display = 'none';
+            if (conditionSelect) {
+                conditionSelect.value = 'legacy';
+                conditionSelect.disabled = false;
+            }
+            // Clear PO reference
+            document.getElementById('asset-po-id').value = '';
+            document.getElementById('asset-po-number').value = '';
+            document.getElementById('asset-po-item-id').value = '';
+            document.getElementById('asset-vendor').value = '';
+        }
+        this.updateAssetCodePreview();
+    },
+
+    onPOSelected(poId, targetItemId = null) {
+        const poSelect = document.getElementById('asset-po-select');
+        const itemSelect = document.getElementById('asset-po-item-select');
+        const poIdInput = document.getElementById('asset-po-id');
+        const poNumInput = document.getElementById('asset-po-number');
+        const vendorInput = document.getElementById('asset-vendor');
+        const dateInput = document.getElementById('asset-purchase-date');
+
+        if (!poId) {
+            if (itemSelect) itemSelect.innerHTML = '<option value="">-- Pilih Item dari PO --</option>';
+            if (poIdInput) poIdInput.value = '';
+            if (poNumInput) poNumInput.value = '';
+            if (vendorInput) vendorInput.value = '';
+            return;
+        }
+
+        const allPOs = (typeof Storage !== 'undefined' && Storage.get ? (Storage.get(Storage.KEYS.PURCHASE_ORDERS) || []) : []);
+        const po = allPOs.find(p => String(p.id) === String(poId));
+        if (!po) return;
+
+        if (poIdInput) poIdInput.value = po.id;
+        if (poNumInput) poNumInput.value = po.poNumber;
+        if (vendorInput) vendorInput.value = po.supplierName || '';
+        if (dateInput && po.orderDate) {
+            dateInput.value = po.orderDate;
+            this.updateAssetCodePreview();
+        }
+
+        if (itemSelect) {
+            itemSelect.innerHTML = `
+                <option value="">-- Pilih Item dari PO (${(po.items || []).length} item) --</option>
+                ${(po.items || []).map((item, idx) => `
+                    <option value="${item.itemId || idx}" data-name="${item.itemName}" data-price="${item.unitPrice}" data-qty="${item.quantity}" data-notes="${item.notes || ''}" data-code="${item.itemCode || ''}" data-acct="${item.inventoryAccount || ''}">
+                        ${item.itemCode ? item.itemCode + ' - ' : ''}${item.itemName} (Qty: ${item.quantity}, @ Rp ${Number(item.unitPrice).toLocaleString('id-ID')})
+                    </option>
+                `).join('')}
+            `;
+
+            // Auto-select first item or target item
+            if (targetItemId) {
+                itemSelect.value = targetItemId;
+            } else if (po.items && po.items.length === 1) {
+                itemSelect.selectedIndex = 1;
+            }
+
+            if (itemSelect.selectedIndex > 0) {
+                this.onPOItemSelected(itemSelect.value);
+            }
+        }
+    },
+
+    onPOItemSelected(itemId) {
+        const itemSelect = document.getElementById('asset-po-item-select');
+        if (!itemSelect || itemSelect.selectedIndex <= 0) return;
+
+        const option = itemSelect.options[itemSelect.selectedIndex];
+        const name = option.dataset.name || '';
+        const price = parseFloat(option.dataset.price || 0);
+        const qty = parseFloat(option.dataset.qty || 1);
+        const notes = option.dataset.notes || '';
+        const acct = option.dataset.acct || '';
+
+        const nameInput = document.getElementById('asset-name');
+        const priceInput = document.getElementById('asset-purchase-price');
+        const notesInput = document.getElementById('asset-notes');
+        const poItemIdInput = document.getElementById('asset-po-item-id');
+        const batchContainer = document.getElementById('batch-asset-container');
+        const assetCountInput = document.getElementById('asset-count');
+        const batchHint = document.getElementById('batch-asset-hint');
+        const categorySelect = document.getElementById('asset-category');
+
+        if (nameInput && name) nameInput.value = name;
+        if (priceInput && price) priceInput.value = price;
+        if (notesInput && notes) notesInput.value = notes;
+        if (poItemIdInput) poItemIdInput.value = itemId;
+
+        // Infer Category if empty
+        if (categorySelect && (!categorySelect.value || categorySelect.value === '')) {
+            categorySelect.value = this.inferAssetCategory(acct, name);
+        }
+
+        // Auto select account code if mapped
+        if (acct && this.isFixedAssetAccount(acct)) {
+            const acctSelect = document.getElementById('asset-account-code');
+            if (acctSelect) {
+                acctSelect.value = acct;
+                this.handleAccountCodeChange(acct);
+            }
+        }
+
+        // Handle batch creation helper (POIN 4: Qty > 1 bisa buat beberapa aset sekaligus)
+        if (qty > 1 && batchContainer && assetCountInput) {
+            batchContainer.style.display = 'block';
+            assetCountInput.max = qty;
+            assetCountInput.value = qty;
+            if (batchHint) batchHint.textContent = `(Item PO memiliki ${qty} unit. Akan otomatis membuat ${qty} aset dengan nomor berurutan).`;
+        } else if (batchContainer) {
+            batchContainer.style.display = 'none';
+            if (assetCountInput) assetCountInput.value = 1;
+        }
     },
 
     togglePaymentFields() {
-        const paymentMethod = document.getElementById('paymentMethod')?.value;
-        const partialFields = document.getElementById('partialPaymentFields');
-        const remainingInput = document.querySelector('input[name="remainingPayment"]');
-        const dpInput = document.querySelector('input[name="downPayment"]');
-        const priceInput = document.querySelector('input[name="purchasePrice"]');
-
-        if (partialFields) {
-            partialFields.style.display = paymentMethod === 'partial' ? 'block' : 'none';
-        }
-
-        // Auto-calculate remaining if DP changes
-        if (paymentMethod === 'partial' && dpInput && remainingInput && priceInput) {
-            dpInput.addEventListener('input', () => {
-                const total = parseFloat(priceInput.value) || 0;
-                const dp = parseFloat(dpInput.value) || 0;
-                remainingInput.value = Math.max(0, total - dp);
-            });
-            priceInput.addEventListener('input', () => {
-                const total = parseFloat(priceInput.value) || 0;
-                const dp = parseFloat(dpInput.value) || 0;
-                remainingInput.value = Math.max(0, total - dp);
-            });
-        }
+        // Payment fields no longer required for PO asset creation since PO handles AP/payments
     },
 
     async handleCreateSubmit(event) {
         event.preventDefault();
         const formData = new FormData(event.target);
+        const sourceType = formData.get('sourceType') || 'po';
+        const condition = formData.get('condition') || (sourceType === 'legacy' ? 'legacy' : 'new');
+        const poId = formData.get('poId');
+        const poNumber = formData.get('poNumber');
+        const poItemId = formData.get('poItemId');
+        const vendor = formData.get('vendor');
 
-        const assetData = {
-            name: formData.get('name'),
-            category: formData.get('category'),
-            accountCode: formData.get('accountCode'),
-            purchaseDate: formData.get('purchaseDate'),
-            purchasePrice: formData.get('purchasePrice'),
-            salvageValue: formData.get('salvageValue'),
-            usefulLife: formData.get('usefulLife'),
-            depreciationMethod: formData.get('depreciationMethod'),
-            accumAccountCode: formData.get('accumAccountCode'),
-            deprExpenseAccountCode: formData.get('deprExpenseAccountCode'),
-            location: formData.get('location'),
-            serialNumber: formData.get('serialNumber'),
-            notes: formData.get('notes'),
-            paymentMethod: formData.get('paymentMethod'),
-            downPayment: formData.get('downPayment'),
-            condition: formData.get('condition')
-        };
+        // POIN 1 Validation: Alur pembelian aset baru WAJIB melalui PO
+        if (sourceType === 'po' || condition === 'new') {
+            if (!poId || !poNumber) {
+                alert('⚠️ Pembelian aset baru wajib memilih Purchase Order (PO) yang valid.');
+                return;
+            }
+        }
 
-        // Important: override assetNumber generation with selected condition/date
-        assetData.assetNumber = this.generateAssetNumber(assetData.condition, assetData.purchaseDate);
+        const count = parseInt(formData.get('assetCount') || '1', 10);
+        const baseName = formData.get('name');
+        const purchasePrice = parseFloat(formData.get('purchasePrice'));
+        const purchaseDate = formData.get('purchaseDate');
 
-        const result = await this.createAsset(assetData);
+        const submitBtn = document.getElementById('btn-submit-asset');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Menyimpan...';
+        }
 
-        if (result.success) {
-            // Create journal entry based on payment method
-            if (typeof JournalEntry !== 'undefined' && JournalEntry.createEntry) {
-                const mapping = Storage.getAccountMapping?.() || {};
-                const purchasePrice = parseFloat(assetData.purchasePrice);
-                const paymentMethod = assetData.paymentMethod;
-                const downPayment = parseFloat(assetData.downPayment || 0);
-                const lines = [];
+        try {
+            let createdCount = 0;
+            let lastAssetNumber = '';
 
-                // Debit: Fixed Asset (always)
-                lines.push({
-                    accountCode: assetData.accountCode,
-                    description: `Aset: ${assetData.name}`,
-                    debit: purchasePrice,
-                    credit: 0
-                });
+            for (let i = 0; i < count; i++) {
+                const assetData = {
+                    name: count > 1 ? `${baseName} (${i + 1}/${count})` : baseName,
+                    category: formData.get('category'),
+                    accountCode: formData.get('accountCode'),
+                    purchaseDate: purchaseDate,
+                    purchasePrice: purchasePrice,
+                    salvageValue: formData.get('salvageValue'),
+                    usefulLife: formData.get('usefulLife'),
+                    depreciationMethod: formData.get('depreciationMethod'),
+                    accumAccountCode: formData.get('accumAccountCode'),
+                    deprExpenseAccountCode: formData.get('deprExpenseAccountCode'),
+                    location: formData.get('location'),
+                    serialNumber: formData.get('serialNumber'),
+                    notes: formData.get('notes'),
+                    condition: condition,
+                    source: sourceType === 'po' ? 'purchase_order' : 'legacy',
+                    poId: poId || null,
+                    poNumber: poNumber || '',
+                    poItemId: poItemId || null,
+                    vendor: vendor || ''
+                };
 
-                // Credit: Based on payment method
-                if (paymentMethod === 'cash') {
-                    // Full payment from cash
-                    lines.push({
-                        accountCode: mapping.cash || '1110',
-                        description: 'Pembayaran tunai',
-                        debit: 0,
-                        credit: purchasePrice
-                    });
-                } else if (paymentMethod === 'bank') {
-                    // Full payment from bank
-                    lines.push({
-                        accountCode: mapping.bank || '1120',
-                        description: 'Pembayaran via bank',
-                        debit: 0,
-                        credit: purchasePrice
-                    });
-                } else if (paymentMethod === 'credit') {
-                    // Full credit/hutang
-                    lines.push({
-                        accountCode: mapping.accounts_payable || '2110',
-                        description: 'Hutang pembelian aset',
-                        debit: 0,
-                        credit: purchasePrice
-                    });
-                } else if (paymentMethod === 'partial') {
-                    // Partial: DP + Remaining hutang
-                    if (downPayment > 0) {
-                        lines.push({
-                            accountCode: mapping.bank || '1120',
-                            description: `DP pembayaran (${this.formatCurrency(downPayment)})`,
-                            debit: 0,
-                            credit: downPayment
-                        });
-                    }
+                // Generate asset number preserving existing format (POIN 5)
+                assetData.assetNumber = this.generateAssetNumber(condition, purchaseDate);
 
-                    const remaining = purchasePrice - downPayment;
-                    if (remaining > 0) {
-                        lines.push({
-                            accountCode: mapping.long_term_debt || '2210',
-                            description: `Hutang jangka panjang (${this.formatCurrency(remaining)})`,
-                            debit: 0,
-                            credit: remaining
-                        });
-                    }
+                const result = await this.createAsset(assetData);
+                if (result.success) {
+                    createdCount++;
+                    lastAssetNumber = result.asset.assetNumber;
+                } else {
+                    alert('Error: ' + (result.errors?.validation || 'Gagal membuat aset'));
+                    break;
                 }
-
-                await JournalEntry.createEntry({
-                    date: assetData.purchaseDate,
-                    reference: result.asset.assetNumber,
-                    description: `Pembelian Aset Tetap: ${assetData.name} (${paymentMethod.toUpperCase()})`,
-                    transactionType: 'JRN',
-                    lines: lines
-                });
             }
 
-            // Close modal
-            event.target.closest('.modal-overlay').remove();
+            if (createdCount > 0) {
+                // Close modal
+                event.target.closest('.modal-overlay').remove();
 
-            // Refresh display
-            document.getElementById('main-content').innerHTML = this.render();
+                // Refresh display
+                const content = document.getElementById('main-content');
+                if (content) content.innerHTML = this.render();
 
-            // Show success message
-            if (typeof App !== 'undefined' && App.showAlert) {
-                App.showAlert('success', `Asset ${result.asset.assetNumber} berhasil ditambahkan!`);
-            } else {
-                alert(`Asset ${result.asset.assetNumber} berhasil ditambahkan!`);
+                const successMsg = createdCount > 1
+                    ? `Berhasil membuat ${createdCount} aset tetap dari PO ${poNumber}!`
+                    : `Aset ${lastAssetNumber} berhasil ditambahkan!`;
+
+                if (typeof App !== 'undefined' && App.showAlert) {
+                    App.showAlert('success', successMsg);
+                } else {
+                    alert(successMsg);
+                }
             }
-        } else {
-            alert('Error: ' + (result.errors?.validation || 'Failed to create asset'));
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '💾 Simpan Aset';
+            }
         }
     },
 
@@ -1321,7 +1450,23 @@ const FixedAssets = {
                 </div>
                 <div class="modal-body">
                     <h4>${asset.name}</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0;">
+                    ${asset.poNumber || asset.vendor ? `
+                        <div style="background: rgba(59, 130, 246, 0.06); padding: 12px 16px; border-radius: 8px; margin-top: 12px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+                            <p style="margin: 0 0 4px; font-weight: 600; color: #1d4ed8;">📋 Referensi Pembelian (Purchase Order):</p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.95rem;">
+                                <p style="margin:0;"><strong>PO Number:</strong> ${asset.poNumber || '-'}</p>
+                                <p style="margin:0;"><strong>Vendor / Supplier:</strong> ${asset.vendor || asset.sourceSupplierName || '-'}</p>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${asset.notes ? `
+                        <div style="background: var(--color-gray-100); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--color-gray-200); font-size: 0.95rem;">
+                            <strong>📝 Spesifikasi / Catatan:</strong> ${asset.notes}
+                        </div>
+                    ` : ''}
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 16px 0;">
                         <div>
                             <p><strong>Category:</strong> ${asset.category}</p>
                             <p><strong>Purchase Date:</strong> ${new Date(asset.purchaseDate).toLocaleDateString('id-ID')}</p>

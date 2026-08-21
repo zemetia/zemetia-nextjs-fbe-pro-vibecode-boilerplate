@@ -1,16 +1,824 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
+  <script>
+    // Force reload to get latest JS scripts
+    if (!localStorage.getItem('cache_busted_payroll_pwd_rev1')) {
+      localStorage.setItem('cache_busted_payroll_pwd_rev1', 'true');
+      window.location.reload(true);
+    }
+  </script>
+
+  <script>
+    // Force cache bust and clear temporary test data
+    if (!localStorage.getItem('cache_busted_clear_test_data_rev1')) {
+      localStorage.setItem('cache_busted_clear_test_data_rev1', 'true');
+      const keysToClear = [
+        'erp_production_batches',
+        'erp_job_orders',
+        'goods_receipts',
+        'ttb_documents',
+        'kyc_records',
+        'erp_deleted_ids',
+        'deleted_records'
+      ];
+      keysToClear.forEach(k => localStorage.removeItem(k));
+      window.location.reload(true);
+    }
+  </script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PT TAN - Enterprise Gold Trading & Jewelry Export ERP</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/src/index.css">
+  <meta name="description" content="ERP System - Standar Akuntansi Indonesia">
+  <meta name="keywords" content="ERP, Akuntansi, SAK, Indonesia, UMKM">
+  <meta name="author" content="Enhanced ERP - Golden Alura">
+
+  <title>ERP - Sistem Akuntansi SAK Indonesia</title>
+
+  <!-- Favicon -->
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles.css?v=20260812_rev37">
+
+  <!-- PDF Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js?v=20260812_rev37"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js?v=20260812_rev37"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js?v=20260812_rev37"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js?v=20260812_rev37"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js?v=20260812_rev37"></script>
+  <script>
+    // Set worker source for pdf.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
 </head>
+
 <body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
+  <div class="app-container">
+    <!-- Mobile Menu Button (Hidden on Desktop) -->
+    <button class="mobile-menu-btn" onclick="App.toggleSidebar()" aria-label="Toggle Menu">
+      ☰
+    </button>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" onclick="App.toggleSidebar()"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h1 class="logo">ERP</h1>
+          <div id="sync-indicator" title="Sync Status" style="cursor: pointer; font-size: 18px;"
+            onclick="FirebaseSync.processQueue()">
+            <span id="sync-icon">✅</span>
+          </div>
+        </div>
+        <div id="user-info"
+          style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.1); border-radius: 8px; display: none;">
+          <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">Logged in as:</div>
+          <div id="user-name" style="font-weight: 600; color: white; margin-bottom: 4px;"></div>
+          <div id="user-role" style="font-size: 11px; color: rgba(255,255,255,0.8);"></div>
+
+          <!-- Backup Indicator -->
+          <div id="backup-indicator"
+            style="font-size: 11px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); cursor: pointer;"
+            onclick="BackupService.forceBackup()" title="Click to force backup">
+            🛡️ Checking backup...
+          </div>
+
+          <button onclick="SyncDiagnosticUI.show()"
+            style="margin-top: 8px; width: 100%; padding: 6px; background: rgba(77, 184, 255, 0.2); border: 1px solid rgba(77, 184, 255, 0.5); border-radius: 4px; color: white; cursor: pointer; font-size: 11px; font-weight: 500;">
+            🔍 Cek Koneksi Cloud
+          </button>
+
+          <button onclick="(window.FirebaseAuth || window.Auth).logout()"
+            style="margin-top: 8px; width: 100%; padding: 6px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">
+            🚪 Logout
+          </button>
+        </div>
+        <p class="logo-subtitle">Standar Akuntansi Indonesia</p>
+      </div>
+
+      <nav class="nav-menu">
+        <!-- Dashboard -->
+        <ul class="nav-section">
+          <li class="nav-section-title">Main Menu</li>
+          <li class="nav-item">
+            <a href="#" class="nav-link active" data-page="dashboard" id="nav-dashboard">
+              <span class="nav-icon">🏠</span>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li class="nav-item" id="nav-inventory-custody" style="display: none;">
+            <a href="#" class="nav-link" data-page="inventory-custody">
+              <span class="nav-icon">🏦</span>
+              <span>Inventory vs Custody</span>
+            </a>
+          </li>
+          <li class="nav-item" id="nav-staff-home" style="display: none;">
+            <a href="#" class="nav-link" data-page="staff-dashboard">
+              <span class="nav-icon">🏠</span>
+              <span>Home Staff</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="ai-advisor">
+              <span class="nav-icon">🤖</span>
+              <span>AI Advisor</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="market-portal/index.html" target="_blank" class="nav-link">
+              <span class="nav-icon">📈</span>
+              <span>Analisis Pasar ↗</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="whatsapp-bot" id="nav-whatsapp-bot">
+              <span class="nav-icon">🟢</span>
+              <span>WhatsApp AI Bot</span>
+              <span class="badge badge-info" style="font-size: 9px; margin-left: 4px;">PROTOTYPE</span>
+            </a>
+          </li>
+          <!-- CRM / Sales (Collapsible) -->
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'crm-menu')">
+              <span class="nav-icon">📊</span>
+              <span>CRM / Sales</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="crm-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="crm-prospect">
+                  <span>🏪 Daftar Prospek</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="crm-sales-target">
+                  <span>🏆 Target & Leaderboard</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+          <!-- Pembelian (Collapsible) -->
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'pembelian-menu')">
+              <span class="nav-icon">🛒</span>
+              <span>Pembelian</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="pembelian-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="purchase-requisition">
+                  <span>📝 Purchase Requisition</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="purchase-order">
+                  <span>Purchase Orders</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-direct-swap">
+                <a href="#" class="nav-link" data-page="direct-swap">
+                  <span>Pemurnian Express</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-makloon-service">
+                <a href="#" class="nav-link" data-page="makloon-service">
+                  <span>Jasa Makloon (Refining)</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-refinery-simulations">
+                <a href="#" class="nav-link" data-page="refinery-simulations">
+                  <span>📥 Data Simulasi Awi (Refinery)</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-purchase-cash">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="purchase_cash">
+                  <span>Pembelian Tunai</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-purchase-credit">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="purchase_credit">
+                  <span>Pembelian Kredit</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+
+          <!-- Penjualan (Collapsible) -->
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'penjualan-menu')">
+              <span class="nav-icon">💰</span>
+              <span>Penjualan</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="penjualan-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="quotation">
+                  <span>Quotations</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="sales-order">
+                  <span>Sales Orders</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="sales_cash">
+                  <span>Penjualan Tunai</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="sales_credit">
+                  <span>Penjualan Kredit</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+
+          <!-- Biaya (Collapsible) -->
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'biaya-menu')">
+              <span class="nav-icon">💸</span>
+              <span>Biaya</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="biaya-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="payment-voucher">
+                  <span>💳 Payment Voucher (BKK/BBK)</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="receipt-voucher">
+                  <span>📥 Receipt Voucher (BKM/BBM)</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="operational_expense">
+                  <span>Biaya Operasional</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="pay_salary">
+                  <span>Bayar Gaji</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+
+          <!-- Gudang -->
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'gudang-menu')">
+              <span class="nav-icon">📦</span>
+              <span>Gudang</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="gudang-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="goods-receipt">
+                  <span>📥 Penerimaan Barang (GR)</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="ttb">
+                  <span>🚚 Tanda Terima Barang (TTB)</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="simple-transaction" data-template="warehouse_transfer">
+                  <span>Mutasi Gudang</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="stock-opening-balance">
+                  <span>💎 Saldo Awal Stok</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="reorder-system">
+                  <span>Reorder System</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+
+          <!-- Production (Moved here, below Penjualan) -->
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'production-menu')">
+              <span class="nav-icon">🏭</span>
+              <span>Production</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="production-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="job-orders">
+                  <span>📋 Job Orders</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="client-requests">
+                  <span>🛎️ Client Requests</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="production-batches">
+                  <span>🔄 Production Batches</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="production-order">
+                  <span>Production Orders</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="bom-management">
+                  <span>BOM Management</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="gold-dust-recovery">
+                  <span>Gold Dust Recovery</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="refinery-kpi">
+                  <span>📊 Refinery KPI</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="packaging">
+                  <span>💎 Packaging & Serialization</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-lab-quality-test" style="display: none;">
+                <a href="#" class="nav-link" data-page="lab-quality-test">
+                  <span>🧪 Input Lab Sample</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-yield-analysis" style="display: none;">
+                <a href="#" class="nav-link" data-page="yield-analysis">
+                  <span>📊 Yield Analysis Report</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="client-calculator">
+                  <span>🥇 Kalkulator Emas Client</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <!-- HR / Personalia (Collapsible) -->
+        <ul class="nav-section">
+          <li class="nav-section-title">Personalia</li>
+          <li class="nav-item nav-parent" id="nav-hr">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'hr-menu')">
+              <span class="nav-icon">👥</span>
+              <span>HR / Personalia</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="hr-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-employee">
+                  <span>👤 Master Karyawan</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-shift">
+                  <span>🕒 Master Shift</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="work-calendar">
+                  <span>📅 Kalender Kerja</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="attendance">
+                  <span>📅 Absensi Karyawan</span>
+                </a>
+              </li>
+
+              <li class="nav-item" id="nav-payroll">
+                <a href="#" class="nav-link" data-page="payroll">
+                  <span>💰 Payroll (Gaji)</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="leave-management">
+                  <span>📝 Entry Ijin / Cuti</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="production-log">
+                  <span>📝 Log Insentif Prod</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-payroll-simulation">
+                <a href="#" class="nav-link" data-page="payroll-simulation">
+                  <span>⚖️ Simulasi Payroll</span>
+                </a>
+              </li>
+              <li class="nav-item" id="nav-bpjs-compliance">
+                <a href="#" class="nav-link" data-page="bpjs-tax-compliance">
+                  <span>📑 Rekonsiliasi BPJS & PPh 21</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <!-- Accounting (Collapsible) -->
+        <ul class="nav-section">
+          <li class="nav-section-title">Akuntansi</li>
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'akuntansi-menu')">
+              <span class="nav-icon">📊</span>
+              <span>Akuntansi</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="akuntansi-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="chart-of-accounts">
+                  <span>Kode Akun</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="journal-entry">
+                  <span>Jurnal Umum</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="journal-report">
+                  <span>📊 Laporan Jurnal</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="general-ledger">
+                  <span>Buku Besar</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <!-- Reports (Collapsible) -->
+        <ul class="nav-section">
+          <li class="nav-section-title">Laporan</li>
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'laporan-menu')">
+              <span class="nav-icon">📈</span>
+              <span>Laporan Keuangan</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="laporan-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="balance-sheet">
+                  <span>Neraca</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="income-statement">
+                  <span>Laba Rugi</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="cash-flow">
+                  <span>Arus Kas</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="reports-menu">
+              <span class="nav-icon">📊</span>
+              <span>Reports Center</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="bpjs-tax-compliance">
+              <span class="nav-icon">📑</span>
+              <span>BPJS & Tax Compliance</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="comparison_report.html" target="_blank" class="nav-link">
+              <span class="nav-icon">📊</span>
+              <span>Flow vs ERP Report</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="swap-analysis">
+              <span class="nav-icon">🔄</span>
+              <span>Direct Swap Analysis</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- Master Data (Collapsible) -->
+        <ul class="nav-section">
+          <li class="nav-section-title">Master Data</li>
+          <li class="nav-item nav-parent">
+            <a href="#" class="nav-link nav-toggle" onclick="toggleSubmenu(event, 'master-menu')">
+              <span class="nav-icon">📁</span>
+              <span>Master Data</span>
+              <span class="nav-arrow">▼</span>
+            </a>
+            <ul id="master-menu" class="nav-submenu">
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-customer">
+                  <span>Customer</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="customer-kyc">
+                  <span>🔐 KYC Management</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="kyc-assessment">
+                  <span>⚖️ Penilaian Risiko AML/CFT</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-supplier">
+                  <span>Supplier</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-warehouse">
+                  <span>Warehouse</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-item">
+                  <span>Items</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-tax">
+                  <span>Pajak</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-karat">
+                  <span>🥇 Master Karat & Fee</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-bank">
+                  <span>Bank</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-payment-terms">
+                  <span>Payment Terms</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-department">
+                  <span>Department</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-user">
+                  <span>Users</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" data-page="master-role">
+                  <span>Roles</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <!-- Settings -->
+        <ul class="nav-section">
+          <li class="nav-section-title">Lainnya</li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="fixed-assets">
+              <span class="nav-icon">🏢</span>
+              <span>Fixed Assets</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="audit-log">
+              <span class="nav-icon">📋</span>
+              <span>Audit Log</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="change-password">
+              <span class="nav-icon">🔑</span>
+              <span>Change Password</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="settings">
+              <span class="nav-icon">⚙️</span>
+              <span>Pengaturan</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-page="support">
+              <span class="nav-icon">🚩</span>
+              <span>Support / Lapor Issue</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- Footer -->
+      <div style="margin-top: auto; padding-top: var(--spacing-xl); border-top: 1px solid var(--color-gray-900);">
+        <p style="font-size: var(--font-size-xs); color: var(--color-gray-700); text-align: center;">
+          SAK EMKM Compliant<br>
+          <span style="color: var(--color-gray-500);">v1.0.0</span>
+        </p>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content" id="main-content">
+      <!-- ☁️ Cloud Status Banner (Hidden by default) -->
+      <div id="cloud-status-banner"
+        style="display: none; background: #ff4d4d; color: white; padding: 10px; text-align: center; font-size: 14px; font-weight: bold; position: sticky; top: 0; z-index: 9999;">
+        ⚠️ CLOUD DISCONNECTED: Data you input will NOT be visible to others.
+        <button onclick="location.reload()" style="margin-left: 10px; padding: 2px 8px; cursor: pointer;">Reconnect
+          Now</button>
+      </div>
+
+      <!-- Dynamic content will be loaded here -->
+      <div class="page-header">
+        <h1 class="page-title">Loading...</h1>
+      </div>
+    </main>
+  </div>
+
+  <!-- Firebase Configuration and Modules -->
+  <script type="module" src="data/firebase-storage.js?v=20260812_rev37"></script>
+  <script type="module" src="modules/firebase-auth.js?v=20260812_rev37"></script>
+
+  <!-- IMPORTANT: Wait for Firebase to load before loading app.js -->
+  <script type="module">
+    // Ensure Firebase is fully loaded before App.init()
+    import { db, auth } from './firebase-config.js';
+    import * as firestoreModule from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // Export to window for app.js to use
+    window.db = db;
+    window.auth = auth;
+    window.firestore = firestoreModule;
+
+    console.log('✅ Firebase modules loaded and exported to window');
+
+    // Now signal that Firebase is ready
+    window.firebaseReady = true;
+  </script>
+
+  <!-- Data and Core Scripts -->
+  <script src="data/storage.js?v=20260812_rev37"></script>
+  <script src="data/firebase-sync.js?v=20260812_rev37"></script>
+  <script src="data/warehouseStock.js?v=20260812_rev37"></script>
+  <script src="modules/auth.js?v=20260812_rev37"></script>
+
+  <!-- Utility Modules -->
+  <script src="modules/_errorHandler.js?v=20260812_rev37"></script>
+  <script src="modules/clientRequests.js?v=20260812_rev37"></script>
+  
+  <!-- Add simple transaction templates if any -->
+  <script src="modules/_validators.js?v=20260812_rev37"></script>
+  <script src="modules/auditLog.js?v=20260812_rev37"></script>
+
+  <!-- Transaction Modules -->
+  <script src="modules/purchaseOrder.js?v=20260812_rev37"></script>
+  <script src="modules/salesOrder.js?v=20260812_rev37"></script>
+  <script src="modules/quotation.js?v=20260812_rev37"></script>
+  <script src="modules/fixedAssets.js?v=20260812_rev37"></script>
+
+  <!-- Module Scripts -->
+  <script src="modules/chartOfAccounts.js?v=20260812_rev37"></script>
+  <script src="modules/masterSupplier.js?v=20260812_rev37"></script>
+  <script src="modules/supplierCard.js?v=20260812_rev37"></script>
+  <script src="modules/masterCustomer.js?v=20260812_rev37"></script>
+  <script src="modules/customerCard.js?v=20260812_rev37"></script>
+  <script src="modules/masterWarehouse.js?v=20260812_rev37"></script>
+  <script src="modules/masterItem.js?v=20260812_rev37"></script>
+  <script src="modules/inventoryValuation.js?v=20260812_rev37"></script>
+  <script src="modules/preciousMetalInventory.js?v=20260812_rev37"></script>
+  <script src="modules/labTest.js?v=20260812_rev37"></script>
+  <script src="modules/jobOrder.js?v=20260812_rev37"></script>
+  <script src="modules/productionBatch.js?v=20260812_rev37"></script>
+  <script src="modules/masterTax.js?v=20260812_rev37"></script>
+  <script src="modules/masterBank.js?v=20260812_rev37"></script>
+  <script src="modules/masterPaymentTerms.js?v=20260812_rev37"></script>
+  <script src="modules/masterDepartment.js?v=20260812_rev37"></script>
+  <script src="modules/masterUser.js?v=20260812_rev37"></script>
+  <script src="modules/masterRole.js?v=20260812_rev37"></script>
+  <script src="modules/masterPurity.js?v=20260812_rev37"></script>
+  <script src="modules/masterRefiningRules.js?v=20260812_rev37"></script>
+  <script src="modules/goldSavings.js?v=20260812_rev37"></script>
+  <script src="modules/goldBalanceReport.js?v=20260812_rev37"></script>
+  <script src="modules/masterEmployee.js?v=20260812_rev37"></script>
+  <script src="modules/masterShift.js?v=20260812_rev37"></script>
+  <script src="modules/workCalendar.js?v=20260812_rev37"></script>
+  <script src="modules/attendance.js?v=20260812_rev37"></script>
+
+  <script src="modules/taxEngineTER.js?v=20260812_rev37"></script>
+  <script src="modules/payroll.js?v=20260709_rev7"></script>
+  <script src="modules/payrollSimulation.js?v=20260812_rev37"></script>
+  <script src="modules/bpjsTaxCompliance.js?v=20260812_rev37"></script>
+  <script src="modules/leaveManagement.js?v=20260812_rev37"></script>
+  <script src="modules/changePassword.js?v=20260812_rev37"></script>
+  <script src="modules/settings.js?v=20260812_rev37"></script>
+  <script src="modules/reportsMenu.js?v=20260812_rev37"></script>
+  <script src="modules/receivingReport.js?v=20260812_rev37"></script>
+  <script src="modules/stockCard.js?v=20260812_rev37"></script>
+  <script src="modules/stockPosition.js?v=20260812_rev37"></script>
+  <script src="modules/arApAging.js?v=20260812_rev37"></script>
+  <script src="modules/transactionRegisters.js?v=20260812_rev37"></script>
+  <script src="modules/labTestRegister.js?v=20260812_rev37"></script>
+  <script src="modules/balanceReports.js?v=20260812_rev37"></script>
+  <script src="modules/analysisReports.js?v=20260812_rev37"></script>
+  <script src="modules/finalReports.js?v=20260812_rev37"></script>
+  <script src="modules/additionalReports.js?v=20260812_rev37"></script>
+  <script src="modules/inventoryOptimization.js?v=20260812_rev37"></script>
+  <script src="modules/bomManagement.js?v=20260812_rev37"></script>
+  <script src="modules/productionOrder.js?v=20260812_rev37"></script>
+  <script src="modules/productionDetail.js?v=20260812_rev37"></script>
+  <script src="modules/productionReports.js?v=20260812_rev37"></script>
+  <script src="modules/pdfExporter.js?v=20260812_rev37"></script>
+  <script src="modules/dataCleanup.js?v=20260812_rev37"></script>
+  <script src="modules/journalEntry.js?v=20260812_rev37"></script>
+  <script src="modules/journalReport.js?v=20260812_rev37"></script>
+  <script src="modules/simpleTransaction.js?v=20260812_rev37"></script>
+  <script src="modules/generalLedger.js?v=20260812_rev37"></script>
+  <script src="modules/balanceSheet.js?v=20260812_rev37"></script>
+  <script src="modules/incomeStatement.js?v=20260812_rev37"></script>
+  <script src="modules/cashFlow.js?v=20260812_rev37"></script>
+  <script src="modules/goldDustRecovery.js?v=20260812_rev37"></script>
+  <script src="modules/refineryKPI.js?v=20260812_rev37"></script>
+  <script src="modules/refineryForms.js?v=20260812_rev37"></script>
+  <script src="modules/aiAdvisor.js?v=20260812_rev37"></script>
+  <script src="modules/livePrice.js?v=20260812_rev37"></script>
+  <script src="modules/whatsappBot.js?v=20260812_rev37"></script>
+
+  <!-- New Modules: Gap Closure Phase 1 -->
+  <script src="modules/paymentVoucher.js?v=20260812_rev37"></script>
+  <script src="modules/receiptVoucher.js?v=20260812_rev37"></script>
+  <script src="modules/checkGiroTracking.js?v=20260812_rev37"></script>
+  <script src="modules/customerKYC.js?v=20260812_rev37"></script>
+  <script src="modules/kycAssessment.js?v=20260812_rev37"></script>
+  <script src="modules/purchaseRequisition.js?v=20260812_rev37"></script>
+
+  <!-- New Modules: Gap Closure Phase 2 -->
+  <script src="modules/goodsReceipt.js?v=20260812_rev37"></script>
+  <script src="modules/directSwap.js?v=20260812_rev37"></script>
+  <script src="modules/makloonService.js?v=20260812_rev37"></script>
+  <script src="modules/refinerySimulationImport.js?v=20260819_rev1"></script>
+  <script src="modules/swapAnalysis.js?v=20260812_rev37"></script>
+  <script src="modules/ttb.js?v=20260812_rev37"></script>
+  <script src="modules/supplierInvoice.js?v=20260812_rev37"></script>
+  <script src="modules/threeWayMatching.js?v=20260812_rev37"></script>
+  <script src="modules/paymentSchedule.js?v=20260812_rev37"></script>
+
+  <script src="modules/stockOpeningBalance.js?v=20260812_rev37"></script>
+  <script src="modules/reorderSystem.js?v=20260812_rev37"></script>
+  <script src="modules/riskAssessment.js?v=20260812_rev37"></script>
+  <script src="modules/serializedItem.js?v=20260812_rev37"></script>
+  <script src="modules/packaging.js?v=20260812_rev37"></script>
+  <script src="modules/masterKaratUI.js?v=20260812_rev37"></script>
+
+  <!-- Chart.js for Risk Graph Visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=20260812_rev37"></script>
+
+  <!-- Notification System -->
+  <script src="modules/notificationService.js?v=20260812_rev37"></script>
+  <script src="modules/riskMonitor.js?v=20260812_rev37"></script>
+
+  <script src="modules/support.js?v=20260812_rev37"></script>
+  <script src="modules/staffDashboard.js?v=20260812_rev37"></script>
+  <script src="modules/productionLog.js?v=20260812_rev37"></script>
+  <script src="modules/crmProspect.js?v=20260812_rev37"></script>
+  <script src="modules/crmSalesTarget.js?v=20260812_rev37"></script>
+  <script src="modules/syncDiagnosticUI.js?v=20260812_rev37"></script>
+  <!-- App.js MUST load last, after Firebase is ready -->
+  <script src="modules/inventoryCustodyReport.js?v=20260812_rev37"></script>
+  <!-- 🤖 Autonomous AI Engine -->
+  <script src="modules/agentOrchestrator.js?v=20260812_rev37"></script>
+
+  <script src="modules/labQualityTest.js?v=20260812_rev37"></script>
+  <script src="modules/yieldAnalysis.js?v=20260812_rev37"></script>
+  <script src="modules/clientCalculator.js?v=20260812_rev37"></script>
+  <script src="data/firestore-sync.js?v=20260812_rev37"></script>
+  <script src="modules/debugToolkit.js?v=20260812_rev37"></script>
+  <script src="app.js?v=20260812_rev37"></script>
 </body>
+
 </html>

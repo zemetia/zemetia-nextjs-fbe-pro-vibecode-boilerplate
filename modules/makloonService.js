@@ -48,6 +48,7 @@ const MakloonService = {
     },
 
     connectXRF() {
+        if (typeof WebSocket === 'undefined') return;
         if (this.xrfWebSocket) {
             const state = this.xrfWebSocket.readyState;
             if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return;
@@ -896,9 +897,25 @@ const MakloonService = {
                             </div>
                         </div>
 
+                        <!-- Import dari Simulasi Awi (Evelyn) -->
+                        <div style="background: linear-gradient(135deg, #2d2417 0%, #1e1b13 100%); border: 2px dashed #f59e0b; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 800; color: #f59e0b; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                    <span>📥 Tarik Data dari Simulasi Awi (Evelyn)</span>
+                                    <span class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;">Anti Human-Error</span>
+                                </div>
+                                <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                    Tarik data pelanggan, tanggal, berat kotor, berat lebur, kadar Au/Ag, dan nomor sertifikat secara otomatis.
+                                </div>
+                            </div>
+                            <button type="button" onclick="MakloonService.showSimulationPickerModal()" class="btn btn-sm btn-primary" style="background: #f59e0b; border-color: #d97706; color: #000; font-weight: 700; padding: 6px 14px; font-size: 12px; white-space: nowrap;">
+                                ⚡ Pilih Data Simulasi
+                            </button>
+                        </div>
+
                         <div class="form-group mb-3">
                             <label class="form-label font-bold text-warning">Import dari Tanda Terima Frontdesk (Optional)</label>
-                            <select id="swap-frontdesk-ttb" class="form-select text-warning" onchange="MakloonService.onFrontdeskTTBChange(this.value)" style="border: 2px dashed #f59e0b; background: #2a2215;">
+                            <select id="swap-frontdesk-ttb" class="form-select text-warning" onchange="MakloonService.onFrontdeskTTBChange(this.value)" style="border: 1px solid #5f471e; background: #2a2215;">
                                 <option value="">-- Pilih TTB Frontdesk (Optional) --</option>
                                 ${frontdeskTTBs.map(t => {
                                     const selected = trx && String(t.id) === String(trx.frontdeskTtbId) ? 'selected' : '';
@@ -1240,6 +1257,320 @@ const MakloonService = {
         if (modal) modal.classList.add('hidden');
     },
 
+    async showSimulationPickerModal() {
+        const modalId = 'simulation-picker-modal';
+        let modal = document.getElementById(modalId);
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'modal-overlay';
+        modal.style.zIndex = '999999';
+
+        // Load simulations fresh
+        let sims = [];
+        if (typeof RefinerySimulationImport !== 'undefined') {
+            await RefinerySimulationImport.loadSimulations();
+            sims = RefinerySimulationImport.simulations || [];
+        } else {
+            const raw = localStorage.getItem('erp_refinery_simulations');
+            sims = raw ? JSON.parse(raw) : [];
+        }
+
+        modal.innerHTML = `
+            <div class="modal" style="max-width: 96vw; width: 96vw; height: 90vh; max-height: 90vh; background: #111827; color: #ffffff; border: 1px solid #374151; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; overflow: hidden;">
+                <div class="modal-header" style="border-bottom: 1px solid #374151; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; background: #1f2937;">
+                    <div>
+                        <h3 class="modal-title" style="color: #f59e0b; font-size: 19px; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <span>📥 Pilih Data Simulasi Awi (Refinery & SPK)</span>
+                            <span class="badge badge-warning" style="font-size: 11px; padding: 3px 8px;">Cloud Synchronized</span>
+                        </h3>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #9ca3af;">
+                            Pilih data formulir peleburan/pemurnian yang di-input Evelyn untuk mengisi seluruh field form transaksi secara instan.
+                        </p>
+                    </div>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: #9ca3af; font-size: 28px; background: none; border: none; cursor: pointer; line-height: 1;">×</button>
+                </div>
+
+                <!-- Search filter toolbar inside modal -->
+                <div style="padding: 12px 24px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                    <div style="font-size: 13px; color: #cbd5e1; font-weight: 600;">
+                        Menampilkan <span style="color: #f59e0b; font-weight: 700;">${sims.length}</span> formulir simulasi
+                    </div>
+                    <input 
+                        type="text" 
+                        id="picker-sim-search" 
+                        placeholder="🔍 Cari nama customer, no. laporan SPK, atau tanggal..." 
+                        oninput="MakloonService.filterSimulationPickerTable(this.value)"
+                        style="min-width: 320px; padding: 7px 14px; font-size: 13px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #ffffff;"
+                    />
+                </div>
+
+                <div class="modal-body" style="padding: 20px 24px; flex: 1; overflow-y: auto; background: #0b1120;">
+                    <div class="table-responsive" style="border: 1px solid #1f2937; border-radius: 8px; overflow: hidden;">
+                        <table class="table table-hover" id="picker-simulation-table" style="font-size: 13px; margin: 0; width: 100%; border-collapse: collapse;">
+                            <thead style="background: #1e293b; color: #cbd5e1; position: sticky; top: 0; z-index: 10;">
+                                <tr>
+                                    <th style="padding: 12px 14px; text-align: left;">No. Laporan / SPK</th>
+                                    <th style="padding: 12px 14px; text-align: left;">Tanggal Transaksi</th>
+                                    <th style="padding: 12px 14px; text-align: left;">Nama Customer</th>
+                                    <th style="padding: 12px 14px; text-align: left;">Petugas</th>
+                                    <th style="padding: 12px 14px; text-align: right;">Berat Terima</th>
+                                    <th style="padding: 12px 14px; text-align: right;">Berat Lebur</th>
+                                    <th style="padding: 12px 14px; text-align: right;">Kadar Au (%)</th>
+                                    <th style="padding: 12px 14px; text-align: right;">Au Murni (gr)</th>
+                                    <th style="padding: 12px 14px; text-align: center;">Status ERP</th>
+                                    <th style="padding: 12px 14px; text-align: center; width: 130px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="picker-simulation-rows">
+                                ${sims.length === 0 ? `
+                                    <tr><td colspan="10" style="text-align: center; padding: 40px; color: #9ca3af;">Belum ada data simulasi yang tersimpan di Cloud/Local. Buka <a href="simulasi-awi.html" target="_blank" style="color:#38bdf8; text-decoration: underline;">simulasi-awi.html</a> untuk membuat formulir baru.</td></tr>
+                                ` : sims.map(sim => {
+                                    const summary = (typeof RefinerySimulationImport !== 'undefined' && RefinerySimulationImport.computeSimSummary) 
+                                        ? RefinerySimulationImport.computeSimSummary(sim) 
+                                        : {
+                                            meta: {
+                                                customerName: sim.metadata?.customerName || 'Tanpa Nama',
+                                                reportNumber: sim.metadata?.reportNumber || sim.id,
+                                                transactionDate: sim.metadata?.date || sim.metadata?.transactionDate || '-',
+                                                operatorName: sim.metadata?.petugasName || sim.metadata?.operatorName || '-'
+                                            },
+                                            totRaw: (sim.items || []).reduce((s, i) => s + parseFloat(i.beratAwal ?? i.beratDeklarasi ?? i.beratTerima ?? i.rawWeight ?? 0), 0),
+                                            totMelt: (sim.items || []).reduce((s, i) => s + parseFloat(i.beratLebur ?? i.meltedWeight ?? 0), 0),
+                                            totAu: (sim.items || []).reduce((s, i) => s + parseFloat(i.beratAuManual ?? i.auMurni ?? 0), 0),
+                                            avgPurity: 0
+                                        };
+                                    
+                                    const meta = summary.meta;
+                                    const isProcessed = sim.isProcessedToERP || sim.status === 'processed_to_erp' || sim.erpTrxId;
+
+                                    return `
+                                        <tr class="picker-sim-row" data-search="${(meta.reportNumber + ' ' + meta.customerName + ' ' + meta.transactionDate).toLowerCase()}" style="border-bottom: 1px solid #1f2937; background: #0f172a;">
+                                            <td style="padding: 12px 14px; font-weight: 700; color: #f59e0b;">${meta.reportNumber}</td>
+                                            <td style="padding: 12px 14px; color: #cbd5e1;">📅 ${meta.transactionDate || '-'}</td>
+                                            <td style="padding: 12px 14px; font-weight: 700; color: #ffffff;">${meta.customerName}</td>
+                                            <td style="padding: 12px 14px; color: #9ca3af;">${meta.operatorName}</td>
+                                            <td style="padding: 12px 14px; text-align: right; font-weight: 600; color: #ffffff;">${summary.totRaw.toFixed(2)} gr</td>
+                                            <td style="padding: 12px 14px; text-align: right; color: #38bdf8; font-weight: 600;">${summary.totMelt.toFixed(2)} gr</td>
+                                            <td style="padding: 12px 14px; text-align: right; color: #fbbf24; font-weight: 700;">${summary.avgPurity.toFixed(2)} %</td>
+                                            <td style="padding: 12px 14px; text-align: right; font-weight: 800; color: #f59e0b;">${summary.totAu.toFixed(2)} gr</td>
+                                            <td style="padding: 12px 14px; text-align: center;">
+                                                ${isProcessed ? '<span class="badge badge-success" style="font-size:11px; padding: 3px 8px; background: #065f46; color: #34d399;">Sudah Diproses</span>' : '<span class="badge badge-warning" style="font-size:11px; padding: 3px 8px; background: #78350f; color: #fde68a;">Baru</span>'}
+                                            </td>
+                                            <td style="padding: 12px 14px; text-align: center;">
+                                                <button type="button" class="btn btn-sm btn-primary" onclick="MakloonService.applySimulationDataById('${sim.id}'); this.closest('.modal-overlay').remove();" style="padding: 6px 14px; font-size: 12px; background: #f59e0b; border-color: #d97706; color: #000; font-weight: 800; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);">
+                                                    ⚡ Pakai Data
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    filterSimulationPickerTable(query) {
+        const rows = document.querySelectorAll('.picker-sim-row');
+        const q = (query || '').toLowerCase().trim();
+        rows.forEach(row => {
+            const text = row.getAttribute('data-search') || '';
+            row.style.display = (q === '' || text.includes(q)) ? '' : 'none';
+        });
+    },
+
+    applySimulationDataById(simId) {
+        let sim = null;
+        if (typeof RefinerySimulationImport !== 'undefined') {
+            sim = RefinerySimulationImport.getSimulationById(simId);
+        }
+        if (!sim) {
+            const raw = localStorage.getItem('erp_refinery_simulations');
+            const list = raw ? JSON.parse(raw) : [];
+            sim = list.find(s => String(s.id) === String(simId));
+        }
+        if (sim) {
+            this.applySimulationData(sim);
+        } else {
+            alert('Data simulasi tidak ditemukan!');
+        }
+    },
+
+    applySimulationData(sim) {
+        if (!sim) return;
+        
+        let summary;
+        if (typeof RefinerySimulationImport !== 'undefined' && RefinerySimulationImport.computeSimSummary) {
+            summary = RefinerySimulationImport.computeSimSummary(sim);
+        } else {
+            const rawMeta = sim.metadata || {};
+            const rawItems = (sim.items || []).map(i => {
+                const rw = parseFloat(i.beratAwal ?? i.beratDeklarasi ?? i.beratTerima ?? i.rawWeight ?? 0);
+                const mw = parseFloat(i.beratLebur ?? i.meltedWeight ?? 0);
+                const au = parseFloat(i.beratAuManual ?? i.auMurni ?? (i.kadarLab ? (rw * parseFloat(i.kadarLab) / 100) : 0));
+                const p = parseFloat(i.kadarRef ?? i.purity ?? i.kadarLab ?? (mw > 0 && au > 0 ? (au / mw * 100) : 0));
+                return { rawWeight: rw, meltedWeight: mw, auMurni: au, purityAu: p, notes: i.notes || '' };
+            });
+            const totRaw = rawItems.reduce((s, i) => s + i.rawWeight, 0);
+            const totMelt = rawItems.reduce((s, i) => s + i.meltedWeight, 0);
+            const totAu = rawItems.reduce((s, i) => s + i.auMurni, 0);
+            const avgPurityAu = totMelt > 0 ? (totAu / totMelt * 100) : (totRaw > 0 ? (totAu / totRaw * 100) : 0);
+            summary = {
+                meta: {
+                    customerName: rawMeta.customerName || 'Tanpa Nama',
+                    customerPhone: rawMeta.customerPhone || '',
+                    customerAddress: rawMeta.customerAddress || '',
+                    reportNumber: rawMeta.reportNumber || 'N/A',
+                    transactionDate: rawMeta.date || rawMeta.transactionDate || '',
+                    operatorName: rawMeta.petugasName || rawMeta.operatorName || '-',
+                    ttbDescription: rawMeta.ttbDescription || ''
+                },
+                items: rawItems,
+                totRaw,
+                totMelt,
+                totAu,
+                avgPurity: avgPurityAu
+            };
+        }
+
+        const meta = summary.meta;
+        const items = summary.items;
+        const totRaw = summary.totRaw;
+        const totMelt = summary.totMelt;
+        const totAu = summary.totAu;
+        const avgPurityAu = summary.avgPurity;
+        const avgPurityAg = summary.avgPurityAg || (items[0] && items[0].agKadar) || 0;
+
+        // 1. Date
+        const dateInput = document.getElementById('swap-date');
+        if (dateInput && meta.transactionDate) {
+            dateInput.value = meta.transactionDate;
+        }
+
+        // 2. Customer
+        if (meta.customerName) {
+            let customers = Storage.get('erp_customers') || [];
+            let matchedCust = customers.find(c => (c.name || '').trim().toLowerCase() === meta.customerName.trim().toLowerCase());
+            
+            if (!matchedCust) {
+                // Auto create customer in storage
+                const newCode = `CUST-${String(customers.length + 1).padStart(4, '0')}`;
+                matchedCust = {
+                    id: 'CUST-' + Date.now(),
+                    code: newCode,
+                    name: meta.customerName.trim(),
+                    phone: meta.customerPhone || '',
+                    address: meta.customerAddress || '',
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                };
+                customers.push(matchedCust);
+                Storage.set('erp_customers', customers);
+                
+                // Add to customer select dropdown
+                const custSelect = document.getElementById('swap-customer');
+                if (custSelect) {
+                    const opt = document.createElement('option');
+                    opt.value = matchedCust.id;
+                    opt.textContent = `${matchedCust.code} - ${matchedCust.name} ✅`;
+                    custSelect.appendChild(opt);
+                }
+            }
+
+            const custSelect = document.getElementById('swap-customer');
+            if (custSelect && matchedCust) {
+                custSelect.value = matchedCust.id;
+                this.onCustomerChange(matchedCust.id);
+            }
+        }
+
+        // 3. Receipt weight
+        const receiptInput = document.getElementById('swap-receipt-weight');
+        if (receiptInput) {
+            receiptInput.value = totRaw > 0 ? totRaw.toFixed(2) : totMelt.toFixed(2);
+        }
+
+        // 4. Melting Report
+        const meltInternalNo = document.getElementById('melt-internal-no');
+        if (meltInternalNo && meta.reportNumber) {
+            meltInternalNo.value = meta.reportNumber;
+        }
+
+        const meltOperator = document.getElementById('melt-operator');
+        if (meltOperator && meta.operatorName) {
+            meltOperator.value = meta.operatorName;
+        }
+
+        const meltWeightAfter = document.getElementById('melt-weight-after');
+        if (meltWeightAfter) {
+            meltWeightAfter.value = totMelt > 0 ? totMelt.toFixed(2) : totRaw.toFixed(2);
+        }
+
+        const meltAu = document.getElementById('melt-purity-au');
+        if (meltAu) {
+            meltAu.value = avgPurityAu.toFixed(2);
+        }
+
+        const meltAg = document.getElementById('melt-purity-ag');
+        if (meltAg) {
+            meltAg.value = avgPurityAg.toFixed(2);
+        }
+
+        // 5. Fill Batch Row (Item In)
+        const batchRows = document.querySelectorAll('.batch-row');
+        if (batchRows.length > 0) {
+            const firstRow = batchRows[0];
+            const weightIn = firstRow.querySelector('.batch-weight');
+            const purityIn = firstRow.querySelector('.batch-purity');
+            if (weightIn) weightIn.value = totRaw > 0 ? totRaw.toFixed(2) : totMelt.toFixed(2);
+            if (purityIn) purityIn.value = avgPurityAu.toFixed(2);
+        }
+
+        // 6. Fill Output Pure Gold
+        const weightOutInput = document.getElementById('swap-weight-out');
+        if (weightOutInput && totAu > 0) {
+            weightOutInput.value = totAu.toFixed(2);
+        }
+
+        // 7. Notes & Certs
+        const notesInput = document.getElementById('swap-notes');
+        const certNotesList = [];
+        items.forEach((item, idx) => {
+            if (item.notes) certNotesList.push(`Lot ${idx+1}: ${item.notes}`);
+        });
+        const fullNotes = `[SIMULASI AWI: ${meta.reportNumber || 'N/A'}] ${meta.ttbDescription || ''} ${certNotesList.length > 0 ? ' | ' + certNotesList.join(', ') : ''}`.trim();
+        if (notesInput) {
+            notesInput.value = fullNotes;
+        }
+
+        // 8. Re-calculate totals
+        this.calculateMeltLoss();
+        this.syncAuPurityToBatch();
+        this.validateWeight();
+        this.calculateTotals();
+
+        // Store active simulation reference
+        this._activeImportedSimId = sim.id;
+
+        if (typeof App !== 'undefined' && App.showAlert) {
+            App.showAlert('success', `Data Simulasi [${meta.reportNumber || 'SPK'}] untuk ${meta.customerName} berhasil ditarik!`);
+        } else {
+            alert(`✅ Data Simulasi [${meta.reportNumber || 'SPK'}] untuk ${meta.customerName} berhasil ditarik!`);
+        }
+    },
+
+    createFromSimulation(sim) {
+        this.showCreateModal();
+        setTimeout(() => {
+            this.applySimulationData(sim);
+        }, 100);
+    },
+
     onFrontdeskTTBChange(ttbId) {
         if (!ttbId) {
             const customerSelect = document.getElementById('swap-customer');
@@ -1349,11 +1680,14 @@ const MakloonService = {
 
     showKYCWarning(status) {
         const warningArea = document.getElementById('kyc-warning-area');
+        const statusLabel = (status && status.status) ? String(status.status).toUpperCase() : 'PENDING';
+        const reasonText = (status && status.reason) ? status.reason : 'Belum ada data verifikasi KYC.';
+
         if (warningArea) {
             warningArea.innerHTML = `
                 <div class="alert alert-danger p-2" style="border: 2px solid #e74c3c; background: #fff5f5; border-radius: 6px;">
-                    <strong style="color: #c0392b; font-size: 13px;">🛑 KYC RESTRICTED: ${status.status.toUpperCase()}</strong>
-                    <p class="small m-0" style="color: #555;">${status.reason}</p>
+                    <strong style="color: #c0392b; font-size: 13px;">🛑 KYC RESTRICTED: ${statusLabel}</strong>
+                    <p class="small m-0" style="color: #555;">${reasonText}</p>
                 </div>
             `;
             warningArea.style.display = 'block';
@@ -1365,7 +1699,7 @@ const MakloonService = {
             finalizeBtn.disabled = true;
             finalizeBtn.style.opacity = '0.5';
             finalizeBtn.style.cursor = 'not-allowed';
-            finalizeBtn.title = `Locked: KYC ${status.status}`;
+            finalizeBtn.title = `Locked: KYC ${statusLabel}`;
         }
     },
 
@@ -1591,7 +1925,7 @@ const MakloonService = {
         const varianceAlert = document.getElementById('purity-variance-alert');
         const avgPurityInput = document.getElementById('swap-purity-in');
 
-        const avgPurity = this.unformatNumber(avgPurityInput.value) || 0;
+        const avgPurity = avgPurityInput ? (this.unformatNumber(avgPurityInput.value) || 0) : 0;
 
         if (physicalCheck && coreArea) {
             if (physicalCheck.checked) {
@@ -1686,7 +2020,8 @@ const MakloonService = {
         if (totalWeightIn > 0) {
             const avgP = weightedPuritySum / totalWeightIn;
             if (avgPurityInput) avgPurityInput.value = this.formatNumber(avgP, 2);
-            document.getElementById('swap-weight-in').value = this.formatNumber(totalWeightIn, 2);
+            const swapWeightIn = document.getElementById('swap-weight-in');
+            if (swapWeightIn) swapWeightIn.value = this.formatNumber(totalWeightIn, 2);
 
             const yieldHint = document.getElementById('yield-calc-hint');
             if (yieldHint) {
@@ -1699,25 +2034,33 @@ const MakloonService = {
         }
 
         // --- 3. Trading Financials ---
-        const priceIn = this.unformatNumber(document.getElementById('swap-price-in').value) || 0;
-        const weightOut = this.unformatNumber(document.getElementById('swap-weight-out').value) || 0;
-        const feePerGram = this.unformatNumber(document.getElementById('swap-fee').value) || 0;
+        const priceInInput = document.getElementById('swap-price-in');
+        const priceIn = priceInInput ? (this.unformatNumber(priceInInput.value) || 0) : 0;
+        const weightOutInput = document.getElementById('swap-weight-out');
+        const weightOut = weightOutInput ? (this.unformatNumber(weightOutInput.value) || 0) : 0;
+        const feeInput = document.getElementById('swap-fee');
+        const feePerGram = feeInput ? (this.unformatNumber(feeInput.value) || 0) : 0;
 
         const valIn = totalWeightIn * priceIn;
-        const itemOutCode = document.getElementById('swap-item-out').value;
-        const itemOutMaster = Storage.getItem(itemOutCode);
+        const itemOutCodeInput = document.getElementById('swap-item-out');
+        const itemOutCode = itemOutCodeInput ? itemOutCodeInput.value : '';
+        const itemOutMaster = itemOutCode ? Storage.getItem(itemOutCode) : null;
         const costOut = itemOutMaster ? (itemOutMaster.standardCost || 0) : 0;
         const valOut = weightOut * costOut;
 
         const totalFeeAmount = totalWeightIn * feePerGram;
 
-        document.getElementById('val-in-display').innerText = this.formatCurrency(valIn);
-        document.getElementById('val-out-display').innerText = this.formatCurrency(valOut);
+        const valInDisplay = document.getElementById('val-in-display');
+        if (valInDisplay) valInDisplay.innerText = this.formatCurrency(valIn);
+        const valOutDisplay = document.getElementById('val-out-display');
+        if (valOutDisplay) valOutDisplay.innerText = this.formatCurrency(valOut);
 
         const revenue = valIn - valOut + totalFeeAmount;
         const revenueEl = document.getElementById('revenue-display');
-        revenueEl.innerText = this.formatCurrency(revenue);
-        revenueEl.className = revenue >= 0 ? 'text-success' : 'text-danger';
+        if (revenueEl) {
+            revenueEl.innerText = this.formatCurrency(revenue);
+            revenueEl.className = revenue >= 0 ? 'text-success' : 'text-danger';
+        }
 
         const feeTotalDisplay = document.getElementById('fee-total-display');
         if (feeTotalDisplay) feeTotalDisplay.innerText = `Total Fee: ${this.formatCurrency(totalFeeAmount)}`;
@@ -3793,6 +4136,12 @@ const MakloonService = {
         // 7. Generate TTB (Goods Receipt)
         if (transaction.status === 'COMPLETED' && typeof TTB !== 'undefined') {
             TTB.createTTBFromSwap(transaction);
+        }
+
+        // 8. Mark Simulation as Processed if imported from Evelyn's simulation
+        if (typeof RefinerySimulationImport !== 'undefined' && this._activeImportedSimId) {
+            RefinerySimulationImport.markSimulationAsProcessed(this._activeImportedSimId, transaction.id, transaction.id);
+            this._activeImportedSimId = null;
         }
 
         return { success: true, transaction, id: transaction.id };

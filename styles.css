@@ -644,6 +644,102 @@ body {
 }
 
 /* ==========================================
+   Sticky / Frozen Columns for Data Tables
+   ========================================== */
+.table th.sticky-col,
+.table td.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #1e293b;
+}
+
+.table thead th.sticky-col {
+  z-index: 4;
+  background: #0f172a;
+}
+
+.table tbody tr:hover td.sticky-col {
+  background: #27354a;
+}
+
+.table th.sticky-col-shadow,
+.table td.sticky-col-shadow {
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Compliance / BPJS Table Multi-Column Sticky */
+.compliance-table th.sticky-no,
+.compliance-table td.sticky-no {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #1e293b;
+  width: 45px;
+  min-width: 45px;
+}
+
+.compliance-table thead th.sticky-no {
+  z-index: 4;
+  background: #0f172a;
+}
+
+.compliance-table th.sticky-nik,
+.compliance-table td.sticky-nik {
+  position: sticky;
+  left: 45px;
+  z-index: 2;
+  background: #1e293b;
+  width: 100px;
+  min-width: 100px;
+}
+
+.compliance-table thead th.sticky-nik {
+  z-index: 4;
+  background: #0f172a;
+}
+
+.compliance-table th.sticky-nama,
+.compliance-table td.sticky-nama {
+  position: sticky;
+  left: 145px;
+  z-index: 2;
+  background: #1e293b;
+  min-width: 180px;
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4);
+}
+
+.compliance-table thead th.sticky-nama {
+  z-index: 4;
+  background: #0f172a;
+}
+
+.compliance-table tbody tr:hover td.sticky-no,
+.compliance-table tbody tr:hover td.sticky-nik,
+.compliance-table tbody tr:hover td.sticky-nama {
+  background: #27354a;
+}
+
+/* Drawer Keyframe Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ==========================================
    Badge & Status Indicators
    ========================================== */
 .badge {
@@ -680,6 +776,20 @@ body {
 .badge-secondary {
   background: var(--color-gray-700);
   color: var(--color-white);
+}
+
+.badge-emp-id {
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  padding: 0.35rem 0.75rem !important;
+  min-width: 45px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  letter-spacing: 0.06em !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+  font-family: monospace, var(--font-family-base) !important;
 }
 
 /* ==========================================

@@ -802,13 +802,15 @@ const App = {
       navYieldAnalysis.style.display = allowedYieldAnalysis.includes(user.role?.toUpperCase()) ? 'block' : 'none';
     }
 
-    // Role-based visibility for Payroll (Gaji) & Simulasi Payroll
+    // Role-based visibility for Payroll (Gaji) & Simulasi Payroll & BPJS Compliance
     const navPayroll = document.getElementById('nav-payroll');
     const navPayrollSim = document.getElementById('nav-payroll-simulation');
+    const navBpjsComp = document.getElementById('nav-bpjs-compliance');
     const canAccessPayroll = typeof Storage !== 'undefined' && typeof Storage.canCurrentUserReadKey === 'function' && Storage.canCurrentUserReadKey('erp_payroll');
     
     if (navPayroll) navPayroll.style.display = canAccessPayroll ? 'block' : 'none';
     if (navPayrollSim) navPayrollSim.style.display = canAccessPayroll ? 'block' : 'none';
+    if (navBpjsComp) navBpjsComp.style.display = canAccessPayroll ? 'block' : 'none';
   },
 
   setupNavigation() {
@@ -935,6 +937,9 @@ const App = {
         break;
       case 'reports-menu':
         ReportsMenu.init();
+        break;
+      case 'bpjs-tax-compliance':
+        BPJSTaxCompliance.init();
         break;
       case 'receiving-report':
         ReceivingReport.init();
@@ -1109,6 +1114,13 @@ const App = {
         if (typeof MakloonService !== 'undefined') {
           MakloonService.init();
           MakloonService.render();
+        }
+        break;
+      case 'refinery-simulations':
+        if (typeof RefinerySimulationImport !== 'undefined') {
+          RefinerySimulationImport.init().then(() => {
+            RefinerySimulationImport.render();
+          });
         }
         break;
       case 'lab-quality-test':

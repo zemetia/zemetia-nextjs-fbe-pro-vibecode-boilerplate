@@ -189,6 +189,24 @@ const PurchaseOrder = {
             return { success: false, errors: validation.errors };
         }
 
+        const allSuppliers = (typeof Storage !== 'undefined' && Storage.getSuppliers) ? Storage.getSuppliers() : [];
+        const supplierObj = allSuppliers.find(s => String(s.id) === String(orderData.supplier) || s.code === orderData.supplier);
+        const isPkp = supplierObj ? (supplierObj.taxStatus === 'PKP' || supplierObj.is_pkp === true) : false;
+        const defaultTaxRate = (typeof Storage !== 'undefined' && Storage.get && Storage.get('erp_settings')?.defaultTaxRate) ?? 11;
+        const enforcedTaxRate = isPkp ? defaultTaxRate : 0;
+        const subtotal = orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity) * parseFloat(item.unitPrice)), 0);
+        const taxAmount = Math.round(subtotal * (enforcedTaxRate / 100));
+        const total = subtotal + taxAmount;
+
+        const currency = orderData.currency || 'IDR';
+        const exchangeRate = parseFloat(orderData.exchangeRate || 1);
+        const subtotalIDR = currency === 'USD' ? (subtotal * exchangeRate) : subtotal;
+        const importDuty = parseFloat(orderData.importDuty || 0);
+        const freightAndInsurance = parseFloat(orderData.freightAndInsurance || 0);
+        const totalQty = orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+        const totalLandedCostIDR = subtotalIDR + importDuty + freightAndInsurance;
+        const unitLandedCostIDRPerGram = totalQty > 0 ? (totalLandedCostIDR / totalQty) : 0;
+
         const order = {
             id: Date.now(),
             poNumber: await this.generatePONumber(),
@@ -196,77 +214,50 @@ const PurchaseOrder = {
             supplierName: orderData.supplierName,
             orderDate: orderData.orderDate,
             expectedDate: orderData.expectedDate || null,
+            currency: currency,
+            exchangeRate: exchangeRate,
+            subtotalIDR: subtotalIDR,
+            importDuty: importDuty,
+            freightAndInsurance: freightAndInsurance,
+            totalLandedCostIDR: totalLandedCostIDR,
+            unitLandedCostIDRPerGram: unitLandedCostIDRPerGram,
+            pibNo: orderData.pibNo || '',
+            sppbNo: orderData.sppbNo || '',
+            mawbNo: orderData.mawbNo || '',
+            barSerialNumbers: orderData.barSerialNumbers || [],
             items: orderData.items.map(item => {
                 // Look up inventory GL account from master items
                 const masterItems = Storage.getItems ? Storage.getItems() : (Storage.get(Storage.KEYS.ITEMS) || []);
                 const masterItem = masterItems.find(mi => mi.id === item.itemId || mi.code === item.itemCode);
                 const inventoryAccount = masterItem?.inventoryAccount || '';
-                const uPrice = parseFloat(item.unitPrice ?? item.unitPriceUSD ?? item.unitPriceIDR ?? 0);
 
                 return {
                     itemId: item.itemId,
                     itemCode: item.itemCode,
                     itemName: item.itemName,
-                    quantity: parseFloat(item.quantity || 0),
-                    unit: item.unit || 'gram',
-                    unitPrice: uPrice,
-                    unitPriceUSD: parseFloat(item.unitPriceUSD ?? uPrice),
-                    unitPriceIDR: parseFloat(item.unitPriceIDR ?? 0),
-                    subtotal: parseFloat(item.quantity || 0) * uPrice,
+                    quantity: parseFloat(item.quantity),
+                    unit: item.unit,
+                    unitPrice: parseFloat(item.unitPrice),
+                    subtotal: parseFloat(item.quantity) * parseFloat(item.unitPrice),
                     notes: item.notes || '',
                     inventoryAccount: inventoryAccount  // GL account for journal
                 };
             }),
-            subtotal: orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item.unitPrice ?? item.unitPriceUSD ?? item.unitPriceIDR ?? 0)), 0),
-            currency: orderData.currency || 'IDR',
-            exchangeRate: parseFloat(orderData.exchangeRate || 1),
-            paymentTerms: orderData.paymentTerms || '',
-            unitMode: orderData.unitMode || 'gram',
-            quantityUnits: parseFloat(orderData.quantityUnits || 0),
-            weightGrams: parseFloat(orderData.weightGrams || 0),
-            weightOz: parseFloat(orderData.weightOz || 0),
-            baseAmountUSD: parseFloat(orderData.baseAmountUSD || 0),
-            totalAmountUSD: parseFloat(orderData.totalAmountUSD || orderData.baseAmountUSD || 0),
-            importDuty: parseFloat(orderData.importDuty || 0),
-            pph22Import: parseFloat(orderData.pph22Import || 0),
-            freightAndInsurance: parseFloat(orderData.freightAndInsurance || 0),
-            barSerialNumbers: Array.isArray(orderData.barSerialNumbers) ? orderData.barSerialNumbers : [],
-            taxRate: parseFloat(orderData.taxRate || 0),
-            taxAmount: 0,
-            total: 0,
+            subtotal: subtotal,
+            taxRate: enforcedTaxRate,
+            taxAmount: taxAmount,
+            total: total,
             reference: orderData.reference || '',
-            pibNo: orderData.pibNo || '',
-            sppbNo: orderData.sppbNo || '',
-            mawbNo: orderData.mawbNo || '',
+            prfId: orderData.prfId || null,
+            prfNumber: orderData.prfNumber || '',
+            prfNotes: orderData.prfNotes || '',
             notes: orderData.notes || '',
-            status: orderData.status || 'draft', // draft, submitted, approved, received, cancelled
+            status: 'draft', // draft, submitted, approved, received, cancelled
             createdBy: Auth?.getCurrentUser?.()?.id || 'system',
             createdByName: Auth?.getCurrentUser?.()?.name || 'system',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
-
-        order.taxAmount = order.subtotal * (order.taxRate / 100);
-        order.total = order.subtotal + order.taxAmount;
-        if (order.currency === 'USD' && !order.totalAmountUSD) {
-            order.totalAmountUSD = order.total;
-        }
-
-        // Multi-Currency & Landed Cost Calculation for LM Import
-        const totalQuantityGrams = order.weightGrams || order.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0);
-        const subtotalIDR = order.currency === 'USD' ? ((order.totalAmountUSD || order.subtotal) * order.exchangeRate) : order.subtotal;
-        const totalLandedCostIDR = subtotalIDR + order.importDuty + order.freightAndInsurance;
-        const unitLandedCostIDRPerGram = totalQuantityGrams > 0 ? (totalLandedCostIDR / totalQuantityGrams) : 0;
-
-        order.subtotalIDR = subtotalIDR;
-        order.totalLandedCostIDR = totalLandedCostIDR;
-        order.unitLandedCostIDRPerGram = unitLandedCostIDRPerGram;
-
-        // Payment Tracking Fields
-        order.paidAmountIDR = parseFloat(orderData.paidAmountIDR || 0);
-        order.remainingBalanceIDR = typeof orderData.remainingBalanceIDR !== 'undefined' ? parseFloat(orderData.remainingBalanceIDR) : Math.max(0, totalLandedCostIDR - order.paidAmountIDR);
-        order.paymentStatus = orderData.paymentStatus || (order.paidAmountIDR >= totalLandedCostIDR && totalLandedCostIDR > 0 ? 'PAID' : order.paidAmountIDR > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
-        order.paymentHistory = Array.isArray(orderData.paymentHistory) ? orderData.paymentHistory : [];
 
         this.orders.unshift(order);
         const saved = await this.saveOrders();
@@ -375,6 +366,18 @@ const PurchaseOrder = {
         }
 
         const oldOrder = { ...this.orders[index] };
+        const targetSupplier = updates.supplier || oldOrder.supplier;
+        const allSuppliers = (typeof Storage !== 'undefined' && Storage.getSuppliers) ? Storage.getSuppliers() : [];
+        const supplierObj = allSuppliers.find(s => String(s.id) === String(targetSupplier) || s.code === targetSupplier);
+        const isPkp = supplierObj ? (supplierObj.taxStatus === 'PKP' || supplierObj.is_pkp === true) : false;
+        const defaultTaxRate = (typeof Storage !== 'undefined' && Storage.get && Storage.get('erp_settings')?.defaultTaxRate) ?? 11;
+        const enforcedTaxRate = isPkp ? defaultTaxRate : 0;
+        updates.taxRate = enforcedTaxRate;
+
+        // Retain PRF notes and tracking if not explicitly passed
+        if (updates.prfNotes === undefined && oldOrder.prfNotes) updates.prfNotes = oldOrder.prfNotes;
+        if (updates.prfId === undefined && oldOrder.prfId) updates.prfId = oldOrder.prfId;
+        if (updates.prfNumber === undefined && oldOrder.prfNumber) updates.prfNumber = oldOrder.prfNumber;
 
         // Process items if provided to ensure subtotals are calculated
         if (updates.items) {
@@ -390,14 +393,12 @@ const PurchaseOrder = {
             }));
 
             updates.subtotal = updates.items.reduce((sum, item) => sum + item.subtotal, 0);
-            const taxRate = parseFloat(updates.taxRate || oldOrder.taxRate || 0);
-            updates.taxAmount = updates.subtotal * (taxRate / 100);
+            updates.taxAmount = Math.round(updates.subtotal * (enforcedTaxRate / 100));
             updates.total = updates.subtotal + updates.taxAmount;
-        } else if (updates.taxRate !== undefined) {
-            // If only taxRate changed
-            const order = this.orders[index];
-            updates.taxAmount = order.subtotal * (parseFloat(updates.taxRate) / 100);
-            updates.total = order.subtotal + updates.taxAmount;
+        } else {
+            const currentSubtotal = updates.subtotal !== undefined ? updates.subtotal : oldOrder.subtotal;
+            updates.taxAmount = Math.round(currentSubtotal * (enforcedTaxRate / 100));
+            updates.total = currentSubtotal + updates.taxAmount;
         }
 
         this.orders[index] = {
@@ -784,6 +785,11 @@ const PurchaseOrder = {
                                                             Edit
                                                         </button>
                                                     ` : ''}
+                                                    ${['approved', 'partially_received', 'received'].includes(order.status) ? `
+                                                        <button onclick="PurchaseOrder.createAssetFromPO(${order.id})" class="btn btn-sm btn-info" title="Buat Aset dari PO">
+                                                            🏢 Jadikan Aset
+                                                        </button>
+                                                    ` : ''}
                                                     <button onclick="PDFExporter.exportPurchaseOrder(PurchaseOrder.getOrder(${order.id}), Storage.get(Storage.KEYS.CONFIG))" class="btn btn-sm btn-outline-info" title="Cetak PDF">
                                                         📄 PDF
                                                     </button>
@@ -842,6 +848,12 @@ const PurchaseOrder = {
                     </div>
                     <form id="po-create-form" onsubmit="PurchaseOrder.handleSubmit(event)">
                         <div class="modal-body">
+                            <!-- PRF Reference Box (Poin 2) -->
+                            <div id="po-prf-reference-box" style="display: none; margin-bottom: 16px; padding: 12px 16px; background: rgba(59, 130, 246, 0.08); border-left: 4px solid #3b82f6; border-radius: 6px;">
+                                <strong style="color: #1d4ed8;">📝 Catatan dari PRF:</strong>
+                                <span id="po-prf-reference-text" style="margin-left: 8px; color: #1e293b; font-style: italic;"></span>
+                            </div>
+
                             <!-- Supplier Info -->
                             <div class="form-row">
                                 <div class="form-group">
@@ -866,25 +878,6 @@ const PurchaseOrder = {
                                 </div>
                             </div>
 
-                            <!-- Dokumen Impor & Kepabeanan (Jika Transaksi Impor) -->
-                            <div class="card p-3 mb-3 bg-light" style="border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.05); margin-bottom: 16px;">
-                                <h4 style="margin-top: 0; margin-bottom: 8px; color: #2563eb; font-size: 0.95rem;">✈️ Dokumen Impor & Kepabeanan (Opsional)</h4>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>No. PIB <small class="text-gray">(Pemberitahuan Impor Barang)</small></label>
-                                        <input type="text" name="pibNo" id="po-pib-no" placeholder="Contoh: 001234/PIB/KPU-TP/2026" maxlength="100">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>No. SPPB <small class="text-gray">(Persetujuan Pengeluaran)</small></label>
-                                        <input type="text" name="sppbNo" id="po-sppb-no" placeholder="Contoh: SPPB-009876/KPU.01/2026" maxlength="100">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>No. MAWB <small class="text-gray">(Master Air Waybill)</small></label>
-                                        <input type="text" name="mawbNo" id="po-mawb-no" placeholder="Contoh: SQ-618-99881122" maxlength="100">
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Items -->
                             <div class="form-group">
                                 <label>Items *</label>
@@ -896,23 +889,23 @@ const PurchaseOrder = {
                                 </button>
                             </div>
 
-                            <!-- Totals -->
+                            <!-- Totals (Poin 3: DPP, PPN Auto & Locked, Grand Total) -->
                             <div class="form-row" style="justify-content: flex-end;">
-                                <div style="width: 300px;">
+                                <div style="width: 340px;">
                                     <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                                        <span>Subtotal:</span>
+                                        <span>DPP (Subtotal):</span>
                                         <span id="po-subtotal">Rp 0</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between; padding: 8px 0; align-items: center;">
-                                        <span>Tax:</span>
+                                        <span>PPN (Auto):</span>
                                         <div>
-                                            <input type="number" name="taxRate" value="11" min="0" max="100" step="0.01" 
-                                                style="width: 60px; text-align: right;" onchange="PurchaseOrder.calculateTotals()"> %
+                                            <input type="number" name="taxRate" value="0" readonly 
+                                                style="width: 60px; text-align: right; background: var(--color-gray-100, #f1f5f9); cursor: not-allowed;" onchange="PurchaseOrder.calculateTotals()"> %
                                             <span id="po-tax" style="margin-left: 8px;">Rp 0</span>
                                         </div>
                                     </div>
                                     <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: 600; font-size: 18px; border-top: 2px solid var(--color-gray-800);">
-                                        <span>Total:</span>
+                                        <span>Grand Total:</span>
                                         <span id="po-total">Rp 0</span>
                                     </div>
                                 </div>
@@ -921,7 +914,7 @@ const PurchaseOrder = {
                             <!-- Notes -->
                             <div class="form-group">
                                 <label>Notes</label>
-                                <textarea name="notes" rows="3"></textarea>
+                                <textarea name="notes" rows="3" placeholder="Catatan tambahan PO"></textarea>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -937,7 +930,7 @@ const PurchaseOrder = {
     getSupplierOptions() {
         // Use Storage API
         const suppliers = Storage.getSuppliers();
-        return suppliers.map(s => `<option value="${s.id}" data-name="${s.name}" data-tax-status="${s.taxStatus || 'NON_PKP'}">${s.code} - ${s.name}</option>`).join('');
+        return suppliers.map(s => `<option value="${s.id}" data-name="${s.name}" data-tax-status="${s.taxStatus || (s.is_pkp ? 'PKP' : 'NON_PKP')}">${s.code} - ${s.name}</option>`).join('');
     },
 
     getItemOptions() {
@@ -947,26 +940,34 @@ const PurchaseOrder = {
 
     onSupplierChange(select) {
         const option = select.options[select.selectedIndex];
+        if (!option) return;
         // Store supplierName in dataset for form submission
         select.dataset.supplierName = option.dataset.name || '';
 
-        // Enforce Tax Logic
+        // Enforce Tax Logic (POIN 3: Otomatisasi PPN, locked read-only)
         const taxStatus = option.dataset.taxStatus || 'NON_PKP';
         const taxInput = document.querySelector('[name="taxRate"]');
         const taxStatusLabel = document.getElementById('supplier-tax-status');
 
-        if (taxStatus === 'PKP') {
-            taxInput.value = 11;
-            taxInput.disabled = false;
-            taxInput.readOnly = false; // Allow manual adjustment if needed, but default to 11
-            taxStatusLabel.innerHTML = '✓ Supplier is PKP - Tax enabled (Def: 11%)';
-            taxStatusLabel.className = 'text-success';
-        } else {
-            taxInput.value = 0;
-            taxInput.readOnly = true; // Lock it
-            // taxInput.disabled = true; // Don't disable, otherwise formData won't capture it (though it's 0)
-            taxStatusLabel.innerHTML = '⚠️ Supplier is Non-PKP - Tax locked to 0%';
-            taxStatusLabel.className = 'text-warning';
+        if (taxInput) {
+            if (taxStatus === 'PKP') {
+                const defaultTaxRate = (typeof Storage !== 'undefined' && Storage.get && Storage.get('erp_settings')?.defaultTaxRate) ?? 11;
+                taxInput.value = defaultTaxRate;
+                taxInput.readOnly = true; // Auto-calculate & locked
+                taxInput.style.backgroundColor = 'var(--color-gray-100, #f1f5f9)';
+                if (taxStatusLabel) {
+                    taxStatusLabel.innerHTML = `✓ Supplier adalah PKP (PPN ${defaultTaxRate}% Terhitung Otomatis)`;
+                    taxStatusLabel.className = 'text-success';
+                }
+            } else {
+                taxInput.value = 0;
+                taxInput.readOnly = true; // Locked to 0%
+                taxInput.style.backgroundColor = 'var(--color-gray-100, #f1f5f9)';
+                if (taxStatusLabel) {
+                    taxStatusLabel.innerHTML = '⚠️ Supplier Non-PKP (PPN 0%)';
+                    taxStatusLabel.className = 'text-warning';
+                }
+            }
         }
 
         this.calculateTotals();
@@ -1023,13 +1024,17 @@ const PurchaseOrder = {
             subtotal += itemSubtotal;
         });
 
-        const taxRate = parseFloat(document.querySelector('[name="taxRate"]').value) || 0;
-        const taxAmount = subtotal * (taxRate / 100);
+        const taxRate = parseFloat(document.querySelector('[name="taxRate"]')?.value) || 0;
+        const taxAmount = Math.round(subtotal * (taxRate / 100));
         const total = subtotal + taxAmount;
 
-        document.getElementById('po-subtotal').textContent = this.formatCurrency(subtotal);
-        document.getElementById('po-tax').textContent = this.formatCurrency(taxAmount);
-        document.getElementById('po-total').textContent = this.formatCurrency(total);
+        const subtotalEl = document.getElementById('po-subtotal');
+        const taxEl = document.getElementById('po-tax');
+        const totalEl = document.getElementById('po-total');
+
+        if (subtotalEl) subtotalEl.textContent = this.formatCurrency(subtotal);
+        if (taxEl) taxEl.textContent = this.formatCurrency(taxAmount);
+        if (totalEl) totalEl.textContent = this.formatCurrency(total);
     },
 
     showCreateModal() {
@@ -1040,6 +1045,10 @@ const PurchaseOrder = {
         if (titleEl) titleEl.textContent = 'Create Purchase Order';
         const submitBtn = document.getElementById('po-submit-btn');
         if (submitBtn) submitBtn.textContent = 'Create Purchase Order';
+
+        // Reset PRF reference box
+        const prfBox = document.getElementById('po-prf-reference-box');
+        if (prfBox) prfBox.style.display = 'none';
 
         // Reset the form
         const form = document.getElementById('po-create-form');
@@ -1064,6 +1073,16 @@ const PurchaseOrder = {
         const submitBtn = document.getElementById('po-submit-btn');
         if (submitBtn) submitBtn.textContent = 'Update Purchase Order';
 
+        // PRF reference note (Poin 2)
+        const prfBox = document.getElementById('po-prf-reference-box');
+        const prfText = document.getElementById('po-prf-reference-text');
+        if (order.prfNotes && prfBox && prfText) {
+            prfText.textContent = order.prfNotes;
+            prfBox.style.display = 'block';
+        } else if (prfBox) {
+            prfBox.style.display = 'none';
+        }
+
         const modal = document.getElementById('po-create-modal');
         if (modal) modal.classList.remove('hidden');
 
@@ -1073,13 +1092,14 @@ const PurchaseOrder = {
 
         const form = document.getElementById('po-create-form');
         if (!form) return;
-        form.querySelector('[name="supplier"]').value = order.supplier || '';
+        const supplierSelect = form.querySelector('[name="supplier"]');
+        if (supplierSelect) {
+            supplierSelect.value = order.supplier || '';
+            this.onSupplierChange(supplierSelect);
+        }
         form.querySelector('[name="orderDate"]').value = order.orderDate || '';
         form.querySelector('[name="expectedDate"]').value = order.expectedDate || '';
         form.querySelector('[name="reference"]').value = order.reference || '';
-        if (form.querySelector('[name="pibNo"]')) form.querySelector('[name="pibNo"]').value = order.pibNo || '';
-        if (form.querySelector('[name="sppbNo"]')) form.querySelector('[name="sppbNo"]').value = order.sppbNo || '';
-        if (form.querySelector('[name="mawbNo"]')) form.querySelector('[name="mawbNo"]').value = order.mawbNo || '';
         form.querySelector('[name="taxRate"]').value = order.taxRate || 0;
         form.querySelector('[name="notes"]').value = order.notes || '';
 
@@ -1154,9 +1174,6 @@ const PurchaseOrder = {
                 orderDate: formData.get('orderDate'),
                 expectedDate: formData.get('expectedDate'),
                 reference: formData.get('reference') || '',
-                pibNo: formData.get('pibNo') || '',
-                sppbNo: formData.get('sppbNo') || '',
-                mawbNo: formData.get('mawbNo') || '',
                 items: items,
                 taxRate: formData.get('taxRate'),
                 notes: formData.get('notes')
@@ -1212,6 +1229,14 @@ const PurchaseOrder = {
                     <button onclick="this.closest('.modal-overlay').remove()" class="close-btn">×</button>
                 </div>
                 <div class="modal-body">
+                    <!-- PRF Note Box (Poin 2) -->
+                    ${order.prfNotes ? `
+                        <div style="margin-bottom: 16px; padding: 12px 16px; background: rgba(59, 130, 246, 0.08); border-left: 4px solid #3b82f6; border-radius: 6px;">
+                            <strong style="color: #1d4ed8;">📝 Catatan dari PRF (${order.prfNumber || '-'}):</strong> 
+                            <span style="margin-left: 8px; color: #1e293b; font-style: italic;">${order.prfNotes}</span>
+                        </div>
+                    ` : ''}
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
                         <div>
                             <h4>Supplier Information</h4>
@@ -1224,17 +1249,6 @@ const PurchaseOrder = {
                             ${order.reference ? `<p><strong>📎 Referensi:</strong> <span style="color: #60a5fa; font-weight: 600;">${order.reference}</span></p>` : ''}
                         </div>
                     </div>
-
-                    ${(order.pibNo || order.sppbNo || order.mawbNo) ? `
-                    <div style="margin-bottom: 20px; padding: 14px; background: rgba(59, 130, 246, 0.08); border-left: 4px solid #3b82f6; border-radius: 6px;">
-                        <h4 style="margin: 0 0 10px; color: #2563eb; font-size: 0.95rem;">✈️ Dokumen Impor & Kepabeanan</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 0.95rem;">
-                            <div><span class="text-gray" style="font-size: 0.8rem;">No. PIB:</span><br><strong style="color: #2563eb;">${order.pibNo || '-'}</strong></div>
-                            <div><span class="text-gray" style="font-size: 0.8rem;">No. SPPB:</span><br><strong style="color: #16a34a;">${order.sppbNo || '-'}</strong></div>
-                            <div><span class="text-gray" style="font-size: 0.8rem;">No. MAWB:</span><br><strong style="color: #d97706;">${order.mawbNo || '-'}</strong></div>
-                        </div>
-                    </div>
-                    ` : ''}
 
                     <h4>Items</h4>
                     <table class="table">
@@ -1258,11 +1272,11 @@ const PurchaseOrder = {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="3" style="text-align: right;"><strong>Subtotal:</strong></td>
+                                <td colspan="3" style="text-align: right;"><strong>Subtotal (DPP):</strong></td>
                                 <td><strong>${this.formatCurrency(order.subtotal)}</strong></td>
                             </tr>
                             <tr>
-                                <td colspan="3" style="text-align: right;">Tax (${order.taxRate}%):</td>
+                                <td colspan="3" style="text-align: right;">Tax PPN (${order.taxRate}%):</td>
                                 <td>${this.formatCurrency(order.taxAmount)}</td>
                             </tr>
                             <tr>
@@ -1326,6 +1340,11 @@ const PurchaseOrder = {
                             Mark as Received
                         </button>
                     ` : ''}
+                    ${['approved', 'partially_received', 'received'].includes(order.status) ? `
+                        <button onclick="PurchaseOrder.createAssetFromPO(${order.id})" class="btn btn-info" style="font-weight:600;">
+                            🏢 Jadikan Aset
+                        </button>
+                    ` : ''}
                     ${order.status === 'received' && order.journalStatus === 'pending_approval' ? `
                         <button onclick="PurchaseOrder.approveJournal(${order.id})" class="btn btn-warning" style="font-weight:bold;">
                             📋 Setujui & Posting Jurnal
@@ -1339,6 +1358,21 @@ const PurchaseOrder = {
             </div>
         `;
         document.body.appendChild(modal);
+    },
+
+    createAssetFromPO(poId) {
+        const order = this.getOrder(poId);
+        if (!order) {
+            alert('PO tidak ditemukan');
+            return;
+        }
+        if (typeof FixedAssets !== 'undefined' && typeof FixedAssets.showCreateFromPOModal === 'function') {
+            const currentModal = document.getElementById('po-detail-modal');
+            if (currentModal) currentModal.remove();
+            FixedAssets.showCreateFromPOModal(order.id);
+        } else {
+            alert('Modul Fixed Assets belum dimuat');
+        }
     },
 
     formatCurrency(amount) {

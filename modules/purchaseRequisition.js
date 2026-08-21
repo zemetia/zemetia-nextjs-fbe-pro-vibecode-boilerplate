@@ -1206,16 +1206,23 @@ const PurchaseRequisition = {
                 return { success: false, errors: { module: 'PurchaseOrder module not available' } };
             }
 
+            const allSuppliers = (typeof Storage !== 'undefined' && Storage.getSuppliers) ? Storage.getSuppliers() : [];
+            const supplierObj = allSuppliers.find(s => String(s.id) === String(supplierInfo.supplierId) || s.code === supplierInfo.supplierId);
+            const isPkp = supplierObj ? (supplierObj.taxStatus === 'PKP' || supplierObj.is_pkp === true) : false;
+            const defaultTaxRate = (typeof Storage !== 'undefined' && Storage.get && Storage.get('erp_settings')?.defaultTaxRate) ?? 11;
+            const taxRate = isPkp ? defaultTaxRate : 0;
+
             const orderData = {
                 supplier: supplierInfo.supplierId,
                 supplierName: supplierInfo.supplierName,
                 orderDate: new Date().toISOString().split('T')[0],
                 expectedDate: prf.deadline || null,
                 items: poItems,
-                taxRate: 0,
+                taxRate: taxRate,
                 prfId: prf.id,
                 prfNumber: prf.prfNumber,
-                notes: `Converted from PRF ${prf.prfNumber}. Purpose: ${prf.purpose || '-'}`
+                prfNotes: prf.notes || '',
+                notes: prf.notes || (prf.purpose ? `Purpose: ${prf.purpose}` : '')
             };
 
             const result = await PurchaseOrder.createOrder(orderData);
@@ -1250,7 +1257,7 @@ const PurchaseRequisition = {
                     AuditLog.log('update', 'purchase_requisition', prfId, `Converted to PO ${result.order.poNumber} (${prf.status})`);
                 }
 
-                return { success: true, po: result.order };
+                return { success: true, po: result.order, order: result.order };
             } else {
                 return { success: false, errors: result.errors || { general: 'Failed to create PO' } };
             }

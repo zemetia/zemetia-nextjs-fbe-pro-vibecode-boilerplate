@@ -256,22 +256,28 @@ const Packaging = {
     },
 
     async submit() {
-        const batchNo = document.getElementById('pck-batch-no').value;
-        const bulkWeight = parseFloat(document.getElementById('pck-bulk-weight').value);
-        const refProd = document.getElementById('pck-ref-prod').value;
-        const totalWeight = parseFloat(document.getElementById('pck-total-weight').innerText);
+        const batchNo = document.getElementById('pck-batch-no')?.value;
+        const bulkWeight = parseFloat(document.getElementById('pck-bulk-weight')?.value) || 0;
+        const refProd = document.getElementById('pck-ref-prod')?.value;
         const unitRows = document.querySelectorAll('#pck-units-body tr');
+
+        let totalWeight = 0;
+        document.querySelectorAll('.weight-input').forEach(input => {
+            totalWeight += parseFloat(input.value) || 0;
+        });
 
         if (!batchNo) return alert('Masukkan No. Batch Packaging');
         if (isNaN(bulkWeight) || bulkWeight <= 0) return alert('Masukkan Berat Bulk Asal yang valid');
         if (unitRows.length === 0) return alert('Input setidaknya 1 unit');
         if (totalWeight > bulkWeight + 0.0001) { // small epsilon for float
-            return alert('Total berat unit (' + totalWeight + 'g) melebihi berat bulk (' + bulkWeight + 'g)!');
+            return alert('Total berat unit (' + totalWeight.toFixed(3) + 'g) melebihi berat bulk (' + bulkWeight.toFixed(3) + 'g)!');
         }
 
         const btn = document.getElementById('btn-save-pck');
-        btn.disabled = true;
-        btn.innerText = 'Menyimpan...';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Menyimpan...';
+        }
 
         try {
             const units = [];

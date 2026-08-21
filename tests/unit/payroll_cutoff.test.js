@@ -363,15 +363,15 @@ describe('Flexible Payroll Cut-Off Engine', () => {
         expect(rec1.bpjs_health_benefit).toBe(240000);
         expect(rec1.jht_benefit).toBe(222000);
 
-        // Employee 2: Fallback to base_salary = 5,000,000
-        // bpjs_health_deduction = 1% of 5,000,000 = 50,000
+        // Employee 2: Fallback to base_salary = 5,000,000 with UMK Surabaya 2026 Floor (5,288,796) for BPJS Health
+        // bpjs_health_deduction = 1% of 5,288,796 = 52,888
         // jht_deduction = 2% of 5,000,000 = 100,000
-        // bpjs_health_benefit = 4% of 5,000,000 = 200,000
+        // bpjs_health_benefit = 4% of 5,288,796 = 211,552
         // jht_benefit = 3.7% of 5,000,000 = 185,000
         const rec2 = generated.find(r => r.nik === 'EMP_BPJS2');
-        expect(rec2.bpjs_health_deduction).toBe(50000);
+        expect(rec2.bpjs_health_deduction).toBe(52888);
         expect(rec2.jht_deduction).toBe(100000);
-        expect(rec2.bpjs_health_benefit).toBe(200000);
+        expect(rec2.bpjs_health_benefit).toBe(211552);
         expect(rec2.jht_benefit).toBe(185000);
     });
 
@@ -613,6 +613,197 @@ describe('Flexible Payroll Cut-Off Engine', () => {
 
             // Recalculated THP: Earnings 5.5M - Deductions (10k late + 50k bpjs + 100k jht) = 5.340.000
             expect(record.total_salary).toBe(5340000);
+        });
+
+        test('Contract Active Date Guard: Pre-join and post-resign dates do not produce false Alpha absences', async () => {
+            const mockEmployees = [
+                {
+                    nik: 'NEW_HIRE_1',
+                    name: 'Budi New Hire',
+                    start_date: '2026-07-03', // Joined on day 3
+                    department: 'PROD',
+                    base_salary: 5000000,
+                    status: 'active'
+                },
+                {
+                    nik: 'RESIGNED_1',
+                    name: 'Siti Resigned',
+                    start_date: '2025-01-01',
+                    resignation_date: '2026-07-02', // Resigned on day 2
+                    department: 'PROD',
+                    base_salary: 5000000,
+                    status: 'inactive'
+                }
+            ];
+
+            Storage.getWorkCalendar.mockReturnValue({
+                '2026-07': {
+                    'DEPT:PROD': { '01': 'SHIFT_REG', '02': 'SHIFT_REG', '03': 'SHIFT_REG', '04': 'SHIFT_REG', '05': 'SHIFT_REG' }
+                }
+            });
+
+            Storage.get.mockImplementation((key) => {
+                if (key === Storage.KEYS.MASTER_SHIFTS) {
+                    return [{ id: 'SHIFT_REG', name: 'Regular', startTime: '08:00', endTime: '17:00' }];
+                }
+                return [];
+            });
+
+            // Mock attendance logs:
+            // Budi attended day 3, 4, 5 (all days since joining)
+            // Siti attended day 1, 2 (all days before resigning)
+            const mockLogs = [
+                { nik: 'NEW_HIRE_1', date: '2026-07-03', timestamp: '2026-07-03 08:00:00', status: 'IN' },
+                { nik: 'NEW_HIRE_1', date: '2026-07-03', timestamp: '2026-07-03 17:00:00', status: 'OUT' },
+                { nik: 'NEW_HIRE_1', date: '2026-07-04', timestamp: '2026-07-04 08:00:00', status: 'IN' },
+                { nik: 'NEW_HIRE_1', date: '2026-07-04', timestamp: '2026-07-04 17:00:00', status: 'OUT' },
+                { nik: 'NEW_HIRE_1', date: '2026-07-05', timestamp: '2026-07-05 08:00:00', status: 'IN' },
+                { nik: 'NEW_HIRE_1', date: '2026-07-05', timestamp: '2026-07-05 17:00:00', status: 'OUT' },
+
+                { nik: 'RESIGNED_1', date: '2026-07-01', timestamp: '2026-07-01 08:00:00', status: 'IN' },
+                { nik: 'RESIGNED_1', date: '2026-07-01', timestamp: '2026-07-01 17:00:00', status: 'OUT' },
+                { nik: 'RESIGNED_1', date: '2026-07-02', timestamp: '2026-07-02 08:00:00', status: 'IN' },
+                { nik: 'RESIGNED_1', date: '2026-07-02', timestamp: '2026-07-02 17:00:00', status: 'OUT' }
+            ];
+
+            global.window.firestore.getDocs.mockResolvedValue({
+                forEach: (callback) => {
+                    mockLogs.forEach(log => callback({ data: () => log }));
+                }
+            });
+
+            const atd = await Payroll.calculateAttendanceForRange(mockEmployees, '2026-07-01', '2026-07-05');
+
+            const budiAtd = atd.find(a => a.nik === 'NEW_HIRE_1');
+            const sitiAtd = atd.find(a => a.nik === 'RESIGNED_1');
+
+            // Budi should have 3 work days and exactly 0 absence days (no Alpha for day 1 and day 2)
+            expect(budiAtd.work_days).toBe(3);
+            expect(budiAtd.absence_days).toBe(0);
+
+            // Siti should have 2 work days and exactly 0 absence days (no Alpha for day 3, 4, 5)
+            expect(sitiAtd.work_days).toBe(2);
+            expect(sitiAtd.absence_days).toBe(0);
+        });
+
+        test('Payslip Clean-up: viewPayslip does not contain [Hari Pertama - Onboarding]', () => {
+            const record = {
+                id: 'PAY-REC-TEST-NEW',
+                nik: 'EMP_NEW_1',
+                name: 'Karyawan Baru',
+                department: 'PROD',
+                position: 'Staff',
+                ptkp: 'TK/0',
+                npwp: '-',
+                base_salary: 5000000,
+                is_first_day: true,
+                meal_pay: 0,
+                night_meal_pay: 0,
+                overtime_pay: 0,
+                bonus: 0,
+                fixed_allowance: 0,
+                variable_allowance: 0,
+                custom_components: {},
+                late_deduction: 0,
+                absence_deduction: 0,
+                half_day_deduction: 0,
+                bpjs_health_deduction: 0,
+                jht_deduction: 0,
+                pph21_deduction: 0,
+                other_deductions: 0,
+                total_earnings: 5000000,
+                total_deductions: 0,
+                total_salary: 5000000
+            };
+
+            Payroll.period = '2026-07';
+            Payroll.payrollRecords = [record];
+            document.body.innerHTML = '<div id="main-content"></div>';
+
+            Payroll.viewPayslip('PAY-REC-TEST-NEW');
+
+            const modal = document.getElementById('payslip-modal');
+            expect(modal).not.toBeNull();
+            expect(modal.innerHTML).not.toContain('[Hari Pertama - Onboarding]');
+            expect(modal.innerHTML).toContain('Karyawan Baru');
+        });
+
+        test('UI/UX Enhancement: openAllowanceDrawer and closeAllowanceDrawer open and remove side-over breakdown drawer', () => {
+            const record = {
+                id: 'PAY-REC-DRAWER-TEST',
+                nik: 'EMP_DRAWER_1',
+                name: 'Ahmad Fauzi',
+                base_salary: 6000000,
+                meal_pay: 300000,
+                night_meal_pay: 100000,
+                presence_pay: 150000,
+                production_pay: 200000,
+                overtime_pay: 160000,
+                overtime_hours: 8,
+                tunj_tetap: 500000,
+                variable_allowance: 250000,
+                tunj_luar_kota: 300000,
+                bonus: 500000,
+                previous_month_deficiency: 100000,
+                custom_components: {
+                    'Insentif Khusus': { type: 'earnings', amount: 200000 }
+                },
+                late_deduction: 0,
+                absence_deduction: 0,
+                half_day_deduction: 0,
+                bpjs_health_deduction: 50000,
+                jht_deduction: 100000,
+                pph21_deduction: 50000,
+                total_salary: 8560000
+            };
+
+            Payroll.period = '2026-07';
+            Payroll.payrollRecords = [record];
+            document.body.innerHTML = '<div id="main-content"></div>';
+
+            Payroll.openAllowanceDrawer('PAY-REC-DRAWER-TEST');
+
+            const drawer = document.getElementById('allowance-detail-drawer');
+            expect(drawer).not.toBeNull();
+            expect(drawer.innerHTML).toContain('Ahmad Fauzi');
+            expect(drawer.innerHTML).toContain('Uang Makan (Meal)');
+            expect(drawer.innerHTML).toContain('Uang Lembur (Overtime)');
+            expect(drawer.innerHTML).toContain('8 Jam Terverifikasi');
+            expect(drawer.innerHTML).toContain('Insentif Khusus');
+
+            // Close drawer
+            Payroll.closeAllowanceDrawer();
+            expect(document.getElementById('allowance-detail-drawer')).toBeNull();
+        });
+
+        test('UI/UX Enhancement: renderTable renders Total Tunjangan and sticky columns', () => {
+            const record = {
+                id: 'PAY-REC-STICKY-TEST',
+                nik: 'EMP_STICKY_1',
+                name: 'Dewi Lestari',
+                period: '2026-07',
+                base_salary: 5000000,
+                meal_pay: 200000,
+                night_meal_pay: 0,
+                overtime_pay: 100000,
+                overtime_hours: 5,
+                late_deduction: 0,
+                absence_deduction: 0,
+                half_day_deduction: 0,
+                bpjs_health_deduction: 50000,
+                jht_deduction: 100000,
+                pph21_deduction: 25000,
+                total_salary: 5125000,
+                status: 'draft'
+            };
+
+            Payroll.period = '2026-07';
+            Payroll.payrollRecords = [record];
+
+            const html = Payroll.renderTable();
+            expect(html).toContain('sticky-col');
+            expect(html.toLowerCase()).toContain('total tunjangan');
+            expect(html).toContain('openAllowanceDrawer');
         });
     });
 });

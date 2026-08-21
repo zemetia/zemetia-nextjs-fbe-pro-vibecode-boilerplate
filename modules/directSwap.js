@@ -1168,11 +1168,14 @@ const DirectSwap = {
 
     showKYCWarning(status) {
         const warningArea = document.getElementById('kyc-warning-area');
+        const statusLabel = (status && status.status) ? String(status.status).toUpperCase() : 'PENDING';
+        const reasonText = (status && status.reason) ? status.reason : 'Belum ada data verifikasi KYC.';
+
         if (warningArea) {
             warningArea.innerHTML = `
                 <div class="alert alert-danger p-2" style="border: 2px solid #e74c3c; background: #fff5f5; border-radius: 6px;">
-                    <strong style="color: #c0392b; font-size: 13px;">🛑 KYC RESTRICTED: ${status.status.toUpperCase()}</strong>
-                    <p class="small m-0" style="color: #555;">${status.reason}</p>
+                    <strong style="color: #c0392b; font-size: 13px;">🛑 KYC RESTRICTED: ${statusLabel}</strong>
+                    <p class="small m-0" style="color: #555;">${reasonText}</p>
                 </div>
             `;
             warningArea.style.display = 'block';
@@ -1184,7 +1187,7 @@ const DirectSwap = {
             finalizeBtn.disabled = true;
             finalizeBtn.style.opacity = '0.5';
             finalizeBtn.style.cursor = 'not-allowed';
-            finalizeBtn.title = `Locked: KYC ${status.status}`;
+            finalizeBtn.title = `Locked: KYC ${statusLabel}`;
         }
     },
 
