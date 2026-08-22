@@ -963,10 +963,16 @@ const Storage = {
             const employees = this.get(this.KEYS.EMPLOYEES) || [];
             const dummyEmps = employees.filter(e => isTargetDummy(e.name || e.fullName));
             const dummyIds = new Set(dummyEmps.map(e => String(e.id)));
-            const dummyNiks = new Set(dummyEmps.map(e => String(e.nik || '').trim()).filter(Boolean));
-
-            // Known dummy sample NIKs
-            ['EMP-2024-001', 'EMP-2024-002', 'EMP-2024-003', 'EMP-2024-005', 'EMP-001', 'EMP-002', 'EMP-003', 'EMP-005'].forEach(n => dummyNiks.add(n));
+            // Only collect NIKs that are formatted dummy NIKs (not short numeric like '1','2','3')
+            // to avoid accidentally matching real employees with low numeric NIKs
+            const dummyNiks = new Set(
+                dummyEmps
+                    .map(e => String(e.nik || '').trim())
+                    .filter(n => n && n.toUpperCase().startsWith('EMP-'))
+            );
+            // Add well-known legacy dummy NIK patterns (EMP-prefixed only)
+            ['EMP-2024-001', 'EMP-2024-002', 'EMP-2024-003', 'EMP-2024-005',
+             'EMP-001', 'EMP-002', 'EMP-003', 'EMP-005'].forEach(n => dummyNiks.add(n));
 
             if (dummyEmps.length > 0) {
                 console.log(`🧹 [DataCleanup] Purging ${dummyEmps.length} target dummy employees from DB:`, dummyEmps.map(e => e.name));
@@ -980,12 +986,13 @@ const Storage = {
                 }
             }
 
-            // 2. Purge from Attendance
+            // 2. Purge from Attendance — ONLY by name or EMP-prefixed dummy NIKs
             const attendance = this.get(this.KEYS.ATTENDANCE) || [];
             const filteredAttendance = attendance.filter(a => {
                 if (isTargetDummy(a.name || a.employee_name)) return false;
                 if (a.employee_id && dummyIds.has(String(a.employee_id))) return false;
-                if (a.nik && dummyNiks.has(String(a.nik).trim())) return false;
+                const nik = String(a.nik || '').trim();
+                if (nik && dummyNiks.has(nik)) return false;
                 return true;
             });
             if (filteredAttendance.length !== attendance.length) {
@@ -999,12 +1006,13 @@ const Storage = {
                 }
             }
 
-            // 3. Purge from Payroll
+            // 3. Purge from Payroll — ONLY by name or EMP-prefixed dummy NIKs
             const payroll = this.get(this.KEYS.PAYROLL) || [];
             const filteredPayroll = payroll.filter(p => {
                 if (isTargetDummy(p.name)) return false;
                 if (p.employee_id && dummyIds.has(String(p.employee_id))) return false;
-                if (p.nik && dummyNiks.has(String(p.nik).trim())) return false;
+                const nik = String(p.nik || '').trim();
+                if (nik && dummyNiks.has(nik)) return false;
                 return true;
             });
             if (filteredPayroll.length !== payroll.length) {
