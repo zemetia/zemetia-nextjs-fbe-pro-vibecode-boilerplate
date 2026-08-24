@@ -3986,6 +3986,17 @@ const Storage = {
         return dept.includes('security') || div.includes('security') || pos.includes('security') || pos.includes('satpam');
     },
 
+    isMessOrSecurityEmployee(emp) {
+        if (!emp) return false;
+        if (this.isSecurityEmployee(emp)) return true;
+        const cat = String(emp.night_meal_category || '').toLowerCase();
+        if (cat === 'mess' || cat === 'security') return true;
+        if (emp.is_mess === true || emp.living_in_mess === true || emp.mess === true) return true;
+        const dept = String(emp.department || '').toLowerCase();
+        if (dept.includes('mess') || dept.includes('security')) return true;
+        return false;
+    },
+
     getDepartments() {
         const official = this.getOfficialDepartments();
         // Always persist the clean 7 official departments list without duplicates

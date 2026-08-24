@@ -311,14 +311,16 @@ const Payroll = {
                 String(emp.position || '').toLowerCase().includes('security') ||
                 String(emp.position || '').toLowerCase().includes('satpam')
             );
+            const isMess = (emp.night_meal_category === 'mess' || emp.is_mess === true || emp.living_in_mess === true || emp.mess === true);
+            const isMessOrSecurity = isSecurity || isMess;
             const base = masterBaseSalary;
             const dailyRate = base / 25;
-            const dayShifts = isSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
+            const dayShifts = isMessOrSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
             const mealPay = dayShifts * 20000;
             const nightMealPay = (atd.night_days || 0) * 20000;
             const presencePay = isSecurity ? 0 : dailyRate * (atd.extra_days || 0);
             const securityOtRate = emp.security_overtime_rate || emp.overtime_rate || 10000;
-            const overtimePay = isSecurity ? (atd.overtime_hours || 0) * securityOtRate : (atd.overtime_hours || 0) * 20000;
+            const overtimePay = isMessOrSecurity ? (atd.overtime_hours || 0) * securityOtRate : (atd.overtime_hours || 0) * 20000;
 
             let productionPay = 0;
             if (emp.payroll_level && emp.payroll_level !== 'N/A') {
@@ -734,6 +736,8 @@ const Payroll = {
             String(emp.position || '').toLowerCase().includes('security') ||
             String(emp.position || '').toLowerCase().includes('satpam')
         );
+        const isMess = (emp.night_meal_category === 'mess' || emp.is_mess === true || emp.living_in_mess === true || emp.mess === true);
+        const isMessOrSecurity = isSecurity || isMess;
 
         let scheduledWorkDays = 0;
         
@@ -793,7 +797,7 @@ const Payroll = {
                         const hasOut = dayLog.out !== null;
                         const totalLogs = (dayLog.raw || []).length;
                         
-                        if ((hasIn && hasOut) || totalLogs >= 2 || (isSecurity && (hasIn || totalLogs >= 1))) {
+                        if ((hasIn && hasOut) || totalLogs >= 2 || (isMessOrSecurity && (hasIn || totalLogs >= 1))) {
                             workDays++;
                             isPresent = true;
                         } else if (totalLogs === 1) {
@@ -811,16 +815,30 @@ const Payroll = {
                         const clockInTime = (dayLog && dayLog.in) ? dayLog.in.split(' ')[1].substring(0, 5) : '';
                         const clockOutTime = (dayLog && dayLog.out) ? dayLog.out.split(' ')[1].substring(0, 5) : '';
 
-                        if (isSecurity) {
+                        if (isMessOrSecurity) {
                             overtimeHours += 4;
-                            const isNightShift = (shift && (shift.isNight || shift.code === 'SEC-MLM')) || 
-                                                 (clockInTime && (clockInTime >= '15:00' || clockInTime <= '04:00')) ||
-                                                 (clockOutTime && clockOutTime <= '10:00');
+                            let isNightShift = false;
+                            if (shift) {
+                                if (shift.isNight === true || 
+                                    String(shift.code).toUpperCase().includes('MLM') || 
+                                    String(shift.name).toUpperCase().includes('MALAM') || 
+                                    String(shift.code).toUpperCase().includes('NIGHT') ||
+                                    (shift.startTime && shift.startTime >= '18:00') ||
+                                    (shift.endTime && shift.endTime <= '10:00')) {
+                                    isNightShift = true;
+                                }
+                            } else if (clockInTime) {
+                                if (clockInTime >= '15:00' || clockInTime <= '04:00') {
+                                    isNightShift = true;
+                                }
+                            }
+
                             if (isNightShift) {
                                 nightDays++;
                             }
                         } else {
-                            if ((shift && shift.isNight) || (clockOutTime && clockOutTime >= '19:00')) {
+                            if ((shift && (shift.isNight || String(shift.code).toUpperCase().includes('MLM') || String(shift.name).toUpperCase().includes('MALAM'))) || 
+                                (clockOutTime && clockOutTime >= '19:00')) {
                                 nightDays++;
                             }
 
@@ -1333,13 +1351,15 @@ const Payroll = {
           String(emp.position || '').toLowerCase().includes('security') ||
           String(emp.position || '').toLowerCase().includes('satpam')
       );
+      const isMess = (emp.night_meal_category === 'mess' || emp.is_mess === true || emp.living_in_mess === true || emp.mess === true);
+      const isMessOrSecurity = isSecurity || isMess;
       const securityOtRate = emp.security_overtime_rate || emp.overtime_rate || 10000;
 
       // 2. Meal Allowance
       const isLunchEnabled = emp.lunch_allowance_enabled !== false;
       const lunchRate = emp.lunch_allowance_rate !== undefined && emp.lunch_allowance_rate !== '' ? parseFloat(emp.lunch_allowance_rate) : 20000;
-      // For Security: Day shifts get Lunch Allowance (Rp 20.000), Night shifts get Night Meal Allowance (Rp 20.000)
-      const dayShifts = isSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
+      // For Security & Mess: Day shifts get Lunch Allowance (Rp 20.000), Night shifts get Night Meal Allowance (Rp 20.000)
+      const dayShifts = isMessOrSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
       const mealPay = isLunchEnabled ? dayShifts * lunchRate : 0;
 
       const isNightMealEnabled = emp.night_meal_enabled !== false && emp.night_meal_category !== 'disabled';
@@ -1360,7 +1380,7 @@ const Payroll = {
           otRate = 10000;
         } else if (emp.overtime_rate_type === '20000') {
           otRate = 20000;
-        } else if (isSecurity) {
+        } else if (isMessOrSecurity) {
           otRate = securityOtRate;
         }
         overtimePay = (atd.overtime_hours || 0) * otRate;

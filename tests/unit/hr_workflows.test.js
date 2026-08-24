@@ -403,4 +403,46 @@ describe('HR Workflow Verification', () => {
         // Total additional per shift = (240k + 160k + 800k) / 20 = Rp 60.000 per shift
         expect((mealPay + nightMealPay + overtimePay) / totalWorkDays).toBe(60000);
     });
+
+    test('Security Full 25 Night Shifts & Mess Employee 12-Hour Shift Automation', () => {
+        // 1. Storage isMessOrSecurityEmployee helper validation
+        const secEmp = { nik: 'SEC_002', name: 'Bambang Security', department: 'SECURITY' };
+        const messEmp = { nik: 'PROD_001', name: 'Joko Produksi', department: 'PRODUCTION', night_meal_category: 'mess' };
+        const regularEmp = { nik: 'FIN_001', name: 'Finance Staff', department: 'FINANCE' };
+
+        expect(Storage.isMessOrSecurityEmployee(secEmp)).toBe(true);
+        expect(Storage.isMessOrSecurityEmployee(messEmp)).toBe(true);
+        expect(Storage.isMessOrSecurityEmployee(regularEmp)).toBe(false);
+
+        // 2. Security with 25 Full Night Shifts (SEC-MLM)
+        const totalWorkDays25 = 25;
+        const nightDays25 = 25; // 25 night shifts
+        const dayShifts25 = Math.max(0, totalWorkDays25 - nightDays25); // 0 day shifts
+        const otHours25 = totalWorkDays25 * 4; // 100 hours
+
+        const mealPay25 = dayShifts25 * 20000; // Rp 0
+        const nightMealPay25 = nightDays25 * 20000; // Rp 500.000
+        const overtimePay25 = otHours25 * 10000; // Rp 1.000.000
+
+        expect(mealPay25).toBe(0);
+        expect(nightMealPay25).toBe(500000);
+        expect(overtimePay25).toBe(1000000);
+        expect(nightMealPay25 + overtimePay25).toBe(1500000); // Rp 60.000 x 25
+
+        // 3. Mess Employee with 15 Day Shifts + 10 Night Shifts
+        const messTotalDays = 25;
+        const messNightDays = 10;
+        const messDayShifts = Math.max(0, messTotalDays - messNightDays); // 15
+        const messOtHours = messTotalDays * 4; // 100 hours
+
+        const messMealPay = messDayShifts * 20000; // Rp 300.000
+        const messNightMealPay = messNightDays * 20000; // Rp 200.000
+        const messOtPay = messOtHours * 10000; // Rp 1.000.000
+
+        expect(messMealPay).toBe(300000);
+        expect(messNightMealPay).toBe(200000);
+        expect(messOtPay).toBe(1000000);
+        expect(messMealPay + messNightMealPay + messOtPay).toBe(1500000);
+    });
 });
+

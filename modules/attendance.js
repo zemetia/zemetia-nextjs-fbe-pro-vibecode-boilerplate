@@ -1273,6 +1273,8 @@ const Attendance = {
             String(employee.position || '').toLowerCase().includes('security') ||
             String(employee.position || '').toLowerCase().includes('satpam')
         );
+        const isMess = (employee.night_meal_category === 'mess' || employee.is_mess === true || employee.living_in_mess === true || employee.mess === true);
+        const isMessOrSecurity = isSecurity || isMess;
         const employeeDaily = dailyLogs[nik];
         let workDays = 0;
         let missingTaps = 0;
@@ -1292,13 +1294,13 @@ const Attendance = {
           const hasOut = dayLogs.out !== null;
           const totalLogs = (dayLogs.raw || []).length;
 
-          // Requirement 1 & 2: Any Clock-In counts as a valid Workday for Security (no rigid calendar required)
+          // Any Clock-In counts as a valid Workday for Security and Mess employees
           if (hasIn || totalLogs >= 1) {
             workDays++;
           }
 
-          // Requirement 3: Automated Overtime (4h fixed per shift) & Shift Meal mapping for Security
-          if (isSecurity) {
+          // Automated Overtime (4h fixed per shift) & Shift Meal mapping for Security & Mess
+          if (isMessOrSecurity) {
             if (hasIn || totalLogs >= 1) {
               securityOvertimeHours += 4; // 4 jam lembur tetap per kehadiran shift
 
@@ -1309,8 +1311,22 @@ const Attendance = {
               const rawIn = String(dayLogs.in || '').replace('T', ' ');
               const inTimeStr = rawIn.split(' ')[1]?.substring(0, 5) || '';
 
-              const isNightShift = (shift && (shift.isNight || shift.code === 'SEC-MLM')) || 
-                                   (inTimeStr && (inTimeStr >= '15:00' || inTimeStr <= '04:00'));
+              let isNightShift = false;
+              if (shift) {
+                if (shift.isNight === true || 
+                    String(shift.code).toUpperCase().includes('MLM') || 
+                    String(shift.name).toUpperCase().includes('MALAM') || 
+                    String(shift.code).toUpperCase().includes('NIGHT') ||
+                    (shift.startTime && shift.startTime >= '18:00') ||
+                    (shift.endTime && shift.endTime <= '10:00')) {
+                  isNightShift = true;
+                }
+              } else if (inTimeStr) {
+                if (inTimeStr >= '15:00' || inTimeStr <= '04:00') {
+                  isNightShift = true;
+                }
+              }
+
               if (isNightShift) {
                 securityNightDays++;
               }
@@ -1376,12 +1392,12 @@ const Attendance = {
               name: employee.name,
               period: period,
               work_days: workDays,
-              overtime_hours: isSecurity ? securityOvertimeHours : 0,
-              night_days: isSecurity ? securityNightDays : 0,
-              extra_days: isSecurity ? Math.max(0, workDays - securityTargetDays) : 0,
-              late_count: isSecurity ? 0 : lateCount,
+              overtime_hours: isMessOrSecurity ? securityOvertimeHours : 0,
+              night_days: isMessOrSecurity ? securityNightDays : 0,
+              extra_days: isMessOrSecurity ? Math.max(0, workDays - securityTargetDays) : 0,
+              late_count: isMessOrSecurity ? 0 : lateCount,
               absence_days: absenceDays,
-              half_day_izin: isSecurity ? 0 : halfDayIzinCount,
+              half_day_izin: isMessOrSecurity ? 0 : halfDayIzinCount,
               production_grams: 0,
               is_manual: false,
               missing_taps: missingTaps,
@@ -1389,7 +1405,7 @@ const Attendance = {
             });
           } else {
             this.records[recordIndex].work_days = workDays;
-            if (isSecurity) {
+            if (isMessOrSecurity) {
               this.records[recordIndex].overtime_hours = securityOvertimeHours;
               this.records[recordIndex].night_days = securityNightDays;
               this.records[recordIndex].extra_days = Math.max(0, workDays - securityTargetDays);
