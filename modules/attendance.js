@@ -1028,14 +1028,8 @@ const Attendance = {
 
     let lateMinutes = 0;
     if (clockIn && clockIn !== '-' && shiftStart) {
-        const [hIn, mIn] = clockIn.split(':').map(Number);
-        const [hStart, mStart] = shiftStart.split(':').map(Number);
-        const inTotal = hIn * 60 + mIn;
-        const startTotal = hStart * 60 + mStart;
-        
-        if (inTotal > startTotal) {
-            lateMinutes = inTotal - startTotal;
-        }
+        const penaltyRes = Storage.calculateLatePenalty ? Storage.calculateLatePenalty(clockIn, shiftStart) : { isLate: false, lateMinutes: 0 };
+        lateMinutes = penaltyRes.lateMinutes || 0;
     }
     const lateEl = document.getElementById(`late-day-${day}`);
     if (lateEl) lateEl.textContent = lateMinutes;
@@ -1081,7 +1075,8 @@ const Attendance = {
       }
 
       totalOT += otVal;
-      if (lateVal > 0) totalLateCount++;
+      // Late count strictly counts arrivals > 5 mins late (Grace Period immunity) and <= 120 mins
+      if (lateVal > 5 && lateVal <= 120) totalLateCount++;
 
       if (outInput && outInput.value && outInput.value !== '-' && outInput.dataset.night === 'true') {
         totalNight += 1;
@@ -1106,6 +1101,7 @@ const Attendance = {
     let totalOT = 0;
     let totalNight = 0;
     let totalLateCount = 0;
+    let totalHalfDay = 0;
 
     document.querySelectorAll('.daily-clock-in').forEach(inInput => {
       const day = inInput.dataset.day;
@@ -1119,11 +1115,14 @@ const Attendance = {
       if (clockIn && clockIn !== '-') {
         totalWorkDays++;
         if (shiftStart) {
-          const [hIn, mIn] = clockIn.split(':').map(Number);
-          const [hStart, mStart] = shiftStart.split(':').map(Number);
-          const inTotal = hIn * 60 + mIn;
-          const startTotal = hStart * 60 + mStart;
-          if (inTotal > startTotal) totalLateCount++;
+          const penaltyRes = Storage.calculateLatePenalty ? Storage.calculateLatePenalty(clockIn, shiftStart) : { isLate: false };
+          if (penaltyRes.isLate) {
+            if (penaltyRes.isHalfDay) {
+              totalHalfDay++;
+            } else {
+              totalLateCount++;
+            }
+          }
         }
       }
 
@@ -1329,28 +1328,31 @@ const Attendance = {
 
               const rawClockIn = String(dayLogs.in || '').replace('T', ' ');
               const clockInTime = rawClockIn.split(' ')[1]?.substring(0, 5) || '00:00';
-              const [ch, cm] = clockInTime.split(':').map(Number);
-              const clockInTotal = ch * 60 + cm;
 
-              let lateLimitTotal = 0;
+              let shiftStartStr = '08:30';
               const dayStr = date.split('-')[2];
               const shiftId = empSchedule[dayStr] || deptSchedule[dayStr];
               if (shiftId) {
                   const shift = shifts.find(s => s.id === shiftId);
                   if (shift && shift.startTime) {
-                      const [sh, sm] = shift.startTime.split(':').map(Number);
-                      lateLimitTotal = sh * 60 + sm;
+                      shiftStartStr = shift.startTime;
                   }
               } else {
-                  if (dow >= 1 && dow <= 5) {
-                      lateLimitTotal = 8 * 60 + 30;
-                  } else if (dow === 6) {
-                      lateLimitTotal = 8 * 60 + 0;
+                  if (dow === 6) {
+                      shiftStartStr = '08:00';
                   }
               }
 
-              if (lateLimitTotal > 0 && clockInTotal > lateLimitTotal) {
+              const penaltyRes = Storage.calculateLatePenalty 
+                ? Storage.calculateLatePenalty(clockInTime, shiftStartStr, employee.base_salary) 
+                : { isLate: false, isHalfDay: false };
+
+              if (penaltyRes.isLate) {
+                if (penaltyRes.isHalfDay) {
+                  halfDayIzinCount++;
+                } else {
                   lateCount++;
+                }
               }
             }
           }
@@ -1369,7 +1371,7 @@ const Attendance = {
         );
         const absenceDays = Math.max(0, (isSecurity ? securityTargetDays : scheduledWorkDays) - workDays - missingTaps);
 
-        if (workDays > 0 || missingTaps > 0 || lateCount > 0 || securityOvertimeHours > 0) {
+        if (workDays > 0 || missingTaps > 0 || lateCount > 0 || halfDayIzinCount > 0 || securityOvertimeHours > 0) {
           let recordIndex = this.records.findIndex(r => String(r.nik) === String(employee.nik) && r.period === period);
           
           if (recordIndex === -1) {
@@ -1384,7 +1386,7 @@ const Attendance = {
               extra_days: isSecurity ? Math.max(0, workDays - securityTargetDays) : 0,
               late_count: isSecurity ? 0 : lateCount,
               absence_days: absenceDays,
-              half_day_izin: 0,
+              half_day_izin: isSecurity ? 0 : halfDayIzinCount,
               production_grams: 0,
               is_manual: false,
               missing_taps: missingTaps,
@@ -1396,8 +1398,10 @@ const Attendance = {
               this.records[recordIndex].overtime_hours = securityOvertimeHours;
               this.records[recordIndex].extra_days = Math.max(0, workDays - securityTargetDays);
               this.records[recordIndex].late_count = 0;
+              this.records[recordIndex].half_day_izin = 0;
             } else {
               this.records[recordIndex].late_count = lateCount;
+              this.records[recordIndex].half_day_izin = halfDayIzinCount;
             }
             this.records[recordIndex].missing_taps = missingTaps;
             this.records[recordIndex].is_manual = false;
@@ -1641,30 +1645,34 @@ const Attendance = {
           const outTime = dayLogs.out || '-';
           
           let isLate = false;
+          let penaltyBadge = '';
           if (inTime !== '-') {
-              const [ch, cm] = inTime.split(':').map(Number);
-              const clockInTotal = ch * 60 + cm;
-              
+              let shiftStartStr = '08:30';
               const dayStr = date.split('-')[2];
-              let lateLimitTotal = 0;
-              
               const shiftId = empSchedule[dayStr] || deptSchedule[dayStr];
               if (shiftId) {
                   const shift = shifts.find(s => s.id === shiftId);
                   if (shift && shift.startTime) {
-                      const [sh, sm] = shift.startTime.split(':').map(Number);
-                      lateLimitTotal = sh * 60 + sm;
+                      shiftStartStr = shift.startTime;
                   }
               } else {
                   const dow = new Date(date + 'T12:00:00').getDay();
-                  if (dow >= 1 && dow <= 5) {
-                      lateLimitTotal = 8 * 60 + 30; // 08:30
-                  } else if (dow === 6) {
-                      lateLimitTotal = 8 * 60 + 0;  // 08:00
+                  if (dow === 6) {
+                      shiftStartStr = '08:00';
                   }
               }
-              if (lateLimitTotal > 0 && clockInTotal > lateLimitTotal) {
-                  isLate = true;
+              
+              const penaltyRes = Storage.calculateLatePenalty 
+                ? Storage.calculateLatePenalty(inTime, shiftStartStr, employee ? employee.base_salary : 5000000) 
+                : { isLate: false, penalty: 0 };
+
+              isLate = penaltyRes.isLate;
+              if (isLate) {
+                  if (penaltyRes.isHalfDay) {
+                      penaltyBadge = ` <span class="badge badge-warning" style="font-size: 0.65rem; padding: 1px 4px; vertical-align: middle;" title="Terlambat >2 Jam (Izin 1/2 Hari)">⏱️ 1/2 Hari</span>`;
+                  } else if (penaltyRes.penalty > 0) {
+                      penaltyBadge = ` <span class="badge badge-danger" style="font-size: 0.65rem; padding: 1px 4px; vertical-align: middle;" title="Denda Keterlambatan: Rp ${penaltyRes.penalty.toLocaleString('id-ID')}">-${penaltyRes.penalty / 1000}k</span>`;
+                  }
               }
           }
           
@@ -1672,7 +1680,7 @@ const Attendance = {
               <tr>
                   <td style="white-space: nowrap; font-weight: 500;">${formatTgl(date)}</td>
                   <td>
-                      <span style="color: ${isLate ? '#ef4444' : 'inherit'}; font-weight: ${isLate ? 'bold' : 'normal'};">${inTime}</span>
+                      <span style="color: ${isLate ? '#ef4444' : 'inherit'}; font-weight: ${isLate ? 'bold' : 'normal'};">${inTime}</span>${penaltyBadge}
                       ${dayLogs.inIsManual ? '<span style="color: #10b981; font-size: 0.75rem;" title="Manual: ' + (dayLogs.inDoc?.notes || '') + ' oleh ' + (dayLogs.inDoc?.updated_by || 'Admin') + '">✍️</span>' : ''}
                   </td>
                   <td>

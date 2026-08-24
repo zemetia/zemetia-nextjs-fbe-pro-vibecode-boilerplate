@@ -58,21 +58,21 @@ global.Storage = {
         return record;
     },
     calculateLatePenalty: function(clockInStr, shiftStartStr, baseSalary = 5000000) {
-        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0 };
+        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
         const timePart = String(clockInStr).includes(' ') ? String(clockInStr).split(' ')[1] : String(clockInStr);
         const [inH, inM] = timePart.split(':').map(Number);
         const [shiftH, shiftM] = String(shiftStartStr).split(':').map(Number);
-        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0 };
+        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
         const inMinutes = inH * 60 + inM;
         const shiftMinutes = shiftH * 60 + shiftM;
-        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0 };
+        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
         const lateMinutes = inMinutes - shiftMinutes;
-        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0 };
-        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1 };
-        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2 };
+        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false };
+        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false };
+        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false };
         else {
             const dailySalary = (Number(baseSalary) || 5000000) / 25;
-            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3 };
+            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3, isHalfDay: true };
         }
     },
     mockBatches: [],
@@ -326,5 +326,38 @@ describe('HR Workflow Verification', () => {
         expect(undoRes).toBe(true);
         expect(Storage.getAttendanceImportBatches().length).toBe(0);
         expect(Storage.mockRawLogs.length).toBe(0);
+    });
+
+    test('Universal Late Grace Period & Cross-Module Auto-Deduction Sync', () => {
+        const baseSalary = 5000000;
+        const shiftStart = '08:30';
+
+        // 1. 08:35 (Exact 5 mins): Normal, no fine, not late
+        const t0 = Storage.calculateLatePenalty('08:35:00', shiftStart, baseSalary);
+        expect(t0.isLate).toBe(false);
+        expect(t0.penalty).toBe(0);
+        expect(t0.tier).toBe(0);
+        expect(t0.isHalfDay).toBe(false);
+
+        // 2. 08:36 (6 mins): Tier 1 late fine Rp 10.000
+        const t1 = Storage.calculateLatePenalty('08:36:00', shiftStart, baseSalary);
+        expect(t1.isLate).toBe(true);
+        expect(t1.penalty).toBe(10000);
+        expect(t1.tier).toBe(1);
+        expect(t1.isHalfDay).toBe(false);
+
+        // 3. 09:45 (75 mins): Tier 2 late fine Rp 20.000
+        const t2 = Storage.calculateLatePenalty('09:45:00', shiftStart, baseSalary);
+        expect(t2.isLate).toBe(true);
+        expect(t2.penalty).toBe(20000);
+        expect(t2.tier).toBe(2);
+        expect(t2.isHalfDay).toBe(false);
+
+        // 4. 11:00 (150 mins): Tier 3 (>2 hours late) -> Classified as Izin Setengah Hari (0.5 * base / 25)
+        const t3 = Storage.calculateLatePenalty('11:00:00', shiftStart, baseSalary);
+        expect(t3.isLate).toBe(true);
+        expect(t3.tier).toBe(3);
+        expect(t3.isHalfDay).toBe(true);
+        expect(t3.penalty).toBe(100000); // 0.5 * (5,000,000 / 25) = 100,000
     });
 });

@@ -796,22 +796,18 @@ const Payroll = {
                         let dailyLateDeduction = 0;
                         if (!isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
                             const inTime = dayLog.in.split(' ')[1].substring(0, 5);
-                            const [ih, im] = inTime.split(':').map(Number);
-                            const [sh, sm] = shift.startTime.split(':').map(Number);
-                            const inTotal = ih * 60 + im;
-                            const startTotal = sh * 60 + sm;
-                            if (inTotal > startTotal) {
-                                lateCount++;
-                                const lateMinutes = inTotal - startTotal;
-                                if (lateMinutes > 5 && lateMinutes <= 60) {
-                                    dailyLateDeduction = 10000;
-                                } else if (lateMinutes > 60 && lateMinutes <= 120) {
-                                    dailyLateDeduction = 20000;
-                                } else if (lateMinutes > 120) {
-                                    const baseSalary = parseFloat(emp.base_salary) || 0;
-                                    dailyLateDeduction = 0.5 * (baseSalary / 25);
+                            const penaltyRes = Storage.calculateLatePenalty 
+                                ? Storage.calculateLatePenalty(inTime, shift.startTime, emp.base_salary) 
+                                : { isLate: false, penalty: 0, isHalfDay: false };
+
+                            if (penaltyRes.isLate) {
+                                if (penaltyRes.isHalfDay) {
+                                    halfDayIzinCount += 1;
+                                } else {
+                                    lateCount += 1;
+                                    dailyLateDeduction = penaltyRes.penalty;
+                                    lateDeductionAmount += dailyLateDeduction;
                                 }
-                                lateDeductionAmount += dailyLateDeduction;
                             }
                         }
 

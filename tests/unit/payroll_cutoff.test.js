@@ -29,6 +29,24 @@ global.Storage = {
         const pos = String(emp.position || '').toLowerCase();
         return dept.includes('security') || div.includes('security') || pos.includes('security') || pos.includes('satpam');
     },
+    calculateLatePenalty: (clockInStr, shiftStartStr, baseSalary = 5000000) => {
+        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        const timePart = String(clockInStr).includes(' ') ? String(clockInStr).split(' ')[1] : String(clockInStr);
+        const [inH, inM] = timePart.split(':').map(Number);
+        const [shiftH, shiftM] = String(shiftStartStr).split(':').map(Number);
+        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        const inMinutes = inH * 60 + inM;
+        const shiftMinutes = shiftH * 60 + shiftM;
+        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        const lateMinutes = inMinutes - shiftMinutes;
+        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false };
+        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false };
+        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false };
+        else {
+            const dailySalary = (Number(baseSalary) || 5000000) / 25;
+            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3, isHalfDay: true };
+        }
+    },
     get: jest.fn(() => []),
     set: jest.fn()
 };
@@ -556,9 +574,10 @@ describe('Flexible Payroll Cut-Off Engine', () => {
 
             const atd = await Payroll.calculateAttendanceForRange(mockEmployees, '2026-07-01', '2026-07-05');
             expect(atd.length).toBe(1);
-            // Day 2 (10k) + Day 3 (20k) + Day 4 (100k) = 130.000 total late deduction
-            expect(atd[0].late_deduction).toBe(130000);
-            expect(atd[0].late_count).toBe(4); // 4 days actually late (1 is in grace period)
+            // Day 2 (10k) + Day 3 (20k) = 30.000 total late deduction
+            expect(atd[0].late_deduction).toBe(30000);
+            expect(atd[0].late_count).toBe(2); // Days 2 and 3 (Day 1 is in grace period, Day 4 is classified as 1 SH)
+            expect(atd[0].half_day_izin).toBe(1); // Day 4 (>2 hours late) classified as Izin Setengah Hari
         });
 
         test('Payroll.handleLateBlur triggers override justification modal and recalculates net salary THP', async () => {

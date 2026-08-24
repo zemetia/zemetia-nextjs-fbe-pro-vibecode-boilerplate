@@ -982,6 +982,10 @@ const Storage = {
                 if (typeof FirebaseSync !== 'undefined' && FirebaseSync.isEnabled && FirebaseSync.isEnabled()) {
                     for (const emp of dummyEmps) {
                         await FirebaseSync.deleteFromCloud(this.KEYS.EMPLOYEES, String(emp.id)).catch(() => {});
+                        if (emp.nik) await FirebaseSync.deleteFromCloud(this.KEYS.EMPLOYEES, String(emp.nik)).catch(() => {});
+                    }
+                    for (const nik of dummyNiks) {
+                        await FirebaseSync.deleteFromCloud(this.KEYS.EMPLOYEES, nik).catch(() => {});
                     }
                 }
             }
@@ -4419,7 +4423,7 @@ const Storage = {
 
     calculateLatePenalty(clockInStr, shiftStartStr, baseSalary = 5000000) {
         if (!clockInStr || !shiftStartStr) {
-            return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0 };
+            return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         }
 
         const timePart = String(clockInStr).includes(' ') ? String(clockInStr).split(' ')[1] : String(clockInStr);
@@ -4427,32 +4431,32 @@ const Storage = {
         const [shiftH, shiftM] = String(shiftStartStr).split(':').map(Number);
 
         if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) {
-            return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0 };
+            return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         }
 
         const inMinutes = inH * 60 + inM;
         const shiftMinutes = shiftH * 60 + shiftM;
 
         if (inMinutes <= shiftMinutes) {
-            return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0 };
+            return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Tepat Waktu' };
         }
 
         const lateMinutes = inMinutes - shiftMinutes;
 
         if (lateMinutes <= 5) {
-            // Grace Period (0-5 mins late): Do NOT flag as late, do NOT apply penalty, do NOT increment late count
-            return { isLate: false, lateMinutes, penalty: 0, tier: 0 };
+            // Grace Period (0-5 mins late): Normal status, no red text, Rp 0 fine, no late count
+            return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false, description: 'Toleransi Grace Period (≤5 min)' };
         } else if (lateMinutes <= 60) {
-            // Tier 1 (6-60 mins late): Rp 10.000
-            return { isLate: true, lateMinutes, penalty: 10000, tier: 1 };
+            // Tier 1 (6-60 mins late): Red text, Rp 10.000 fine
+            return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false, description: 'Terlambat 6–60 min (Denda Rp 10.000)' };
         } else if (lateMinutes <= 120) {
-            // Tier 2 (61-120 mins late): Rp 20.000
-            return { isLate: true, lateMinutes, penalty: 20000, tier: 2 };
+            // Tier 2 (61-120 mins late): Red text, Rp 20.000 fine
+            return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false, description: 'Terlambat 61–120 min (Denda Rp 20.000)' };
         } else {
-            // Tier 3 (>120 mins late): 1/2 day salary deduction
+            // Tier 3 (>120 mins late): Classified as Izin Setengah Hari (1/2 day proportional salary deduction)
             const dailySalary = (Number(baseSalary) || 5000000) / 25;
             const halfDayDeduction = Math.round(0.5 * dailySalary);
-            return { isLate: true, lateMinutes, penalty: halfDayDeduction, tier: 3 };
+            return { isLate: true, lateMinutes, penalty: halfDayDeduction, tier: 3, isHalfDay: true, description: 'Terlambat >2 Jam (Izin Setengah Hari)' };
         }
     },
 
@@ -5071,7 +5075,18 @@ const Storage = {
     getPaymentTerms() { return this.get(this.KEYS.PAYMENT_TERMS) || []; },
     getUsers() { return this.get(this.KEYS.USERS) || []; },
     getRoles() { return this.get(this.KEYS.ROLES) || []; },
-    getEmployees() { return this.get(this.KEYS.EMPLOYEES) || []; },
+    getEmployees() {
+        const list = this.get(this.KEYS.EMPLOYEES) || [];
+        const TARGET_DUMMY_NAMES = ['andi pratama', 'siti aminah', 'budi baru', 'cici baru'];
+        return list.filter(e => {
+            if (!e) return false;
+            const name = String(e.name || e.fullName || '').trim().toLowerCase();
+            if (TARGET_DUMMY_NAMES.includes(name)) return false;
+            const nik = String(e.nik || '').trim().toUpperCase();
+            if (['EMP-2024-001', 'EMP-2024-002', 'EMP-2024-003', 'EMP-2024-005', 'EMP-001', 'EMP-002', 'EMP-003', 'EMP-005'].includes(nik)) return false;
+            return true;
+        });
+    },
 
 
     // Sales Orders
