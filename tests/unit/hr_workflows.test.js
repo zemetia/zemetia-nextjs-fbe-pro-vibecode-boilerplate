@@ -361,7 +361,7 @@ describe('HR Workflow Verification', () => {
         expect(t3.penalty).toBe(100000); // 0.5 * (5,000,000 / 25) = 100,000
     });
 
-    test('Security Shift Hours & Automated Overtime/Allowance Integration', () => {
+    test('Security Shift Hours & Automated Overtime/Allowance Integration (Lunch + Dinner on 12h Shifts)', () => {
         // 1. Validate Master Shift standard hours
         const rawStorage = require('../../data/storage.js');
         const shifts = Storage.getMasterShifts ? Storage.getMasterShifts() : [];
@@ -378,7 +378,7 @@ describe('HR Workflow Verification', () => {
             expect(secMlm.isNight).toBe(true);
         }
 
-        // 2. Validate Security Attendance Calculation (4h fixed OT and Shift Meal Allocation)
+        // 2. Validate Security Attendance Calculation (4h fixed OT, Lunch Rp 20K + Dinner Rp 20K)
         const secEmp = {
             nik: 'SEC_001',
             name: 'Security Officer',
@@ -389,22 +389,20 @@ describe('HR Workflow Verification', () => {
         };
 
         const totalWorkDays = 20;
-        const nightDays = 8; // 8 night shifts, 12 day shifts
-        const dayShifts = totalWorkDays - nightDays; // 12 day shifts
         const overtimeHours = totalWorkDays * 4; // 80 hours total
 
-        const mealPay = dayShifts * 20000; // 12 * 20.000 = Rp 240.000
-        const nightMealPay = nightDays * 20000; // 8 * 20.000 = Rp 160.000
-        const overtimePay = overtimeHours * 10000; // 80 * 10.000 = Rp 800.000
+        const mealPay = totalWorkDays * 20000; // 20 * 20.000 = Rp 400.000 (Makan Siang)
+        const nightMealPay = totalWorkDays * 20000; // 20 * 20.000 = Rp 400.000 (Makan Malam)
+        const overtimePay = overtimeHours * 10000; // 80 * 10.000 = Rp 800.000 (Lembur)
 
-        expect(mealPay).toBe(240000);
-        expect(nightMealPay).toBe(160000);
+        expect(mealPay).toBe(400000);
+        expect(nightMealPay).toBe(400000);
         expect(overtimePay).toBe(800000);
-        // Total additional per shift = (240k + 160k + 800k) / 20 = Rp 60.000 per shift
-        expect((mealPay + nightMealPay + overtimePay) / totalWorkDays).toBe(60000);
+        // Total additional per shift = (400k + 400k + 800k) / 20 = Rp 80.000 per shift (Siang 20k + Malam 20k + Lembur 40k)
+        expect((mealPay + nightMealPay + overtimePay) / totalWorkDays).toBe(80000);
     });
 
-    test('Security Full 25 Night Shifts & Mess Employee 12-Hour Shift Automation', () => {
+    test('Security Full 25 Shifts & Mess Employee 12-Hour Shift Automation', () => {
         // 1. Storage isMessOrSecurityEmployee helper validation
         const secEmp = { nik: 'SEC_002', name: 'Bambang Security', department: 'SECURITY' };
         const messEmp = { nik: 'PROD_001', name: 'Joko Produksi', department: 'PRODUCTION', night_meal_category: 'mess' };
@@ -414,35 +412,31 @@ describe('HR Workflow Verification', () => {
         expect(Storage.isMessOrSecurityEmployee(messEmp)).toBe(true);
         expect(Storage.isMessOrSecurityEmployee(regularEmp)).toBe(false);
 
-        // 2. Security with 25 Full Night Shifts (SEC-MLM)
+        // 2. Security with 25 Full 12-Hour Shifts
         const totalWorkDays25 = 25;
-        const nightDays25 = 25; // 25 night shifts
-        const dayShifts25 = Math.max(0, totalWorkDays25 - nightDays25); // 0 day shifts
         const otHours25 = totalWorkDays25 * 4; // 100 hours
 
-        const mealPay25 = dayShifts25 * 20000; // Rp 0
-        const nightMealPay25 = nightDays25 * 20000; // Rp 500.000
-        const overtimePay25 = otHours25 * 10000; // Rp 1.000.000
+        const mealPay25 = totalWorkDays25 * 20000; // Rp 500.000 (Siang)
+        const nightMealPay25 = totalWorkDays25 * 20000; // Rp 500.000 (Malam)
+        const overtimePay25 = otHours25 * 10000; // Rp 1.000.000 (Lembur)
 
-        expect(mealPay25).toBe(0);
+        expect(mealPay25).toBe(500000);
         expect(nightMealPay25).toBe(500000);
         expect(overtimePay25).toBe(1000000);
-        expect(nightMealPay25 + overtimePay25).toBe(1500000); // Rp 60.000 x 25
+        expect(mealPay25 + nightMealPay25 + overtimePay25).toBe(2000000); // Rp 80.000 x 25
 
-        // 3. Mess Employee with 15 Day Shifts + 10 Night Shifts
+        // 3. Mess Employee with 25 12-Hour Shifts
         const messTotalDays = 25;
-        const messNightDays = 10;
-        const messDayShifts = Math.max(0, messTotalDays - messNightDays); // 15
         const messOtHours = messTotalDays * 4; // 100 hours
 
-        const messMealPay = messDayShifts * 20000; // Rp 300.000
-        const messNightMealPay = messNightDays * 20000; // Rp 200.000
+        const messMealPay = messTotalDays * 20000; // Rp 500.000
+        const messNightMealPay = messTotalDays * 20000; // Rp 500.000
         const messOtPay = messOtHours * 10000; // Rp 1.000.000
 
-        expect(messMealPay).toBe(300000);
-        expect(messNightMealPay).toBe(200000);
+        expect(messMealPay).toBe(500000);
+        expect(messNightMealPay).toBe(500000);
         expect(messOtPay).toBe(1000000);
-        expect(messMealPay + messNightMealPay + messOtPay).toBe(1500000);
+        expect(messMealPay + messNightMealPay + messOtPay).toBe(2000000);
     });
 });
 

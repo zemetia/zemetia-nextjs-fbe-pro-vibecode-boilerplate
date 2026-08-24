@@ -303,9 +303,10 @@ describe('Flexible Payroll Cut-Off Engine', () => {
         expect(generated[0].work_days).toBe(26);
         expect(generated[0].unpaid_absence_days).toBe(0);
         expect(generated[0].absence_deduction).toBe(0);
-        expect(generated[0].meal_pay).toBe(520000); // 26 days * 20,000 = 520,000
+        expect(generated[0].meal_pay).toBe(520000); // 26 days * 20,000 = 520,000 (Makan Siang)
+        expect(generated[0].night_meal_pay).toBe(520000); // 26 days * 20,000 = 520,000 (Makan Malam)
         expect(generated[0].overtime_pay).toBe(100000); // 10 hours * 10,000 = 100,000
-        expect(generated[0].total_salary).toBe(5620000); // 5,000,000 (Base) + 100,000 (OT) + 520,000 (Meal)
+        expect(generated[0].total_salary).toBe(6140000); // 5,000,000 (Base) + 100,000 (OT) + 520,000 (Siang) + 520,000 (Malam)
     });
 
     test('generatePayroll: Security Division Quantitative Surplus Attendance (27 days present -> +1 Surplus Working Day Incentive)', async () => {
@@ -339,8 +340,9 @@ describe('Flexible Payroll Cut-Off Engine', () => {
         expect(generated[0].work_days).toBe(27);
         expect(generated[0].surplus_work_days).toBe(1);
         expect(generated[0].surplus_work_pay).toBe(200000); // 1 * (5,000,000 / 25) = 200,000
-        expect(generated[0].meal_pay).toBe(540000); // 27 * 20,000 = 540,000
-        expect(generated[0].total_salary).toBe(5740000); // 5,000,000 (Base) + 200,000 (Surplus) + 540,000 (Meal)
+        expect(generated[0].meal_pay).toBe(540000); // 27 * 20,000 = 540,000 (Siang)
+        expect(generated[0].night_meal_pay).toBe(540000); // 27 * 20,000 = 540,000 (Malam)
+        expect(generated[0].total_salary).toBe(6280000); // 5,000,000 (Base) + 200,000 (Surplus) + 540,000 (Siang) + 540,000 (Malam)
     });
 
     test('generatePayroll: BPJS calculation uses bpjs_wage_basis if defined, otherwise falls back to base_salary', async () => {

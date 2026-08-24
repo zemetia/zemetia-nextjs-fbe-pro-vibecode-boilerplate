@@ -1303,33 +1303,7 @@ const Attendance = {
           if (isMessOrSecurity) {
             if (hasIn || totalLogs >= 1) {
               securityOvertimeHours += 4; // 4 jam lembur tetap per kehadiran shift
-
-              const dayStr = date.split('-')[2];
-              const shiftId = empSchedule[dayStr] || deptSchedule[dayStr];
-              const shift = shiftId ? shifts.find(s => s.id === shiftId || s.code === shiftId) : null;
-
-              const rawIn = String(dayLogs.in || '').replace('T', ' ');
-              const inTimeStr = rawIn.split(' ')[1]?.substring(0, 5) || '';
-
-              let isNightShift = false;
-              if (shift) {
-                if (shift.isNight === true || 
-                    String(shift.code).toUpperCase().includes('MLM') || 
-                    String(shift.name).toUpperCase().includes('MALAM') || 
-                    String(shift.code).toUpperCase().includes('NIGHT') ||
-                    (shift.startTime && shift.startTime >= '18:00') ||
-                    (shift.endTime && shift.endTime <= '10:00')) {
-                  isNightShift = true;
-                }
-              } else if (inTimeStr) {
-                if (inTimeStr >= '15:00' || inTimeStr <= '04:00') {
-                  isNightShift = true;
-                }
-              }
-
-              if (isNightShift) {
-                securityNightDays++;
-              }
+              securityNightDays += 1;     // Otomatis berhak atas makan malam untuk setiap kehadiran shift 12 jam
             }
           } else {
             // Late Calculation for regular staff

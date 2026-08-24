@@ -315,9 +315,8 @@ const Payroll = {
             const isMessOrSecurity = isSecurity || isMess;
             const base = masterBaseSalary;
             const dailyRate = base / 25;
-            const dayShifts = isMessOrSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
-            const mealPay = dayShifts * 20000;
-            const nightMealPay = (atd.night_days || 0) * 20000;
+            const mealPay = (atd.work_days || 0) * 20000;
+            const nightMealPay = (isMessOrSecurity ? (atd.work_days || 0) : (atd.night_days || 0)) * 20000;
             const presencePay = isSecurity ? 0 : dailyRate * (atd.extra_days || 0);
             const securityOtRate = emp.security_overtime_rate || emp.overtime_rate || 10000;
             const overtimePay = isMessOrSecurity ? (atd.overtime_hours || 0) * securityOtRate : (atd.overtime_hours || 0) * 20000;
@@ -817,25 +816,7 @@ const Payroll = {
 
                         if (isMessOrSecurity) {
                             overtimeHours += 4;
-                            let isNightShift = false;
-                            if (shift) {
-                                if (shift.isNight === true || 
-                                    String(shift.code).toUpperCase().includes('MLM') || 
-                                    String(shift.name).toUpperCase().includes('MALAM') || 
-                                    String(shift.code).toUpperCase().includes('NIGHT') ||
-                                    (shift.startTime && shift.startTime >= '18:00') ||
-                                    (shift.endTime && shift.endTime <= '10:00')) {
-                                    isNightShift = true;
-                                }
-                            } else if (clockInTime) {
-                                if (clockInTime >= '15:00' || clockInTime <= '04:00') {
-                                    isNightShift = true;
-                                }
-                            }
-
-                            if (isNightShift) {
-                                nightDays++;
-                            }
+                            nightDays++; // Setiap kehadiran shift 12 jam Security/Mess berhak atas makan malam + makan siang
                         } else {
                             if ((shift && (shift.isNight || String(shift.code).toUpperCase().includes('MLM') || String(shift.name).toUpperCase().includes('MALAM'))) || 
                                 (clockOutTime && clockOutTime >= '19:00')) {
@@ -1358,13 +1339,12 @@ const Payroll = {
       // 2. Meal Allowance
       const isLunchEnabled = emp.lunch_allowance_enabled !== false;
       const lunchRate = emp.lunch_allowance_rate !== undefined && emp.lunch_allowance_rate !== '' ? parseFloat(emp.lunch_allowance_rate) : 20000;
-      // For Security & Mess: Day shifts get Lunch Allowance (Rp 20.000), Night shifts get Night Meal Allowance (Rp 20.000)
-      const dayShifts = isMessOrSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
-      const mealPay = isLunchEnabled ? dayShifts * lunchRate : 0;
+      // For Security & Mess: Every 12-hour shift attended earns both Lunch Allowance (Rp 20.000) and Night Meal Allowance (Rp 20.000)
+      const mealPay = isLunchEnabled ? (atd.work_days || 0) * lunchRate : 0;
 
       const isNightMealEnabled = emp.night_meal_enabled !== false && emp.night_meal_category !== 'disabled';
       const nightMealRate = emp.night_meal_rate !== undefined && emp.night_meal_rate !== '' ? parseFloat(emp.night_meal_rate) : 20000;
-      const nightMealPay = isNightMealEnabled ? (atd.night_days || 0) * nightMealRate : 0;
+      const nightMealPay = isNightMealEnabled ? (isMessOrSecurity ? (atd.work_days || 0) * nightMealRate : (atd.night_days || 0) * nightMealRate) : 0;
 
       // 3. Presence Allowance (Red Day Work for office staff; Security handled via surplusWorkPay)
       const presencePay = isSecurity ? 0 : dailyRate * (atd.extra_days || 0);
