@@ -1278,6 +1278,7 @@ const Attendance = {
         let missingTaps = 0;
         let lateCount = 0;
         let securityOvertimeHours = 0;
+        let securityNightDays = 0;
         
         const deptTarget = `DEPT:${employee.department}`;
         const empTarget = `EMP:${employee.id || employee.nik}`;
@@ -1296,28 +1297,22 @@ const Attendance = {
             workDays++;
           }
 
-          // Requirement 3: Automated Duration & Overtime Calculation for Security (8h standard + excess OT)
+          // Requirement 3: Automated Overtime (4h fixed per shift) & Shift Meal mapping for Security
           if (isSecurity) {
             if (hasIn || totalLogs >= 1) {
-              if (hasIn && hasOut) {
-                const rawIn = String(dayLogs.in || '').replace('T', ' ');
-                const rawOut = String(dayLogs.out || '').replace('T', ' ');
-                const inTimeStr = rawIn.split(' ')[1]?.substring(0, 5) || '00:00';
-                const outTimeStr = rawOut.split(' ')[1]?.substring(0, 5) || '00:00';
-                
-                const [hIn, mIn] = inTimeStr.split(':').map(Number);
-                const [hOut, mOut] = outTimeStr.split(':').map(Number);
-                
-                let inMin = hIn * 60 + mIn;
-                let outMin = hOut * 60 + mOut;
-                if (outMin < inMin) outMin += 24 * 60; // Overnight shift
-                
-                const durationMinutes = outMin - inMin;
-                const standardMinutes = 8 * 60;
-                const excessHours = Math.floor((durationMinutes - standardMinutes) / 60);
-                securityOvertimeHours += Math.max(4, excessHours);
-              } else {
-                securityOvertimeHours += 4;
+              securityOvertimeHours += 4; // 4 jam lembur tetap per kehadiran shift
+
+              const dayStr = date.split('-')[2];
+              const shiftId = empSchedule[dayStr] || deptSchedule[dayStr];
+              const shift = shiftId ? shifts.find(s => s.id === shiftId || s.code === shiftId) : null;
+
+              const rawIn = String(dayLogs.in || '').replace('T', ' ');
+              const inTimeStr = rawIn.split(' ')[1]?.substring(0, 5) || '';
+
+              const isNightShift = (shift && (shift.isNight || shift.code === 'SEC-MLM')) || 
+                                   (inTimeStr && (inTimeStr >= '15:00' || inTimeStr <= '04:00'));
+              if (isNightShift) {
+                securityNightDays++;
               }
             }
           } else {
@@ -1382,7 +1377,7 @@ const Attendance = {
               period: period,
               work_days: workDays,
               overtime_hours: isSecurity ? securityOvertimeHours : 0,
-              night_days: 0,
+              night_days: isSecurity ? securityNightDays : 0,
               extra_days: isSecurity ? Math.max(0, workDays - securityTargetDays) : 0,
               late_count: isSecurity ? 0 : lateCount,
               absence_days: absenceDays,
@@ -1396,6 +1391,7 @@ const Attendance = {
             this.records[recordIndex].work_days = workDays;
             if (isSecurity) {
               this.records[recordIndex].overtime_hours = securityOvertimeHours;
+              this.records[recordIndex].night_days = securityNightDays;
               this.records[recordIndex].extra_days = Math.max(0, workDays - securityTargetDays);
               this.records[recordIndex].late_count = 0;
               this.records[recordIndex].half_day_izin = 0;

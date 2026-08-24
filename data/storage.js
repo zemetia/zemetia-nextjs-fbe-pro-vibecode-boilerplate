@@ -1782,7 +1782,7 @@ const Storage = {
     },
 
     // Default Chart of Accounts (SAK EMKM compliant) - Gold Refinery Edition
-    getDefaultChartOfAccounts() {
+        getDefaultChartOfAccounts() {
         return [
           {
                     "code": "1000",
@@ -3590,7 +3590,7 @@ const Storage = {
                     "category": "pendapatan_lain",
                     "balance": 0
           }
-        ];
+];
     },
 
     seedTestData() {
@@ -4249,22 +4249,42 @@ const Storage = {
             {
                 code: 'SEC-PAGI',
                 name: 'Security Pagi (12 Jam)',
-                startTime: '08:00', // Note: as per existing default
-                endTime: '16:00',
+                startTime: '07:00',
+                endTime: '19:00',
                 breakDuration: 60,
                 isNight: false,
-                notes: 'Shift Security Siang/Pagi. Total 12 jam (08:00 - 20:00). 8 Jam Kerja + 4 Jam Lembur.'
+                notes: 'Shift Security Pagi. Total 12 jam (07:00 - 19:00). 8 Jam Kerja + 4 Jam Lembur.'
             },
             {
                 code: 'SEC-MLM',
                 name: 'Security Malam (12 Jam)',
-                startTime: '20:00',
-                endTime: '04:00',
+                startTime: '19:00',
+                endTime: '07:00',
                 breakDuration: 60,
                 isNight: true,
-                notes: 'Shift Security Malam. Total 12 jam (20:00 - 08:00). 8 Jam Kerja + 4 Jam Lembur.'
+                notes: 'Shift Security Malam. Total 12 jam (19:00 - 07:00). 8 Jam Kerja + 4 Jam Lembur.'
             }
         ];
+
+        // Auto-migrate / correct existing Security shifts if they contain legacy hours
+        list.forEach(s => {
+            if (s.code === 'SEC-PAGI' && (s.startTime !== '07:00' || s.endTime !== '19:00')) {
+                s.startTime = '07:00';
+                s.endTime = '19:00';
+                s.name = 'Security Pagi (12 Jam)';
+                s.notes = 'Shift Security Pagi. Total 12 jam (07:00 - 19:00). 8 Jam Kerja + 4 Jam Lembur.';
+                s.isNight = false;
+                updated = true;
+            }
+            if (s.code === 'SEC-MLM' && (s.startTime !== '19:00' || s.endTime !== '07:00')) {
+                s.startTime = '19:00';
+                s.endTime = '07:00';
+                s.name = 'Security Malam (12 Jam)';
+                s.notes = 'Shift Security Malam. Total 12 jam (19:00 - 07:00). 8 Jam Kerja + 4 Jam Lembur.';
+                s.isNight = true;
+                updated = true;
+            }
+        });
 
         for (const def of defaultShifts) {
             if (!list.some(s => s.code === def.code)) {

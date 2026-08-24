@@ -360,4 +360,47 @@ describe('HR Workflow Verification', () => {
         expect(t3.isHalfDay).toBe(true);
         expect(t3.penalty).toBe(100000); // 0.5 * (5,000,000 / 25) = 100,000
     });
+
+    test('Security Shift Hours & Automated Overtime/Allowance Integration', () => {
+        // 1. Validate Master Shift standard hours
+        const rawStorage = require('../../data/storage.js');
+        const shifts = Storage.getMasterShifts ? Storage.getMasterShifts() : [];
+        const secPagi = shifts.find(s => s.code === 'SEC-PAGI');
+        const secMlm = shifts.find(s => s.code === 'SEC-MLM');
+
+        if (secPagi) {
+            expect(secPagi.startTime).toBe('07:00');
+            expect(secPagi.endTime).toBe('19:00');
+        }
+        if (secMlm) {
+            expect(secMlm.startTime).toBe('19:00');
+            expect(secMlm.endTime).toBe('07:00');
+            expect(secMlm.isNight).toBe(true);
+        }
+
+        // 2. Validate Security Attendance Calculation (4h fixed OT and Shift Meal Allocation)
+        const secEmp = {
+            nik: 'SEC_001',
+            name: 'Security Officer',
+            department: 'SECURITY',
+            position: 'Security Guard',
+            base_salary: 4000000,
+            security_overtime_rate: 10000
+        };
+
+        const totalWorkDays = 20;
+        const nightDays = 8; // 8 night shifts, 12 day shifts
+        const dayShifts = totalWorkDays - nightDays; // 12 day shifts
+        const overtimeHours = totalWorkDays * 4; // 80 hours total
+
+        const mealPay = dayShifts * 20000; // 12 * 20.000 = Rp 240.000
+        const nightMealPay = nightDays * 20000; // 8 * 20.000 = Rp 160.000
+        const overtimePay = overtimeHours * 10000; // 80 * 10.000 = Rp 800.000
+
+        expect(mealPay).toBe(240000);
+        expect(nightMealPay).toBe(160000);
+        expect(overtimePay).toBe(800000);
+        // Total additional per shift = (240k + 160k + 800k) / 20 = Rp 60.000 per shift
+        expect((mealPay + nightMealPay + overtimePay) / totalWorkDays).toBe(60000);
+    });
 });

@@ -305,12 +305,20 @@ const Payroll = {
               production_grams: 0
             };
 
+            const isSecurity = (Storage.isSecurityEmployee && Storage.isSecurityEmployee(emp)) || (
+                String(emp.department || '').toLowerCase().includes('security') ||
+                String(emp.division || emp.job_level || '').toLowerCase().includes('security') ||
+                String(emp.position || '').toLowerCase().includes('security') ||
+                String(emp.position || '').toLowerCase().includes('satpam')
+            );
             const base = masterBaseSalary;
             const dailyRate = base / 25;
-            const mealPay = (atd.work_days || 0) * 20000;
+            const dayShifts = isSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
+            const mealPay = dayShifts * 20000;
             const nightMealPay = (atd.night_days || 0) * 20000;
-            const presencePay = dailyRate * (atd.extra_days || 0);
-            const overtimePay = (atd.overtime_hours || 0) * 20000;
+            const presencePay = isSecurity ? 0 : dailyRate * (atd.extra_days || 0);
+            const securityOtRate = emp.security_overtime_rate || emp.overtime_rate || 10000;
+            const overtimePay = isSecurity ? (atd.overtime_hours || 0) * securityOtRate : (atd.overtime_hours || 0) * 20000;
 
             let productionPay = 0;
             if (emp.payroll_level && emp.payroll_level !== 'N/A') {
@@ -720,6 +728,13 @@ const Payroll = {
         const end = new Date(endDateStr + 'T12:00:00');
         let cur = new Date(start);
         
+        const isSecurity = (Storage.isSecurityEmployee && Storage.isSecurityEmployee(emp)) || (
+            String(emp.department || '').toLowerCase().includes('security') ||
+            String(emp.division || emp.job_level || '').toLowerCase().includes('security') ||
+            String(emp.position || '').toLowerCase().includes('security') ||
+            String(emp.position || '').toLowerCase().includes('satpam')
+        );
+
         let scheduledWorkDays = 0;
         
         while (cur <= end) {
@@ -737,10 +752,11 @@ const Payroll = {
             const empSchedule = periodSchedule[empTarget] || {};
             
             const shiftId = empSchedule[dayKey] || deptSchedule[dayKey];
-            const shift = shiftId ? shifts.find(s => s.id === shiftId) : null;
+            const shift = shiftId ? shifts.find(s => s.id === shiftId || s.code === shiftId) : null;
             
-            const isSunday = cur.getDay() === 0;
-            const isHoliday = holidays.some(h => h.date === dateStr);
+            const dayOfWeek = cur.getDay();
+            const isSunday = dayOfWeek === 0;
+            const isHoliday = holidays.some ? holidays.some(h => h.date === dateStr) : (Array.isArray(holidays) && holidays.includes(dateStr));
             const isCompanyDayoff = Storage.isCompanyDayoff ? Storage.isCompanyDayoff(dateStr) : false;
             const companyDayoffRec = isCompanyDayoff && Storage.getCompanyDayoffRecord ? Storage.getCompanyDayoffRecord(dateStr) : null;
             const isPaidCompanyDayoff = isCompanyDayoff && (!companyDayoffRec || companyDayoffRec.isPaid !== false);
@@ -754,8 +770,14 @@ const Payroll = {
             const isPostResign = isInactive && resDate && (dateStr > resDate);
             const isWithinContract = !isPreJoin && !isPostResign;
 
-            if (shift && !isPaidCompanyDayoff && isWithinContract) {
-                scheduledWorkDays++;
+            if (isWithinContract && !isPaidCompanyDayoff) {
+                if (isSecurity) {
+                    if (!isSunday) {
+                        scheduledWorkDays++;
+                    }
+                } else if (shift) {
+                    scheduledWorkDays++;
+                }
             }
             
             if (isWithinContract) {
@@ -769,9 +791,9 @@ const Payroll = {
                     } else {
                         const hasIn = dayLog.in !== null;
                         const hasOut = dayLog.out !== null;
-                        const totalLogs = dayLog.raw.length;
+                        const totalLogs = (dayLog.raw || []).length;
                         
-                        if ((hasIn && hasOut) || totalLogs >= 2) {
+                        if ((hasIn && hasOut) || totalLogs >= 2 || (isSecurity && (hasIn || totalLogs >= 1))) {
                             workDays++;
                             isPresent = true;
                         } else if (totalLogs === 1) {
@@ -786,58 +808,66 @@ const Payroll = {
                             extraDays++;
                         }
 
+                        const clockInTime = (dayLog && dayLog.in) ? dayLog.in.split(' ')[1].substring(0, 5) : '';
                         const clockOutTime = (dayLog && dayLog.out) ? dayLog.out.split(' ')[1].substring(0, 5) : '';
 
-                        // Night meal allowance trigger: shift is night OR clock-out >= 19:00 WIB
-                        if ((shift && shift.isNight) || (clockOutTime && clockOutTime >= '19:00')) {
-                            nightDays++;
-                        }
-
-                        let dailyLateDeduction = 0;
-                        if (!isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
-                            const inTime = dayLog.in.split(' ')[1].substring(0, 5);
-                            const penaltyRes = Storage.calculateLatePenalty 
-                                ? Storage.calculateLatePenalty(inTime, shift.startTime, emp.base_salary) 
-                                : { isLate: false, penalty: 0, isHalfDay: false };
-
-                            if (penaltyRes.isLate) {
-                                if (penaltyRes.isHalfDay) {
-                                    halfDayIzinCount += 1;
-                                } else {
-                                    lateCount += 1;
-                                    dailyLateDeduction = penaltyRes.penalty;
-                                    lateDeductionAmount += dailyLateDeduction;
-                                }
+                        if (isSecurity) {
+                            overtimeHours += 4;
+                            const isNightShift = (shift && (shift.isNight || shift.code === 'SEC-MLM')) || 
+                                                 (clockInTime && (clockInTime >= '15:00' || clockInTime <= '04:00')) ||
+                                                 (clockOutTime && clockOutTime <= '10:00');
+                            if (isNightShift) {
+                                nightDays++;
                             }
-                        }
-
-                        if (dayLog && dayLog.out !== null && shift && shift.endTime) {
-                            const outTime = clockOutTime;
-                            const [oh, om] = outTime.split(':').map(Number);
-                            const [eh, em] = shift.endTime.split(':').map(Number);
-                            let outTotal = oh * 60 + om;
-                            let endTotal = eh * 60 + em;
-                            if (outTotal < 12 * 60 && endTotal > 12 * 60) {
-                                outTotal += 24 * 60;
+                        } else {
+                            if ((shift && shift.isNight) || (clockOutTime && clockOutTime >= '19:00')) {
+                                nightDays++;
                             }
 
-                            // Overtime with role-based capping
-                            if (outTotal > endTotal) {
-                                const extraMin = outTotal - endTotal;
-                                if (extraMin >= 60) {
-                                    const rawOt = Math.floor(extraMin / 60);
-                                    const otCap = this.getOvertimeCapHours(emp);
-                                    overtimeHours += Math.min(rawOt, otCap);
+                            let dailyLateDeduction = 0;
+                            if (!isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
+                                const inTime = clockInTime;
+                                const penaltyRes = Storage.calculateLatePenalty 
+                                    ? Storage.calculateLatePenalty(inTime, shift.startTime, emp.base_salary) 
+                                    : { isLate: false, penalty: 0, isHalfDay: false };
+
+                                if (penaltyRes.isLate) {
+                                    if (penaltyRes.isHalfDay) {
+                                        halfDayIzinCount += 1;
+                                    } else {
+                                        lateCount += 1;
+                                        dailyLateDeduction = penaltyRes.penalty;
+                                        lateDeductionAmount += dailyLateDeduction;
+                                    }
                                 }
                             }
 
-                            // Zero tolerance for early departure (pulang cepat)
-                            if (outTotal < endTotal) {
-                                const earlyMin = endTotal - outTotal;
-                                if (earlyMin > 120) {
-                                    halfDayIzinCount += 1;
-                                } else if (earlyMin > 5) {
-                                    lateDeductionAmount += (earlyMin <= 60 ? 10000 : 20000);
+                            if (dayLog && dayLog.out !== null && shift && shift.endTime) {
+                                const outTime = clockOutTime;
+                                const [oh, om] = outTime.split(':').map(Number);
+                                const [eh, em] = shift.endTime.split(':').map(Number);
+                                let outTotal = oh * 60 + om;
+                                let endTotal = eh * 60 + em;
+                                if (outTotal < 12 * 60 && endTotal > 12 * 60) {
+                                    outTotal += 24 * 60;
+                                }
+
+                                if (outTotal > endTotal) {
+                                    const extraMin = outTotal - endTotal;
+                                    if (extraMin >= 60) {
+                                        const rawOt = Math.floor(extraMin / 60);
+                                        const otCap = this.getOvertimeCapHours(emp);
+                                        overtimeHours += Math.min(rawOt, otCap);
+                                    }
+                                }
+
+                                if (outTotal < endTotal) {
+                                    const earlyMin = endTotal - outTotal;
+                                    if (earlyMin > 120) {
+                                        halfDayIzinCount += 1;
+                                    } else if (earlyMin > 5) {
+                                        lateDeductionAmount += (earlyMin <= 60 ? 10000 : 20000);
+                                    }
                                 }
                             }
                         }
@@ -1297,15 +1327,6 @@ const Payroll = {
 
       const dailyRate = base / 25; // Basis 25 hari
 
-      // 2. Meal Allowance
-      const isLunchEnabled = emp.lunch_allowance_enabled !== false;
-      const lunchRate = emp.lunch_allowance_rate !== undefined && emp.lunch_allowance_rate !== '' ? parseFloat(emp.lunch_allowance_rate) : 20000;
-      const mealPay = isLunchEnabled ? (atd.work_days || 0) * lunchRate : 0;
-
-      const isNightMealEnabled = emp.night_meal_enabled !== false && emp.night_meal_category !== 'disabled';
-      const nightMealRate = emp.night_meal_rate !== undefined && emp.night_meal_rate !== '' ? parseFloat(emp.night_meal_rate) : 20000;
-      const nightMealPay = isNightMealEnabled ? (atd.night_days || 0) * nightMealRate : 0;
-
       const isSecurity = (Storage.isSecurityEmployee && Storage.isSecurityEmployee(emp)) || (
           String(emp.department || '').toLowerCase().includes('security') ||
           String(emp.division || emp.job_level || '').toLowerCase().includes('security') ||
@@ -1313,6 +1334,17 @@ const Payroll = {
           String(emp.position || '').toLowerCase().includes('satpam')
       );
       const securityOtRate = emp.security_overtime_rate || emp.overtime_rate || 10000;
+
+      // 2. Meal Allowance
+      const isLunchEnabled = emp.lunch_allowance_enabled !== false;
+      const lunchRate = emp.lunch_allowance_rate !== undefined && emp.lunch_allowance_rate !== '' ? parseFloat(emp.lunch_allowance_rate) : 20000;
+      // For Security: Day shifts get Lunch Allowance (Rp 20.000), Night shifts get Night Meal Allowance (Rp 20.000)
+      const dayShifts = isSecurity ? Math.max(0, (atd.work_days || 0) - (atd.night_days || 0)) : (atd.work_days || 0);
+      const mealPay = isLunchEnabled ? dayShifts * lunchRate : 0;
+
+      const isNightMealEnabled = emp.night_meal_enabled !== false && emp.night_meal_category !== 'disabled';
+      const nightMealRate = emp.night_meal_rate !== undefined && emp.night_meal_rate !== '' ? parseFloat(emp.night_meal_rate) : 20000;
+      const nightMealPay = isNightMealEnabled ? (atd.night_days || 0) * nightMealRate : 0;
 
       // 3. Presence Allowance (Red Day Work for office staff; Security handled via surplusWorkPay)
       const presencePay = isSecurity ? 0 : dailyRate * (atd.extra_days || 0);
@@ -3155,12 +3187,12 @@ const Payroll = {
     // Build dynamic earnings list (Hide if zero)
     let earningsRows = `<tr><td>Basic Salary</td><td style="text-align: right;">${record.base_salary.toLocaleString('id-ID')}</td></tr>`;
     if (tunjTetap > 0) earningsRows += `<tr><td>Tunj. Tetap</td><td style="text-align: right;">${tunjTetap.toLocaleString('id-ID')}</td></tr>`;
-    if (mealPay > 0) earningsRows += `<tr><td>Tunjangan Makan</td><td style="text-align: right;">${mealPay.toLocaleString('id-ID')}</td></tr>`;
+    if (mealPay > 0) earningsRows += `<tr><td>Tunjangan Makan Siang</td><td style="text-align: right;">${mealPay.toLocaleString('id-ID')}</td></tr>`;
     if (nightMealPay > 0) earningsRows += `<tr><td>Tunjangan Makan Malam</td><td style="text-align: right;">${nightMealPay.toLocaleString('id-ID')}</td></tr>`;
     if (tunjLuarKota > 0) earningsRows += `<tr><td>Tunjangan Luar Kota</td><td style="text-align: right;">${tunjLuarKota.toLocaleString('id-ID')}</td></tr>`;
     if (presencePay > 0) earningsRows += `<tr><td>Tunjangan Kehadiran (Red Day)</td><td style="text-align: right;">${presencePay.toLocaleString('id-ID')}</td></tr>`;
     if (deficiency > 0) earningsRows += `<tr style="background: rgba(37, 99, 235, 0.05); font-weight: bold; color: #1e3a8a;"><td>Selisih Kurang Gaji</td><td style="text-align: right;">${deficiency.toLocaleString('id-ID')}</td></tr>`;
-    if (overtimePay > 0) earningsRows += `<tr><td>Overtime ${record.overtime_hours > 0 ? `(${record.overtime_hours}h)` : ''}</td><td style="text-align: right;">${overtimePay.toLocaleString('id-ID')}</td></tr>`;
+    if (overtimePay > 0) earningsRows += `<tr><td>Uang Lembur ${record.overtime_hours > 0 ? `(${record.overtime_hours} Jam)` : ''}</td><td style="text-align: right;">${overtimePay.toLocaleString('id-ID')}</td></tr>`;
     if (productionPay > 0) earningsRows += `<tr><td>Bonus Produksi</td><td style="text-align: right;">${productionPay.toLocaleString('id-ID')}</td></tr>`;
     if (variableAllowance > 0) earningsRows += `<tr><td>Tunjangan Variabel</td><td style="text-align: right;">${variableAllowance.toLocaleString('id-ID')}</td></tr>`;
     if (bonus > 0) earningsRows += `<tr><td>Bonus</td><td style="text-align: right;">${bonus.toLocaleString('id-ID')}</td></tr>`;
@@ -3442,12 +3474,12 @@ const Payroll = {
 
     if (record.base_salary > 0) earnings.push(['Basic Salary', record.base_salary]);
     if (tunjTetap > 0) earnings.push(['Tunj. Tetap', tunjTetap]);
-    if (mealPay > 0) earnings.push(['Tunjangan Makan', mealPay]);
+    if (mealPay > 0) earnings.push(['Tunjangan Makan Siang', mealPay]);
     if (nightMealPay > 0) earnings.push(['Tunjangan Makan Malam', nightMealPay]);
     if (tunjLuarKota > 0) earnings.push(['Tunjangan Luar Kota', tunjLuarKota]);
     if (presencePay > 0) earnings.push(['Tunjangan Kehadiran (Red Day)', presencePay]);
     if (deficiency > 0) earnings.push([`Selisih Kurang Gaji`, deficiency]);
-    if (overtimePay > 0) earnings.push([`Overtime${record.overtime_hours > 0 ? ` (${record.overtime_hours}h)` : ''}`, overtimePay]);
+    if (overtimePay > 0) earnings.push([`Uang Lembur${record.overtime_hours > 0 ? ` (${record.overtime_hours} Jam)` : ''}`, overtimePay]);
     if (productionPay > 0) earnings.push(['Bonus Produksi', productionPay]);
     if (variableAllowance > 0) earnings.push(['Tunjangan Variabel', variableAllowance]);
     if (bonus > 0) earnings.push(['Bonus', bonus]);

@@ -13,29 +13,50 @@ const MasterShift = {
     },
 
     async checkAndSeedSecurity() {
+        let changed = false;
         const existingPagi = this.shifts.find(s => s.code === 'SEC-PAGI');
         if (!existingPagi) {
             await this.addShift({
                 code: 'SEC-PAGI',
                 name: 'Security Pagi (12 Jam)',
-                startTime: '08:00',
-                endTime: '16:00',
+                startTime: '07:00',
+                endTime: '19:00',
                 breakDuration: 60,
                 isNight: false,
-                notes: 'Shift Security Siang/Pagi. Total 12 jam (08:00 - 20:00). 8 Jam Kerja + 4 Jam Lembur.'
+                notes: 'Shift Security Pagi. Total 12 jam (07:00 - 19:00). 8 Jam Kerja + 4 Jam Lembur.'
             });
+        } else if (existingPagi.startTime !== '07:00' || existingPagi.endTime !== '19:00') {
+            existingPagi.startTime = '07:00';
+            existingPagi.endTime = '19:00';
+            existingPagi.name = 'Security Pagi (12 Jam)';
+            existingPagi.notes = 'Shift Security Pagi. Total 12 jam (07:00 - 19:00). 8 Jam Kerja + 4 Jam Lembur.';
+            existingPagi.isNight = false;
+            changed = true;
         }
+
         const existingMalam = this.shifts.find(s => s.code === 'SEC-MLM');
         if (!existingMalam) {
             await this.addShift({
                 code: 'SEC-MLM',
                 name: 'Security Malam (12 Jam)',
-                startTime: '20:00',
-                endTime: '04:00',
+                startTime: '19:00',
+                endTime: '07:00',
                 breakDuration: 60,
                 isNight: true,
-                notes: 'Shift Security Malam. Total 12 jam (20:00 - 08:00). 8 Jam Kerja + 4 Jam Lembur.'
+                notes: 'Shift Security Malam. Total 12 jam (19:00 - 07:00). 8 Jam Kerja + 4 Jam Lembur.'
             });
+        } else if (existingMalam.startTime !== '19:00' || existingMalam.endTime !== '07:00') {
+            existingMalam.startTime = '19:00';
+            existingMalam.endTime = '07:00';
+            existingMalam.name = 'Security Malam (12 Jam)';
+            existingMalam.notes = 'Shift Security Malam. Total 12 jam (19:00 - 07:00). 8 Jam Kerja + 4 Jam Lembur.';
+            existingMalam.isNight = true;
+            changed = true;
+        }
+
+        if (changed) {
+            await this.saveShifts();
+            this.render();
         }
     },
 
