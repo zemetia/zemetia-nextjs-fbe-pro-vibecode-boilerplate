@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Search, Plus, Filter, CheckCircle2, ShieldCheck, Tag, RefreshCw, FileSpreadsheet } from 'lucide-react';
-import { getCOA, addCOAAccount, saveCOA } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
+import { getCOA, addCOAAccount, saveCOA, resetToDefaultCOA } from '../services/storageService';
+import {
+  Modal,
+  useModal,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function ChartOfAccounts() {
   const { modalProps, showModal } = useModal();
@@ -39,16 +49,13 @@ export default function ChartOfAccounts() {
   };
 
   const replaceWithExcelCOA = async () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const officialCoa = window.Storage.getDefaultChartOfAccounts();
-      await window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, officialCoa, true);
-      showModal({
-        variant: 'success',
-        title: '✅ Chart of Accounts Diperbarui',
-        message: `COA PT TAN berhasil di-replace dengan struktur resmi Excel (${officialCoa.length} akun).`
-      });
-      loadAccounts();
-    }
+    const officialCoa = await resetToDefaultCOA();
+    showModal({
+      variant: 'success',
+      title: '✅ Chart of Accounts Diperbarui',
+      message: `COA PT TAN berhasil di-replace dengan struktur resmi Excel (${officialCoa.length} akun).`
+    });
+    loadAccounts();
   };
 
   const handleAddAccount = async (e) => {
@@ -226,69 +233,63 @@ export default function ChartOfAccounts() {
           )}
         </div>
 
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Kode Akun</th>
-                <th>Nama Akun Keuangan</th>
-                <th>Kategori SAK</th>
-                <th>Tipe</th>
-                <th className="text-right">Saldo Terkini (IDR)</th>
-                <th>Penanda PT TAN</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAccounts.length === 0 ? (
-                <tr>
-                  <td className="text-center text-fg-muted p-7.5" colSpan="6">
-                    Tidak ada akun yang sesuai dengan pencarian
-                  </td>
-                </tr>
-              ) : (
-                filteredAccounts.map(acc => {
-                  const isExportAccount = exportAccountCodes.includes(acc.code);
-                  const isHeader = acc.type === 'header';
-                  return (
-                    <tr
-                      key={acc.code}
-                      className={isHeader ? 'bg-white/[0.03] font-bold' : 'bg-transparent font-normal'}
-                    >
-                      <td>
-                        <strong className={isHeader ? 'text-gold' : 'text-inherit'}>
-                          {acc.code}
-                        </strong>
-                      </td>
-                      <td>
-                        <span className={isHeader ? 'pl-0' : 'pl-4'}>
-                          {acc.name}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Kode Akun</TableHead>
+              <TableHead>Nama Akun Keuangan</TableHead>
+              <TableHead>Kategori SAK</TableHead>
+              <TableHead>Tipe</TableHead>
+              <TableHead className="text-right">Saldo Terkini (IDR)</TableHead>
+              <TableHead>Penanda PT TAN</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAccounts.length === 0 ? (
+              <TableEmpty colSpan={6} message="Tidak ada akun yang sesuai dengan pencarian" />
+            ) : (
+              filteredAccounts.map(acc => {
+                const isExportAccount = exportAccountCodes.includes(acc.code);
+                const isHeader = acc.type === 'header';
+                return (
+                  <TableRow
+                    key={acc.code}
+                    className={isHeader ? 'bg-white/[0.03] font-bold' : 'bg-transparent font-normal'}
+                  >
+                    <TableCell>
+                      <strong className={isHeader ? 'text-gold' : 'text-inherit'}>
+                        {acc.code}
+                      </strong>
+                    </TableCell>
+                    <TableCell>
+                      <span className={isHeader ? 'pl-0' : 'pl-4'}>
+                        {acc.name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="capitalize">{acc.category}</TableCell>
+                    <TableCell>
+                      <span className={`badge text-[0.7rem] ${isHeader ? 'badge-gold' : ''}`}>
+                        {acc.type}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      Rp {(acc.balance || 0).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      {isExportAccount ? (
+                        <span className="badge badge-emerald text-xs">
+                          <ShieldCheck size={12} /> PT TAN Dedicated
                         </span>
-                      </td>
-                      <td className="capitalize">{acc.category}</td>
-                      <td>
-                        <span className={`badge text-[0.7rem] ${isHeader ? 'badge-gold' : ''}`}>
-                          {acc.type}
-                        </span>
-                      </td>
-                      <td className="text-right font-semibold">
-                        Rp {(acc.balance || 0).toLocaleString()}
-                      </td>
-                      <td>
-                        {isExportAccount ? (
-                          <span className="badge badge-emerald text-xs">
-                            <ShieldCheck size={12} /> PT TAN Dedicated
-                          </span>
-                        ) : (
-                          <span className="text-fg-muted text-xs">PT TAN Excel</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      ) : (
+                        <span className="text-fg-muted text-xs">PT TAN Excel</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <Modal {...modalProps} />

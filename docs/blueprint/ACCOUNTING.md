@@ -90,14 +90,21 @@ Implementasi: [src/pages/LmLocalTrading.jsx](../../src/pages/LmLocalTrading.jsx)
 | `11502` | Persediaan Emas WIP (Vault Production WIP) |
 | `1160` | Persediaan Perhiasan Emas Siap Ekspor (Vault Ekspor) |
 
-### Pajak & piutang
+### Pajak, piutang & uang muka
 
-| Kode | Nama |
-|---|---|
-| `1120-3` | PPh 22 (pajak dibayar di muka) |
-| `1135` | PPh 22 Dibayar Di Muka (Impor Emas) |
-| `1132` | Piutang Usaha Ekspor USD |
-| `1113-2` | Piutang Usaha Ekspor |
+| Kode | Nama | Sifat |
+|---|---|---|
+| `1120-3` | PPh 22 (pajak dibayar di muka) | detail |
+| `1135` | PPh 22 Dibayar Di Muka (Impor Emas) | detail |
+| `1132` | Piutang Usaha Ekspor USD | detail |
+| `1113-2` | Piutang Usaha Ekspor | detail |
+| `1121` | Uang Muka Pembelian | **header** |
+| `1121-1` | Uang Muka Pembelian Emas Lokal | detail |
+| `1121-2` | Uang Muka Pembelian Emas Impor | detail |
+| `1121-3` | Uang Muka Pembelian Operasional | detail |
+| `2116` | Uang Muka Penjualan | **header** |
+| `2116-1` | Uang Muka Penjualan Emas Lokal | detail |
+| `2116-2` | Uang Muka Penjualan Perhiasan Ekspor | detail |
 
 ### Pendapatan & HPP
 
@@ -111,7 +118,7 @@ Implementasi: [src/pages/LmLocalTrading.jsx](../../src/pages/LmLocalTrading.jsx)
 | `5118` | Biaya Susut Lebur Emas (Gold Loss) |
 | `5150` | Biaya Freight & Insurance Impor / Ekspor |
 
-Sumber kebenaran: `getDefaultChartOfAccounts()` di [data/storage.js:1658](../../data/storage.js) — 213 akun. Struktur puncaknya: `1` Aktiva · `2` Passiva · `3` Pendapatan · `4` Harga Pokok Penjualan · `5` Biaya Operasional · `6` Di luar usaha.
+Sumber kebenaran: `getDefaultChartOfAccounts()` di [data/storage.js:1658](../../data/storage.js) — 221 akun. Struktur puncaknya: `1` Aktiva · `2` Passiva · `3` Pendapatan · `4` Harga Pokok Penjualan · `5` Biaya Operasional · `6` Di luar usaha.
 
 ---
 

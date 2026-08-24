@@ -11,7 +11,7 @@ Repo ini **bukan** aplikasi framework-modern. Ini SPA React tanpa router, tanpa 
 | File | Coverage | Use When |
 |---|---|---|
 | [STRUCTURE.md](./STRUCTURE.md) | Setiap folder & file penting, siapa memuat apa | Mencari di mana sesuatu tinggal |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Boot sequence, routing `useState`, dua lapisan aplikasi | Debug system-level, menambah halaman/integrasi |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Boot sequence, Clean URL routing (`/page-id`), dua lapisan aplikasi | Debug system-level, menambah halaman/integrasi |
 | [STORAGE.md](./STORAGE.md) | `window.Storage`, `KEYS`, cloud sync, SyncGuard, sequencer | Setiap baca/tulis data |
 | [ACCOUNTING.md](./ACCOUNTING.md) | COA SAK EMKM, alur 2-tahap 1159→1157, aturan jurnal | Setiap transaksi yang menyentuh buku |
 | [PAGES.md](./PAGES.md) | Anatomi halaman React, form + tabel riwayat, handler | Membuat atau mengubah halaman |

@@ -1,10 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Globe, DollarSign, Download, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck, ShoppingBag } from 'lucide-react';
-import { getCustomers, getFinishedGoods } from '../services/storageService';
+import {
+  getCustomers,
+  getFinishedGoods,
+  getExportSalesOrders,
+  getExportInvoices,
+  saveExportInvoices,
+  getJournalEntries,
+  saveJournalEntries,
+  getNextReferenceNumber
+} from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function ExportInvoicing() {
   const { modalProps, showModal } = useModal();
@@ -47,34 +66,10 @@ export default function ExportInvoicing() {
     setFinishedGoods(getFinishedGoods());
 
     // 2. Sales Orders
-    if (typeof window !== 'undefined' && window.Storage) {
-      const storedSO = window.Storage.get('pttan_export_sales_orders') || [];
-      setSalesOrders(storedSO);
-    }
+    setSalesOrders(getExportSalesOrders());
 
     // 3. Stored Export Invoices
-    if (typeof window !== 'undefined' && window.Storage) {
-      const storedInv = window.Storage.get('pttan_export_invoices') || [
-        {
-          id: 'INV-EXP-2026-001',
-          invoiceNo: 'INV-EXP-2026-001',
-          soNumber: 'SO-EXP-2026-001',
-          customerPONumber: 'PO-DMCC-2026-8899',
-          date: '2026-08-10',
-          buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
-          country: 'United Arab Emirates (UAE)',
-          pebNumber: 'PEB-2026-088912',
-          itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
-          weightGrams: 1000,
-          pricePerGramUSD: 85.00,
-          totalUSD: 85000,
-          exchangeRate: 16250,
-          totalIDR: 1381250000,
-          status: 'PEB APPROVED (PPN 0%)'
-        }
-      ];
-      setInvoices(storedInv);
-    }
+    setInvoices(getExportInvoices());
   };
 
   // Handler Pull From Sales Order (SO)
@@ -104,7 +99,7 @@ export default function ExportInvoicing() {
   const totalUSD = (form.weightGrams || 0) * (form.pricePerGramUSD || 0);
   const totalIDR = totalUSD * (form.exchangeRate || 16250);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.invoiceNo || !form.buyerName || !form.weightGrams) {
       showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No Invoice, Buyer, dan Berat Perhiasan Ekspor.' });
@@ -125,35 +120,34 @@ export default function ExportInvoicing() {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      // 1. Save Export Invoice
-      const list = window.Storage.get('pttan_export_invoices') || [];
-      list.unshift(newInvoice);
-      window.Storage.set('pttan_export_invoices', list);
+    // 1. Save Export Invoice
+    const list = getExportInvoices();
+    list.unshift(newInvoice);
+    await saveExportInvoices(list);
 
-      // 2. Auto Posting EMKM Journal (Pengakuan Piutang Ekspor vs Pendapatan Ekspor PPN 0%)
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: `JRN-EXP-${Date.now().toString().slice(-6)}`,
-        date: form.date,
-        description: `Penjualan Ekspor Perhiasan (${newInvoice.invoiceNo}) Ref SO: ${form.selectedSOId || 'Direct'} - ${newInvoice.buyerName} [PEB: ${newInvoice.pebNumber}]`,
-        lines: [
-          { accountCode: '1132', accountName: 'Piutang Usaha Ekspor USD', debit: totalIDR, credit: 0 },
-          { accountCode: '4120', accountName: 'Pendapatan Ekspor Perhiasan Emas (PPN 0%)', debit: 0, credit: totalIDR }
-        ],
-        createdAt: new Date().toISOString()
-      });
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+    // 2. Auto Posting EMKM Journal (Pengakuan Piutang Ekspor vs Pendapatan Ekspor PPN 0%)
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: form.date,
+      description: `Penjualan Ekspor Perhiasan (${newInvoice.invoiceNo}) Ref SO: ${form.selectedSOId || 'Direct'} - ${newInvoice.buyerName} [PEB: ${newInvoice.pebNumber}]`,
+      lines: [
+        { accountCode: '1132', accountName: 'Piutang Usaha Ekspor USD', debit: totalIDR, credit: 0 },
+        { accountCode: '4120', accountName: 'Pendapatan Ekspor Perhiasan Emas (PPN 0%)', debit: 0, credit: totalIDR }
+      ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
 
-      showModal({
-        variant: 'success',
-        title: `✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Diterbitkan`,
-        message: `• Buyer: ${newInvoice.buyerName}\n• Nilai Ekspor: $ ${totalUSD.toLocaleString()} USD (Rp ${totalIDR.toLocaleString()})\n• Jurnal Piutang Ekspor diposting ke Akun 1132 vs Pendapatan Ekspor (Akun 4120).\n• Status Pembayaran: 🔴 UNPAID (Siap dilunasi saat DHE masuk di BBM Kasir).`
-      });
-      loadInitialData();
-      setActiveView('list');
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ Faktur Ekspor USD (${newInvoice.invoiceNo}) Diterbitkan`,
+      message: `• Buyer: ${newInvoice.buyerName}\n• Nilai Ekspor: $ ${totalUSD.toLocaleString()} USD (Rp ${totalIDR.toLocaleString()})\n• Jurnal Piutang Ekspor diposting ke Akun 1132 vs Pendapatan Ekspor (Akun 4120).\n• Status Pembayaran: 🔴 UNPAID (Siap dilunasi saat DHE masuk di BBM Kasir).`
+    });
+    loadInitialData();
+    setActiveView('list');
   };
 
   const filteredInvoices = invoices.filter(inv =>
@@ -221,40 +215,42 @@ export default function ExportInvoicing() {
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. Invoice</th>
-                  <th>Ref No. SO</th>
-                  <th>Tanggal</th>
-                  <th>Buyer Ekspor</th>
-                  <th>Dokumen PEB</th>
-                  <th>Berat Gram</th>
-                  <th className="text-right">Total Nilai USD</th>
-                  <th className="text-right">Equivalent IDR</th>
-                  <th>Status PPN 0%</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map(inv => (
-                  <tr key={inv.id || inv.invoiceNo}>
-                    <td>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. Invoice</TableHead>
+                <TableHead>Ref No. SO</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Buyer Ekspor</TableHead>
+                <TableHead>Dokumen PEB</TableHead>
+                <TableHead className="text-right">Berat Gram</TableHead>
+                <TableHead className="text-right">Total Nilai USD</TableHead>
+                <TableHead className="text-right">Equivalent IDR</TableHead>
+                <TableHead>Status PPN 0%</TableHead>
+                <TableHead>Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredInvoices.length === 0 ? (
+                <TableEmpty colSpan={10} message="Belum ada faktur ekspor." />
+              ) : (
+                filteredInvoices.map(inv => (
+                  <TableRow key={inv.id || inv.invoiceNo}>
+                    <TableCell>
                       <strong>{inv.invoiceNo}</strong>
                       {inv.customerPONumber && (
                         <small className="text-fg-muted block text-xs">PO Cust: {inv.customerPONumber}</small>
                       )}
-                    </td>
-                    <td><small className="text-gold-light">{inv.soNumber || 'SO-EXP-2026-001'}</small></td>
-                    <td>{inv.date}</td>
-                    <td><strong>{inv.buyerName}</strong></td>
-                    <td><small className="text-sky-light">{inv.pebNumber}</small></td>
-                    <td className="font-bold">{inv.weightGrams} g</td>
-                    <td className="text-right font-extrabold text-sky-light">$ {(inv.totalUSD || 0).toLocaleString()} USD</td>
-                    <td className="text-right font-bold text-emerald-light">Rp {(inv.totalIDR || 0).toLocaleString()}</td>
-                    <td><span className="badge badge-emerald"><ShieldCheck className="inline mr-1" size={12} />{inv.status || 'PPN 0% APPROVED'}</span></td>
-                    <td>
+                    </TableCell>
+                    <TableCell><small className="text-gold-light">{inv.soNumber || 'SO-EXP-2026-001'}</small></TableCell>
+                    <TableCell>{inv.date}</TableCell>
+                    <TableCell><strong>{inv.buyerName}</strong></TableCell>
+                    <TableCell><small className="text-sky-light">{inv.pebNumber}</small></TableCell>
+                    <TableCell className="text-right font-bold">{inv.weightGrams} g</TableCell>
+                    <TableCell className="text-right font-extrabold text-sky-light">$ {(inv.totalUSD || 0).toLocaleString()} USD</TableCell>
+                    <TableCell className="text-right font-bold text-emerald-light">Rp {(inv.totalIDR || 0).toLocaleString()}</TableCell>
+                    <TableCell><span className="badge badge-emerald"><ShieldCheck className="inline mr-1" size={12} />{inv.status || 'PPN 0% APPROVED'}</span></TableCell>
+                    <TableCell>
                       <button
                         className="btn-primary py-1.5 px-2.5 text-xs"
                         onClick={() => showModal({
@@ -265,12 +261,12 @@ export default function ExportInvoicing() {
                       >
                         <Printer size={14} /> Cetak Invoice
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 

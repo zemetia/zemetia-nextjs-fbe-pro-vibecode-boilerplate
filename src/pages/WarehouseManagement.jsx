@@ -11,9 +11,19 @@ import {
   getMasterItems,
   getFinishedGoods
 } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function WarehouseManagement() {
   const { modalProps, showModal } = useModal();
@@ -348,67 +358,61 @@ export default function WarehouseManagement() {
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Jenis Dokumen</th>
-                  <th>No. Referensi / Dokumen</th>
-                  <th>Gudang Vault</th>
-                  <th>Nama Emas / Produk</th>
-                  <th className="text-right">Masuk (+)</th>
-                  <th className="text-right">Keluar (-)</th>
-                  <th className="text-right">Saldo Berjalan</th>
-                  <th>Serial Bar / Keterangan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMovements.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-8 text-fg-soft">
-                      Belum ada catatan mutasi stok untuk filter yang dipilih.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredMovements.map(m => (
-                    <tr key={m.id}>
-                      <td className="whitespace-nowrap">{m.date}</td>
-                      <td>
-                        <span className={`badge text-xs ${
-                          m.docType.includes('TTB') || m.docType.includes('LOKAL') ? 'badge-emerald' :
-                          m.docType.includes('WIP') ? 'badge-gold' :
-                          m.docType.includes('EKSPOR') ? 'badge-sky' : 'badge-purple'
-                        }`}>
-                          {m.docType}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>{m.docNo}</strong>
-                        {m.refNo && m.refNo !== '-' && <div className="text-[0.7rem] text-fg-muted">Ref: {m.refNo}</div>}
-                      </td>
-                      <td>
-                        <span className="text-xs text-gold-light font-medium">{m.warehouseName}</span>
-                      </td>
-                      <td><strong>{m.itemName}</strong></td>
-                      <td className="text-right text-emerald-light font-bold">
-                        {m.inQty > 0 ? `+${m.inQty.toLocaleString()} g` : '-'}
-                      </td>
-                      <td className="text-right text-danger font-bold">
-                        {m.outQty > 0 ? `-${m.outQty.toLocaleString()} g` : '-'}
-                      </td>
-                      <td className="text-right font-extrabold text-gold-light text-base">
-                        {m.balanceQty.toLocaleString()} g
-                      </td>
-                      <td>
-                        <small className="text-fg-soft">{m.serialNo}</small>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Jenis Dokumen</TableHead>
+                <TableHead>No. Referensi / Dokumen</TableHead>
+                <TableHead>Gudang Vault</TableHead>
+                <TableHead>Nama Emas / Produk</TableHead>
+                <TableHead className="text-right">Masuk (+)</TableHead>
+                <TableHead className="text-right">Keluar (-)</TableHead>
+                <TableHead className="text-right">Saldo Berjalan</TableHead>
+                <TableHead>Serial Bar / Keterangan</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMovements.length === 0 ? (
+                <TableEmpty colSpan={9} message="Belum ada catatan mutasi stok untuk filter yang dipilih." />
+              ) : (
+                filteredMovements.map(m => (
+                  <TableRow key={m.id}>
+                    <TableCell className="whitespace-nowrap">{m.date}</TableCell>
+                    <TableCell>
+                      <span className={`badge text-xs ${
+                        m.docType.includes('TTB') || m.docType.includes('LOKAL') ? 'badge-emerald' :
+                        m.docType.includes('WIP') ? 'badge-gold' :
+                        m.docType.includes('EKSPOR') ? 'badge-sky' : 'badge-orange'
+                      }`}>
+                        {m.docType}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <strong>{m.docNo}</strong>
+                      {m.refNo && m.refNo !== '-' && <div className="text-[0.7rem] text-fg-muted">Ref: {m.refNo}</div>}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-gold-light font-medium">{m.warehouseName}</span>
+                    </TableCell>
+                    <TableCell><strong>{m.itemName}</strong></TableCell>
+                    <TableCell className="text-right text-emerald-light font-bold">
+                      {m.inQty > 0 ? `+${m.inQty.toLocaleString()} g` : '-'}
+                    </TableCell>
+                    <TableCell className="text-right text-danger font-bold">
+                      {m.outQty > 0 ? `-${m.outQty.toLocaleString()} g` : '-'}
+                    </TableCell>
+                    <TableCell className="text-right font-extrabold text-gold-light text-base">
+                      {m.balanceQty.toLocaleString()} g
+                    </TableCell>
+                    <TableCell>
+                      <small className="text-fg-soft">{m.serialNo}</small>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -479,7 +483,7 @@ export default function WarehouseManagement() {
           <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
             <div>
               <h3 className="font-heading text-[1.1rem] flex items-center gap-2.5">
-                <ArrowRightLeft color="#8b5cf6" size={20} /> Riwayat Transfer Emas Internal Antar-Vault
+                <ArrowRightLeft color="#f97316" size={20} /> Riwayat Transfer Emas Internal Antar-Vault
               </h3>
               <p className="text-[0.8rem] text-fg-soft">
                 Semua pemindahan fisik antar-brankas otomatis menjurnal mutasi debet/kredit akun persediaan SAK EMKM
@@ -487,63 +491,57 @@ export default function WarehouseManagement() {
             </div>
 
             <button
-              className="btn-primary bg-linear-135 from-purple to-purple-dark text-white font-bold"
+              className="btn-primary bg-linear-135 from-orange to-orange-dark text-white font-bold"
               onClick={() => setShowTransferModal(true)}
             >
               <Plus size={16} /> Buat Transfer Baru
             </button>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. Transfer</th>
-                  <th>Tanggal</th>
-                  <th>Gudang Asal (Kredit)</th>
-                  <th>Gudang Tujuan (Debet)</th>
-                  <th>Barang Emas</th>
-                  <th className="text-right">Berat Gram</th>
-                  <th className="text-right">Estimasi Nilai Jurnal</th>
-                  <th>Keterangan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMovements.filter(m => m.docType.includes('TRANSFER')).length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-fg-soft">
-                      Belum ada riwayat transfer internal antar-vault.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredMovements.filter(m => m.docType.includes('TRANSFER') && m.inQty > 0).map(m => (
-                    <tr key={m.id}>
-                      <td><strong>{m.docNo}</strong></td>
-                      <td>{m.date}</td>
-                      <td>
-                        <span className="badge badge-rose text-xs">
-                          {m.refNo?.replace('Diterima dari ', '') || 'Vault Asal'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="badge badge-emerald text-xs">
-                          {m.warehouseName}
-                        </span>
-                      </td>
-                      <td><strong>{m.itemName}</strong></td>
-                      <td className="text-right font-extrabold text-gold-light text-base">
-                        {m.inQty.toLocaleString()} g
-                      </td>
-                      <td className="text-right text-sky-light font-bold">
-                        Rp {m.valueIDR.toLocaleString()}
-                      </td>
-                      <td><small className="text-fg-soft">{m.serialNo}</small></td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. Transfer</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Gudang Asal (Kredit)</TableHead>
+                <TableHead>Gudang Tujuan (Debet)</TableHead>
+                <TableHead>Barang Emas</TableHead>
+                <TableHead className="text-right">Berat Gram</TableHead>
+                <TableHead className="text-right">Estimasi Nilai Jurnal</TableHead>
+                <TableHead>Keterangan</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMovements.filter(m => m.docType.includes('TRANSFER')).length === 0 ? (
+                <TableEmpty colSpan={8} message="Belum ada riwayat transfer internal antar-vault." />
+              ) : (
+                filteredMovements.filter(m => m.docType.includes('TRANSFER') && m.inQty > 0).map(m => (
+                  <TableRow key={m.id}>
+                    <TableCell><strong>{m.docNo}</strong></TableCell>
+                    <TableCell>{m.date}</TableCell>
+                    <TableCell>
+                      <span className="badge badge-rose text-xs">
+                        {m.refNo?.replace('Diterima dari ', '') || 'Vault Asal'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="badge badge-emerald text-xs">
+                        {m.warehouseName}
+                      </span>
+                    </TableCell>
+                    <TableCell><strong>{m.itemName}</strong></TableCell>
+                    <TableCell className="text-right font-extrabold text-gold-light text-base">
+                      {m.inQty.toLocaleString()} g
+                    </TableCell>
+                    <TableCell className="text-right text-sky-light font-bold">
+                      Rp {m.valueIDR.toLocaleString()}
+                    </TableCell>
+                    <TableCell><small className="text-fg-soft">{m.serialNo}</small></TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 

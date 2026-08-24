@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { PlaneTakeoff, Plus, Calculator, RefreshCw, Scale, Printer, Sparkles, History, AlertCircle, Eye, Package, Truck } from 'lucide-react';
-import { createPurchaseOrder, getPurchaseOrders } from '../services/storageService';
+import { PlaneTakeoff, Plus, Calculator, RefreshCw, Scale, Printer, Sparkles, History, AlertCircle, Eye, Package, Truck, X } from 'lucide-react';
+import { createPurchaseOrder, getPurchaseOrders, getPRConversionPrefill, clearPRConversionPrefill, markPRAsConverted } from '../services/storageService';
+import { exportPOPdf } from '../services/pdfService';
 import { fetchBcaERateUSD, getStoredUsdRate } from '../services/currencyService';
-import Modal, { useModal } from '../components/ui/Modal';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function LmImportTrading() {
   const { modalProps, showModal } = useModal();
@@ -12,6 +23,7 @@ export default function LmImportTrading() {
   const [unitMode, setUnitMode] = useState('oz'); // 'oz' (Troy Ounce) or 'gram' (Gram)
   const [selectedPOHistory, setSelectedPOHistory] = useState(null); // State for Payment History Modal
   const [selectedPODetail, setSelectedPODetail] = useState(null); // State for Detail PO Modal
+  const [activePRPrefill, setActivePRPrefill] = useState(null); // State for incoming PR prefill
 
   const [formData, setFormData] = useState({
     supplierName: 'YLG Bullion Singapore Pte Ltd',
@@ -32,7 +44,27 @@ export default function LmImportTrading() {
   useEffect(() => {
     loadOrders();
     syncLiveRate();
+    checkIncomingPRPrefill();
   }, []);
+
+  const checkIncomingPRPrefill = () => {
+    const prefill = getPRConversionPrefill();
+    if (prefill && prefill.category === 'GOLD_IMPORT') {
+      setActivePRPrefill(prefill);
+      if (prefill.unitMode) {
+        setUnitMode(prefill.unitMode);
+      }
+      setFormData(prev => ({
+        ...prev,
+        supplierName: prefill.supplierName || prev.supplierName,
+        invoiceNumber: prefill.invoiceNumber || prev.invoiceNumber,
+        quantityUnits: prefill.quantityUnits || prev.quantityUnits,
+        baseAmountUSD: prefill.baseAmountUSD || prev.baseAmountUSD,
+        notes: prefill.notes || prev.notes
+      }));
+      clearPRConversionPrefill();
+    }
+  };
 
   const loadOrders = () => {
     const list = getPurchaseOrders();
@@ -120,10 +152,22 @@ export default function LmImportTrading() {
 
     const res = await createPurchaseOrder(poPayload);
     if (res.success) {
+      const createdPoNumber = res.order?.poNumber || 'PO-IMP';
+      let prNote = '';
+      if (activePRPrefill) {
+        await markPRAsConverted(activePRPrefill.sourcePRId || activePRPrefill.sourcePRNumber, {
+          poNumber: createdPoNumber,
+          poType: 'GOLD_IMPORT',
+          supplier: formData.supplierName
+        });
+        prNote = `\n• Ref PR: ${activePRPrefill.sourcePRNumber} (Status PR otomatis ter-update: CONVERTED TO PO)`;
+        setActivePRPrefill(null);
+      }
+
       showModal({
         variant: 'success',
         title: 'Purchase Order Resmi Diterbitkan!',
-        message: `PO Impor (${res.order?.poNumber || 'PO-IMP'}) berhasil diterbitkan!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• Supplier: ${formData.supplierName}\n• Total Nilai: $ ${totalGoldAmountUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalLandedCostIDR.toLocaleString()})\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Status Pembayaran: 🔴 UNPAID (Siap dicicil/dilunasi via BBK di Voucher Management)\n• Status Fisik: APPROVED (Siap diterima di Vault TTB)`
+        message: `PO Impor (${createdPoNumber}) berhasil diterbitkan!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• Supplier: ${formData.supplierName}\n• Total Nilai: $ ${totalGoldAmountUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalLandedCostIDR.toLocaleString()})\n• HPP Bersih / Gram: Rp ${Math.round(unitLandedCostIDRPerGram).toLocaleString()} / g\n• Status Pembayaran: 🔴 UNPAID (Siap dicicil/dilunasi via BBK di Voucher Management)\n• Status Fisik: APPROVED (Siap diterima di Vault TTB)${prNote}`
       });
       loadOrders();
     } else {
@@ -133,6 +177,30 @@ export default function LmImportTrading() {
 
   return (
     <div>
+      {/* Banner Prefill Purchase Request */}
+      {activePRPrefill && (
+        <div className="glass-panel p-4 mb-4 border border-gold/50 bg-gold/10 flex justify-between items-center flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📋</span>
+            <div>
+              <strong className="text-sm text-gold-light block">
+                Form PO Emas Impor Diisi Otomatis dari Purchase Request: {activePRPrefill.sourcePRNumber}
+              </strong>
+              <p className="text-xs text-fg-soft m-0 mt-0.5">
+                Departemen: <span className="text-fg">{activePRPrefill.department}</span> | Pemohon: <span className="text-fg">{activePRPrefill.requesterName}</span> | Ref: {activePRPrefill.supplierName}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="text-xs px-2.5 py-1 bg-surface hover:bg-surface/80 text-fg-soft hover:text-fg rounded border border-line cursor-pointer flex items-center gap-1"
+            onClick={() => setActivePRPrefill(null)}
+          >
+            <X size={13} /> Bersihkan Prefill
+          </button>
+        </div>
+      )}
+
       {/* Form Container */}
       <div className="glass-panel p-6 mb-6">
         <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
@@ -324,117 +392,114 @@ export default function LmImportTrading() {
         <h3 className="font-heading text-[1.1rem] mb-4 flex items-center gap-2">
           <Sparkles color="#fbbf24" size={18} /> Riwayat Purchase Order LM Import ({orders.length})
         </h3>
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>No. PO</th>
-                <th>Supplier Impor</th>
-                <th>Tgl PO</th>
-                <th>Volume Pesanan</th>
-                <th>Total Nilai (USD)</th>
-                <th>Total Landed Cost IDR</th>
-                <th>Status Pembayaran (Cicilan)</th>
-                <th>Status Fisik Brankas</th>
-                <th>Aksi & Riwayat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr>
-                  <td className="text-center text-fg-muted p-7.5" colSpan="9">
-                    Belum ada data PO LM Import.
-                  </td>
-                </tr>
-              ) : (
-                orders.map(po => {
-                  const totalCostIDR = po.totalLandedCostIDR || ((po.totalAmountUSD || 0) * (po.exchangeRate || 16250)) || Number(po.total || 0);
-                  const paidIDR = Number(po.paidAmountIDR || 0);
-                  const remainingIDR = typeof po.remainingBalanceIDR !== 'undefined' ? po.remainingBalanceIDR : Math.max(0, totalCostIDR - paidIDR);
-                  
-                  // 3-State Status Logic: UNPAID, PARTIALLY PAID, PAID
-                  let paymentBadge = (
-                    <span className="badge badge-rose">
-                      🔴 UNPAID
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>No. PO</TableHead>
+              <TableHead>Supplier Impor</TableHead>
+              <TableHead>Tgl PO</TableHead>
+              <TableHead className="text-right">Volume Pesanan</TableHead>
+              <TableHead className="text-right">Total Nilai (USD)</TableHead>
+              <TableHead className="text-right">Total Landed Cost IDR</TableHead>
+              <TableHead>Status Pembayaran (Cicilan)</TableHead>
+              <TableHead>Status Fisik Brankas</TableHead>
+              <TableHead>Aksi & Riwayat</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {orders.length === 0 ? (
+              <TableEmpty colSpan={9} message="Belum ada data PO LM Import." />
+            ) : (
+              orders.map(po => {
+                const totalCostIDR = po.totalLandedCostIDR || ((po.totalAmountUSD || 0) * (po.exchangeRate || 16250)) || Number(po.total || 0);
+                const paidIDR = Number(po.paidAmountIDR || 0);
+                const remainingIDR = typeof po.remainingBalanceIDR !== 'undefined' ? po.remainingBalanceIDR : Math.max(0, totalCostIDR - paidIDR);
+                
+                // 3-State Status Logic: UNPAID, PARTIALLY PAID, PAID
+                let paymentBadge = (
+                  <span className="badge badge-rose">
+                    🔴 UNPAID
+                  </span>
+                );
+                if (paidIDR >= totalCostIDR && totalCostIDR > 0) {
+                  paymentBadge = (
+                    <span className="badge badge-emerald">
+                      🟢 PAID / LUNAS
                     </span>
                   );
-                  if (paidIDR >= totalCostIDR && totalCostIDR > 0) {
-                    paymentBadge = (
-                      <span className="badge badge-emerald">
-                        🟢 PAID / LUNAS
-                      </span>
-                    );
-                  } else if (paidIDR > 0 && remainingIDR > 0) {
-                    paymentBadge = (
-                      <span className="badge badge-gold text-xs">
-                        🟡 PARTIALLY PAID<br/>
-                        <small className="font-bold">Bayar: Rp {paidIDR.toLocaleString()} | Sisa: Rp {remainingIDR.toLocaleString()}</small>
-                      </span>
-                    );
-                  }
-
-                  return (
-                    <tr key={po.id || po.poNumber}>
-                      <td>
-                        <strong className="text-sky-light">{po.poNumber}</strong>
-                        {po.invoiceNumber && (
-                          <small className="text-fg-muted block text-xs">Inv: {po.invoiceNumber}</small>
-                        )}
-                      </td>
-                      <td><strong>{po.supplierName || po.supplier}</strong></td>
-                      <td>{po.orderDate}</td>
-                      <td>
-                        <span className="badge badge-gold text-xs">
-                          {po.quantityUnits ? `${po.quantityUnits.toLocaleString()} ${po.unitMode || 'oz'}` : `${po.weightGrams || 1000} g`}
-                        </span>
-                      </td>
-                      <td className="font-extrabold text-gold-light">
-                        $ {(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="font-bold text-emerald-light">
-                        Rp {totalCostIDR.toLocaleString()}
-                      </td>
-                      <td>{paymentBadge}</td>
-                      <td>
-                        {po.status === 'received' ? (
-                          <span className="badge badge-blue">📦 RECEIVED IN VAULT</span>
-                        ) : (
-                          <span className="badge badge-emerald">🟢 APPROVED (OPEN)</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="flex gap-1.5 flex-wrap">
-                          <button
-                            className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(251,191,36,0.15)] border border-gold text-gold-light cursor-pointer"
-                            onClick={() => setSelectedPODetail(po)}
-                          >
-                            <Eye size={13} /> Detail PO
-                          </button>
-                          <button
-                            className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(56,189,248,0.2)] border border-sky-light text-sky-light cursor-pointer"
-                            onClick={() => setSelectedPOHistory(po)}
-                          >
-                            <History size={13} /> Riwayat Cicilan
-                          </button>
-                          <button
-                            className="btn-primary py-1.5 px-2.5 text-xs cursor-pointer"
-                            onClick={() => showModal({
-                              variant: 'info',
-                              title: `🖨️ Cetak Dokumen PO ${po.poNumber}`,
-                              message: `• Supplier: ${po.supplierName || po.supplier}\n• No. Invoice: ${po.invoiceNumber || '-'}\n• Total Nilai: $ ${(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalCostIDR.toLocaleString()})\n• Status Pembayaran: ${paidIDR >= totalCostIDR && totalCostIDR > 0 ? '🟢 LUNAS' : paidIDR > 0 ? `🟡 DICICIL (Terbayar Rp ${paidIDR.toLocaleString()} | Sisa Rp ${remainingIDR.toLocaleString()})` : '🔴 BELUM BAYAR'}\n• Status Fisik: ${po.status === 'received' ? 'Diterima di Vault TTB' : 'Approved (Open)'}`
-                            })}
-                          >
-                            <Printer size={13} /> Cetak PO
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                } else if (paidIDR > 0 && remainingIDR > 0) {
+                  paymentBadge = (
+                    <span className="badge badge-gold text-xs">
+                      🟡 PARTIALLY PAID<br/>
+                      <small className="font-bold">Bayar: Rp {paidIDR.toLocaleString()} | Sisa: Rp {remainingIDR.toLocaleString()}</small>
+                    </span>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                }
+
+                return (
+                  <TableRow key={po.id || po.poNumber}>
+                    <TableCell>
+                      <strong className="text-sky-light">{po.poNumber}</strong>
+                      {po.invoiceNumber && (
+                        <small className="text-fg-muted block text-xs">Inv: {po.invoiceNumber}</small>
+                      )}
+                    </TableCell>
+                    <TableCell><strong>{po.supplierName || po.supplier}</strong></TableCell>
+                    <TableCell>{po.orderDate}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="badge badge-gold text-xs">
+                        {po.quantityUnits ? `${po.quantityUnits.toLocaleString()} ${po.unitMode || 'oz'}` : `${po.weightGrams || 1000} g`}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-extrabold text-gold-light">
+                      $ {(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-emerald-light">
+                      Rp {totalCostIDR.toLocaleString()}
+                    </TableCell>
+                    <TableCell>{paymentBadge}</TableCell>
+                    <TableCell>
+                      {po.status === 'received' ? (
+                        <span className="badge badge-blue">📦 RECEIVED IN VAULT</span>
+                      ) : (
+                        <span className="badge badge-emerald">🟢 APPROVED (OPEN)</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button
+                          className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(251,191,36,0.15)] border border-gold text-gold-light cursor-pointer"
+                          onClick={() => setSelectedPODetail(po)}
+                        >
+                          <Eye size={13} /> Detail PO
+                        </button>
+                        <button
+                          className="btn-primary py-1.5 px-2.5 text-xs bg-[rgba(56,189,248,0.2)] border border-sky-light text-sky-light cursor-pointer"
+                          onClick={() => setSelectedPOHistory(po)}
+                        >
+                          <History size={13} /> Riwayat Cicilan
+                        </button>
+                        <button
+                          className="btn-primary py-1.5 px-2.5 text-xs cursor-pointer flex items-center gap-1"
+                          onClick={async () => {
+                            await exportPOPdf(po);
+                            showModal({
+                              variant: 'success',
+                              title: `🖨️ Cetak Dokumen PO ${po.poNumber}`,
+                              message: `Dokumen Purchase Order ${po.poNumber} berhasil di-generate dan dibuka di tab baru untuk langsung dicetak.\n\n• Supplier: ${po.supplierName || po.supplier}\n• No. Invoice: ${po.invoiceNumber || '-'}\n• Total Nilai: $ ${(po.totalAmountUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} (Rp ${totalCostIDR.toLocaleString()})\n• Status Pembayaran: ${paidIDR >= totalCostIDR && totalCostIDR > 0 ? '🟢 LUNAS' : paidIDR > 0 ? `🟡 DICICIL (Terbayar Rp ${paidIDR.toLocaleString()} | Sisa Rp ${remainingIDR.toLocaleString()})` : '🔴 BELUM BAYAR'}\n• Status Fisik: ${po.status === 'received' ? 'Diterima di Vault TTB' : 'Approved (Open)'}`
+                            });
+                          }}
+                        >
+                          <Printer size={13} /> Cetak PO
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       {/* MODAL POPUP DETAIL LENGKAP PO IMPORT */}
@@ -524,29 +589,29 @@ export default function LmImportTrading() {
               <h4 className="text-[0.9rem] text-sky-light mb-2.5 flex items-center gap-1.5">
                 <Package size={16} /> Rincian Barang
               </h4>
-              <div className="table-container mb-4">
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>Nama Barang</th>
-                      <th className="text-right">Kuantitas</th>
-                      <th className="text-right">Harga/Satuan (USD)</th>
-                      <th className="text-right">Harga/Satuan (IDR)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div className="mb-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nama Barang</TableHead>
+                      <TableHead className="text-right">Kuantitas</TableHead>
+                      <TableHead className="text-right">Harga/Satuan (USD)</TableHead>
+                      <TableHead className="text-right">Harga/Satuan (IDR)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {(po.items || []).length === 0 ? (
-                      <tr><td colSpan="4" className="text-center text-fg-muted p-4">Tidak ada rincian barang.</td></tr>
+                      <TableEmpty colSpan={4} message="Tidak ada rincian barang." />
                     ) : po.items.map((it, i) => (
-                      <tr key={i}>
-                        <td>{it.itemName}</td>
-                        <td className="text-right">{Number(it.quantity || 0).toLocaleString()} {it.unit || 'gram'}</td>
-                        <td className="text-right">$ {Number(it.unitPriceUSD || it.unitPrice || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                        <td className="text-right">Rp {Number(it.unitPriceIDR || 0).toLocaleString()}</td>
-                      </tr>
+                      <TableRow key={i}>
+                        <TableCell>{it.itemName}</TableCell>
+                        <TableCell className="text-right">{Number(it.quantity || 0).toLocaleString()} {it.unit || 'gram'}</TableCell>
+                        <TableCell className="text-right">$ {Number(it.unitPriceUSD || it.unitPrice || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-right">Rp {Number(it.unitPriceIDR || 0).toLocaleString()}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               {/* Logistik */}
@@ -670,48 +735,46 @@ export default function LmImportTrading() {
                 Belum ada transaksi voucher pembayaran (BBK/BKK) untuk PO ini. (Status: 🔴 UNPAID)
               </div>
             ) : (
-              <div className="table-container">
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>No. Voucher</th>
-                      <th>Tanggal</th>
-                      <th>Kategori Alokasi</th>
-                      <th>Penerima (Payee)</th>
-                      <th>Rekening Bank</th>
-                      <th className="text-right">Nominal (IDR)</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedPOHistory.paymentHistory.map((pmt, i) => (
-                      <tr key={i}>
-                        <td><strong className="text-sky-light">{pmt.voucherNo}</strong></td>
-                        <td>{pmt.date}</td>
-                        <td>
-                          <span className={`badge text-xs ${
-                            pmt.category === 'CUSTOMS_DUTY_PPH22'
-                              ? 'bg-sky-950/80 text-sky-300 border border-sky-600/50'
-                              : pmt.category === 'LOGISTICS_HANDLING'
-                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/50'
-                              : pmt.category === 'OTHER_EXPENSE'
-                              ? 'bg-purple-950/80 text-purple-300 border border-purple-600/50'
-                              : 'bg-amber-950/80 text-gold-light border border-gold/50'
-                          }`}>
-                            {pmt.categoryLabel || (pmt.category === 'CUSTOMS_DUTY_PPH22' ? '🏛️ PPh 22 (0,25%)' : pmt.category === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
-                          </span>
-                        </td>
-                        <td><small className="font-semibold text-fg">{pmt.payee || selectedPOHistory.supplierName || 'Supplier'}</small></td>
-                        <td><small>{pmt.bank || 'Bank BCA'}</small></td>
-                        <td className="text-right font-extrabold text-emerald-light">
-                          Rp {Number(pmt.amount || 0).toLocaleString()}
-                        </td>
-                        <td><span className="badge badge-emerald">✅ POSTED</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>No. Voucher</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Kategori Alokasi</TableHead>
+                    <TableHead>Penerima (Payee)</TableHead>
+                    <TableHead>Rekening Bank</TableHead>
+                    <TableHead className="text-right">Nominal (IDR)</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedPOHistory.paymentHistory.map((pmt, i) => (
+                    <TableRow key={i}>
+                      <TableCell><strong className="text-sky-light">{pmt.voucherNo}</strong></TableCell>
+                      <TableCell>{pmt.date}</TableCell>
+                      <TableCell>
+                        <span className={`badge text-xs ${
+                          pmt.category === 'CUSTOMS_DUTY_PPH22'
+                            ? 'bg-sky-950/80 text-sky-300 border border-sky-600/50'
+                            : pmt.category === 'LOGISTICS_HANDLING'
+                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/50'
+                            : pmt.category === 'OTHER_EXPENSE'
+                            ? 'bg-orange-950/80 text-orange-300 border border-orange-600/50'
+                            : 'bg-amber-950/80 text-gold-light border border-gold/50'
+                        }`}>
+                          {pmt.categoryLabel || (pmt.category === 'CUSTOMS_DUTY_PPH22' ? '🏛️ PPh 22 (0,25%)' : pmt.category === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
+                        </span>
+                      </TableCell>
+                      <TableCell><small className="font-semibold text-fg">{pmt.payee || selectedPOHistory.supplierName || 'Supplier'}</small></TableCell>
+                      <TableCell><small>{pmt.bank || 'Bank BCA'}</small></TableCell>
+                      <TableCell className="text-right font-extrabold text-emerald-light">
+                        Rp {Number(pmt.amount || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell><span className="badge badge-emerald">✅ POSTED</span></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
 
             <div className="mt-4 flex justify-end">

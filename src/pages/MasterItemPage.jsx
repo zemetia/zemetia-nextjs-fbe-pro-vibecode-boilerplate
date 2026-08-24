@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Plus, Search, CheckCircle, Tag, Layers } from 'lucide-react';
 import { getMasterItems, saveMasterItem, getCOA } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function MasterItemPage() {
   const { modalProps, showModal } = useModal();
@@ -164,34 +174,36 @@ export default function MasterItemPage() {
         <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Barang Master ({filteredItems.length})
         </h3>
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Barang</th>
-                <th>Kategori</th>
-                <th>Satuan</th>
-                <th>Kadar (%)</th>
-                <th>Akun GL Stok</th>
-                <th>Akun HPP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map(item => (
-                <tr key={item.id || item.code}>
-                  <td><strong>{item.code}</strong></td>
-                  <td>{item.name}</td>
-                  <td><span className="badge badge-gold text-xs">{item.category}</span></td>
-                  <td>{item.unit}</td>
-                  <td>{item.purity || '-'}%</td>
-                  <td><small className="text-emerald-light">{item.inventoryAccount || '1157'}</small></td>
-                  <td><small className="text-sky-light">{item.cogsAccount || '5114'}</small></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Kode</TableHead>
+              <TableHead>Nama Barang</TableHead>
+              <TableHead>Kategori</TableHead>
+              <TableHead>Satuan</TableHead>
+              <TableHead className="text-right">Kadar (%)</TableHead>
+              <TableHead>Akun GL Stok</TableHead>
+              <TableHead>Akun HPP</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredItems.length === 0 ? (
+              <TableEmpty colSpan={7} message="Belum ada data master barang." />
+            ) : (
+              filteredItems.map(item => (
+                <TableRow key={item.id || item.code}>
+                  <TableCell><strong>{item.code}</strong></TableCell>
+                  <TableCell>{item.name}</TableCell>
+                  <TableCell><span className="badge badge-gold text-xs">{item.category}</span></TableCell>
+                  <TableCell>{item.unit}</TableCell>
+                  <TableCell className="text-right">{item.purity || '-'}%</TableCell>
+                  <TableCell><small className="text-emerald-light">{item.inventoryAccount || '1157'}</small></TableCell>
+                  <TableCell><small className="text-sky-light">{item.cogsAccount || '5114'}</small></TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <Modal {...modalProps} />

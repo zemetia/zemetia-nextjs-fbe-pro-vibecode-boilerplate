@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, Globe, CheckCircle } from 'lucide-react';
 import { getCustomers, saveCustomer } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
+import {
+  Modal,
+  useModal,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function MasterCustomer() {
   const { modalProps, showModal } = useModal();
@@ -145,32 +155,34 @@ export default function MasterCustomer() {
         <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Customer Ekspor ({filteredCust.length})
         </h3>
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Buyer</th>
-                <th>Negara Tujuan</th>
-                <th>Kontak & Email</th>
-                <th>Termin Bayar</th>
-                <th>Status Market</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCust.map(c => (
-                <tr key={c.id || c.code}>
-                  <td><strong>{c.code}</strong></td>
-                  <td>{c.name}</td>
-                  <td><span className="badge badge-gold text-xs">{c.country || 'Global'}</span></td>
-                  <td>{c.phone || c.email}</td>
-                  <td>{c.paymentTerms || 'NET-30'}</td>
-                  <td><span className="badge badge-emerald">EXPORT ONLY</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Kode</TableHead>
+              <TableHead>Nama Buyer</TableHead>
+              <TableHead>Negara Tujuan</TableHead>
+              <TableHead>Kontak & Email</TableHead>
+              <TableHead>Termin Bayar</TableHead>
+              <TableHead>Status Market</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredCust.length === 0 ? (
+              <TableEmpty colSpan={6} message="Belum ada data buyer/customer ekspor." />
+            ) : (
+              filteredCust.map(c => (
+                <TableRow key={c.id || c.code}>
+                  <TableCell><strong>{c.code}</strong></TableCell>
+                  <TableCell>{c.name}</TableCell>
+                  <TableCell><span className="badge badge-gold text-xs">{c.country || 'Global'}</span></TableCell>
+                  <TableCell>{c.phone || c.email}</TableCell>
+                  <TableCell>{c.paymentTerms || 'NET-30'}</TableCell>
+                  <TableCell><span className="badge badge-emerald">EXPORT ONLY</span></TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <Modal {...modalProps} />

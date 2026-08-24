@@ -35,7 +35,7 @@
 | Path | Export | Peran |
 |---|---|---|
 | [src/main.jsx](../../src/main.jsx) | — | Bootstrap: import CSS, import side-effect mesin legacy, `Storage.init()`, `createRoot` |
-| [src/App.jsx](../../src/App.jsx) | `App` | Shell: `useState('dashboard')` + render halaman aktif dari registry. 19 baris, tanpa `switch` |
+| [src/App.jsx](../../src/App.jsx) | `App` | Shell: Clean URL Path routing (`/page-id`) + render halaman aktif dari registry. Zero-dependency, tanpa `switch` |
 | [src/index.css](../../src/index.css) | — | Seluruh styling aplikasi. Satu file, CSS variables + class global |
 | [src/config/pages.js](../../src/config/pages.js) | `PAGES`, `PAGE_GROUPS`, `PINNED_PAGE_IDS`, `getPage`, `getPageTitle`, `getMenuItems`, `DEFAULT_PAGE_ID` | **Registry halaman** — satu-satunya tempat pendaftaran: id, judul navbar, label sidebar, ikon, komponen, dan susunan grup menu |
 | [src/components/layout/Sidebar.jsx](../../src/components/layout/Sidebar.jsx) | `Sidebar` | 5 grup menu collapsible, state `openCategories`. Isi menu dibaca dari `config/pages.js`. Struktur tetap: header logo + nav yang bisa di-scroll + footer, semua styling di `index.css` |

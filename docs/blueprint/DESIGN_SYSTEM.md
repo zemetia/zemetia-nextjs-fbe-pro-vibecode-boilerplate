@@ -30,7 +30,8 @@ Token didefinisikan di `@theme`, jadi setiap nama langsung jadi utility: `--colo
   --color-gold-glow: rgba(245,158,11,.2);
   --color-emerald: #10b981;  --color-emerald-light: #34d399;  --color-emerald-dark: #059669;
   --color-sky: #0284c7;      --color-sky-light: #38bdf8;      --color-sky-dark: #0369a1;
-  --color-blue: #3b82f6;  --color-purple: #8b5cf6;  --color-purple-dark: #6d28d9;
+  --color-blue: #3b82f6;
+  --color-orange: #f97316;   --color-orange-light: #fb923c;   --color-orange-dark: #ea580c;
   --color-danger: #ef4444;   --color-danger-light: #f87171;
   --color-ink: #0f172a;      /* latar sidebar & panel terdalam */
 
@@ -50,14 +51,19 @@ Nama lama (`--text-secondary`, `--border-color`, `--accent-gold`, `--font-main`)
 
 Font dimuat dari Google Fonts di [index.html](../../index.html).
 
-### Arti warna (konsisten di seluruh aplikasi)
+### 5 Warna Resmi & Artinya (Dibatasi Ketat — Tanpa Warna Pelangi)
 
-| Warna | Makna |
+Penggunaan warna dibatasi secara ketat hanya pada **5 warna resmi** (ditambah warna dasar gelap netral canvas/surface/field/line/fg):
+
+| Warna | Makna & Penggunaan |
 |---|---|
-| Emas `#f59e0b` / `#fbbf24` | Emas, nilai, identitas PT TAN, item aktif |
-| Emerald `#10b981` / `#34d399` | Selesai, terverifikasi, tunai, sudah masuk vault |
-| Biru `#0284c7` / `#38bdf8` | Kredit/tempo, kurir, dokumen, informasi |
-| Merah `#ef4444` | Gagal, sync tertunda, peringatan |
+| **Emas (Gold)** `#f59e0b` / `#fbbf24` | Brand identity PT TAN, Logam Mulia murni, tombol utama, highlight saldo emas/aktif |
+| **Hijau (Emerald)** `#10b981` / `#34d399` | Selesai, status posted, kas/tunai, sudah tiba/masuk vault, fasilitas pajak PPN 0% |
+| **Biru (Sky/Blue)** `#0284c7` / `#38bdf8` / `#3b82f6` | Kredit/tempo, kurir/logistik kargo, dokumen eksternal/AWB, informasi, pajak PPh 22 |
+| **Orange (Orange)** `#f97316` / `#fb923c` | Produksi, SPK workshop, alloy karat, formula BOM, biaya tambahan, warning/perhatian |
+| **Merah (Danger/Red)** `#ef4444` / `#f87171` | Gagal, transaksi void/batal, hutang jatuh tempo, peringatan kritis, tombol destructive |
+
+Warna di luar 5 palet di atas (seperti ungu/violet/pink/fuchsia/cyan/teal/lime) **dilarang digunakan** agar visual ERP tetap profesional, rapi, dan konsisten.
 
 Ikuti pemetaan ini. Badge hijau untuk barang yang masih transit akan salah dibaca oleh petugas vault.
 
@@ -212,6 +218,30 @@ Aturan pemakaian:
 - Field yang isinya **identifier**, bukan kuantitas — nomor lembar cek (`MasterChequePage`), nomor dokumen — **tetap** `<input type="number">` atau `text` biasa dengan `e.target.value` mentah. Nomor lembar cek boleh berawalan nol dan `NumberInput` akan menghilangkannya karena disimpan sebagai `Number`.
 - `<input type="number" step="0.01">` yang sudah ada sebelumnya (kadar, harga per gram, berat) dipetakan ke `allowDecimal`, bukan dibuang begitu saja — grouping ribuan tanpa dukungan desimal akan memutus digit setelah titik.
 - Tampilan format ulang **setiap keystroke** (bukan hanya saat blur) — cara ini yang membuat `10000` langsung terlihat `10.000` selagi mengetik.
+
+## Komponen UI Modern (src/components/ui/)
+
+Daftar primitif modular bergaya shadcn/ui yang selaras dengan tema gelap emas PT TAN ERP:
+
+| Komponen | Kegunaan | Contoh Import & Penggunaan |
+|---|---|---|
+| `Button` | Tombol dengan varian (`gold`, `emerald`, `sky`, `outline`, `ghost`, `destructive`), ukuran (`sm`, `default`, `lg`, `icon`), dan loading spinner | `<Button variant="emerald" leftIcon={<Box size={14} />}>Simpan</Button>` |
+| `Input` | Input teks/email/date dengan `bg-field`, border aksen, `leftIcon`, `rightIcon`, error message | `<Input value={val} onChange={e => ...} />` |
+| `Label` | Label form dengan penanda `required` otomatis | `<Label required>No. Kuitansi</Label>` |
+| `Textarea` | Input multi-baris konsisten dengan Input | `<Textarea rows={2} value={val} onChange={e => ...} />` |
+| `Select` | Dropdown select native berikon ChevronDown kustom | `<Select value={acc} onChange={e => ...}><option>...</option></Select>` |
+| `Badge` | Status pill dengan varian warna (`gold`, `emerald`, `sky`, `rose`, `purple`), ikon, dan `dot` | `<Badge variant="emerald" dot>VAULT STOCKED</Badge>` |
+| `Card` | Kartu kaca modular (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`) | `<Card><CardHeader><CardTitle>...</CardTitle></CardHeader></Card>` |
+| `Tabs` | Tab navigation dinamis (`Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`) | `<Tabs defaultValue="tab1"><TabsList><TabsTrigger value="tab1">Tab 1</TabsTrigger></TabsList></Tabs>` |
+| `Alert` | Banner inline alert (`info`, `success`, `warning`, `destructive`) dengan ikon otomatis | `<Alert variant="success" title="Tahap 1">...</Alert>` |
+| `Combobox` | Dropdown filterable berbasis cmdk + Radix Popover | `<Combobox value={val} onChange={...} options={...} />` |
+| `NumberInput`| Input angka berpemisah titik ribuan (IDR/Gram) | `<NumberInput value={nominal} onChange={...} />` |
+| `Modal` | Dialog modal pemberitahuan & konfirmasi | `const { modalProps, showModal } = useModal();` |
+
+Seluruh komponen dapat diimpor langsung lewat satu barrel export:
+```jsx
+import { Button, Input, Label, Textarea, Select, Badge, Card, Alert, Combobox, NumberInput, Modal, useModal } from '../components/ui';
+```
 
 ---
 

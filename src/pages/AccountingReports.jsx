@@ -6,10 +6,27 @@ import {
 } from 'lucide-react';
 import {
   getCOA,
-  getExportDeliveryOrders
+  getExportDeliveryOrders,
+  getJournalEntries,
+  saveJournalEntries,
+  getExportInvoices,
+  getLocalPurchases,
+  getPurchaseOrders,
+  getNextReferenceNumber
 } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function AccountingReports() {
   const { modalProps, showModal } = useModal();
@@ -37,19 +54,10 @@ export default function AccountingReports() {
   }, [activeTab]);
 
   const loadFinancialData = () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const storedJournals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      setJournals(storedJournals);
-
-      const invs = window.Storage.get('pttan_export_invoices') || [];
-      setExportInvoices(invs);
-
-      const local = window.Storage.get('pttan_local_purchases') || [];
-      setLocalPurchases(local);
-
-      const pos = window.Storage.get(window.Storage.KEYS.PURCHASE_ORDERS) || [];
-      setImportPOs(pos);
-    }
+    setJournals(getJournalEntries());
+    setExportInvoices(getExportInvoices());
+    setLocalPurchases(getLocalPurchases());
+    setImportPOs(getPurchaseOrders());
   };
 
   const handleCreateJournal = async (e) => {
@@ -63,9 +71,7 @@ export default function AccountingReports() {
       return;
     }
 
-    const entryNum = typeof window.Storage.getNextReferenceNumber === 'function'
-      ? await window.Storage.getNextReferenceNumber('journal')
-      : `JRN-${Date.now().toString().slice(-6)}`;
+    const entryNum = await getNextReferenceNumber('journal');
 
     const debitAccName = coaList.find(a => a.code === newJournal.debitAccount)?.name || newJournal.debitAccount;
     const creditAccName = coaList.find(a => a.code === newJournal.creditAccount)?.name || newJournal.creditAccount;
@@ -82,19 +88,17 @@ export default function AccountingReports() {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      const list = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      list.unshift(entry);
-      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, list);
+    const list = getJournalEntries();
+    list.unshift(entry);
+    await saveJournalEntries(list);
 
-      showModal({
-        variant: 'success',
-        title: `✅ Jurnal Mutasi (${entry.entryNumber}) Diposting`,
-        message: `${entry.description}\n• Debet: ${debitAccName} Rp ${Number(newJournal.amount).toLocaleString()}\n• Kredit: ${creditAccName} Rp ${Number(newJournal.amount).toLocaleString()}`
-      });
-      loadFinancialData();
-      setShowAddForm(false);
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ Jurnal Mutasi (${entry.entryNumber}) Diposting`,
+      message: `${entry.description}\n• Debet: ${debitAccName} Rp ${Number(newJournal.amount).toLocaleString()}\n• Kredit: ${creditAccName} Rp ${Number(newJournal.amount).toLocaleString()}`
+    });
+    loadFinancialData();
+    setShowAddForm(false);
   };
 
   // ==========================================
@@ -376,44 +380,46 @@ export default function AccountingReports() {
             </span>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Kode Akun</th>
-                  <th>Nama Akun Keuangan</th>
-                  <th>Kategori</th>
-                  <th className="text-right">Total Debet (IDR)</th>
-                  <th className="text-right">Total Kredit (IDR)</th>
-                  <th className="text-right">Saldo Netto Akhir</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trialAccounts.map(acc => (
-                  <tr key={acc.code}>
-                    <td><strong>{acc.code}</strong></td>
-                    <td>{acc.name}</td>
-                    <td><span className="badge text-xs">{acc.category?.toUpperCase() || 'SAK'}</span></td>
-                    <td className="text-right text-emerald-light">{acc.totalDebit > 0 ? `Rp ${acc.totalDebit.toLocaleString()}` : '-'}</td>
-                    <td className="text-right text-danger">{acc.totalCredit > 0 ? `Rp ${acc.totalCredit.toLocaleString()}` : '-'}</td>
-                    <td className="text-right font-bold text-gold-light">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun Keuangan</TableHead>
+                <TableHead>Kategori</TableHead>
+                <TableHead className="text-right">Total Debet (IDR)</TableHead>
+                <TableHead className="text-right">Total Kredit (IDR)</TableHead>
+                <TableHead className="text-right">Saldo Netto Akhir</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {trialAccounts.length === 0 ? (
+                <TableEmpty colSpan={6} message="Belum ada data neraca saldo untuk periode ini." />
+              ) : (
+                trialAccounts.map(acc => (
+                  <TableRow key={acc.code}>
+                    <TableCell><strong>{acc.code}</strong></TableCell>
+                    <TableCell>{acc.name}</TableCell>
+                    <TableCell><span className="badge text-xs">{acc.category?.toUpperCase() || 'SAK'}</span></TableCell>
+                    <TableCell className="text-right text-emerald-light">{acc.totalDebit > 0 ? `Rp ${acc.totalDebit.toLocaleString()}` : '-'}</TableCell>
+                    <TableCell className="text-right text-danger">{acc.totalCredit > 0 ? `Rp ${acc.totalCredit.toLocaleString()}` : '-'}</TableCell>
+                    <TableCell className="text-right font-bold text-gold-light">
                       Rp {acc.balance.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-line bg-white/[0.04] font-extrabold text-[0.95rem]">
-                  <td colSpan={3}>TOTAL NERACA SALDO</td>
-                  <td className="text-right text-emerald-light">Rp {trialTotalDebit.toLocaleString()}</td>
-                  <td className="text-right text-danger">Rp {trialTotalCredit.toLocaleString()}</td>
-                  <td className="text-right text-gold-light">
-                    {Math.abs(trialTotalDebit - trialTotalCredit) < 1 ? '✅ Balanced' : '⚠️ Unbalanced'}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="font-extrabold text-[0.95rem]">
+                <TableCell colSpan={3}>TOTAL NERACA SALDO</TableCell>
+                <TableCell className="text-right text-emerald-light">Rp {trialTotalDebit.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-danger">Rp {trialTotalCredit.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-gold-light">
+                  {Math.abs(trialTotalDebit - trialTotalCredit) < 1 ? '✅ Balanced' : '⚠️ Unbalanced'}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
         </div>
       )}
 
@@ -608,40 +614,34 @@ export default function AccountingReports() {
             </div>
 
             <h4 className="text-fg-soft text-xs font-bold mb-3">RINCIAN MUTASI KAS & BANK TERAKHIR:</h4>
-            <div className="table-container">
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th>Tanggal</th>
-                    <th>No. Jurnal</th>
-                    <th>Akun Kas / Bank</th>
-                    <th>Keterangan</th>
-                    <th className="text-right">Nominal Arus Kas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cashMovements.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-6 text-fg-soft">
-                        Belum ada mutasi arus kas tercatat.
-                      </td>
-                    </tr>
-                  ) : (
-                    cashMovements.slice(-10).reverse().map((cm, idx) => (
-                      <tr key={idx}>
-                        <td>{cm.date}</td>
-                        <td><strong>{cm.journalNo}</strong></td>
-                        <td>{cm.account}</td>
-                        <td>{cm.description}</td>
-                        <td className={`text-right font-bold ${cm.type === 'IN' ? 'text-emerald-light' : 'text-danger'}`}>
-                          {cm.type === 'IN' ? `+ Rp ${cm.amount.toLocaleString()}` : `- Rp ${cm.amount.toLocaleString()}`}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>No. Jurnal</TableHead>
+                  <TableHead>Akun Kas / Bank</TableHead>
+                  <TableHead>Keterangan</TableHead>
+                  <TableHead className="text-right">Nominal Arus Kas</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cashMovements.length === 0 ? (
+                  <TableEmpty colSpan={5} message="Belum ada mutasi arus kas tercatat." />
+                ) : (
+                  cashMovements.slice(-10).reverse().map((cm, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{cm.date}</TableCell>
+                      <TableCell><strong>{cm.journalNo}</strong></TableCell>
+                      <TableCell>{cm.account}</TableCell>
+                      <TableCell>{cm.description}</TableCell>
+                      <TableCell className={`text-right font-bold ${cm.type === 'IN' ? 'text-emerald-light' : 'text-danger'}`}>
+                        {cm.type === 'IN' ? `+ Rp ${cm.amount.toLocaleString()}` : `- Rp ${cm.amount.toLocaleString()}`}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -656,102 +656,90 @@ export default function AccountingReports() {
           <div className="space-y-6">
             <div>
               <h4 className="text-emerald-light font-bold text-sm mb-3">📋 REKAPITULASI PIUTANG EKSPOR (ACCOUNTS RECEIVABLE):</h4>
-              <div className="table-container">
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>No. Invoice</th>
-                      <th>Tanggal</th>
-                      <th>Nama Buyer Ekspor</th>
-                      <th className="text-right">Total Tagihan USD</th>
-                      <th className="text-right">Sisa Piutang (USD)</th>
-                      <th className="text-right">Nilai Piutang (IDR)</th>
-                      <th>Status Pembayaran</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {exportInvoices.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="text-center py-6 text-fg-soft">
-                          Tidak ada piutang ekspor.
-                        </td>
-                      </tr>
-                    ) : (
-                      exportInvoices.map(inv => (
-                        <tr key={inv.id || inv.invoiceNo}>
-                          <td><strong>{inv.invoiceNo}</strong></td>
-                          <td>{inv.date}</td>
-                          <td><strong>{inv.buyerName}</strong></td>
-                          <td className="text-right font-medium">$ {(inv.totalUSD || 0).toLocaleString()}</td>
-                          <td className="text-right font-bold text-gold-light">
-                            $ {(typeof inv.remainingBalanceUSD !== 'undefined' ? inv.remainingBalanceUSD : inv.totalUSD || 0).toLocaleString()}
-                          </td>
-                          <td className="text-right text-emerald-light font-bold">
-                            Rp {(inv.totalIDR || 0).toLocaleString()}
-                          </td>
-                          <td>
-                            <span className={`badge ${inv.paymentStatus === 'PAID' ? 'badge-emerald' : 'badge-gold'}`}>
-                              {inv.paymentStatus || 'UNPAID'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>No. Invoice</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Nama Buyer Ekspor</TableHead>
+                    <TableHead className="text-right">Total Tagihan USD</TableHead>
+                    <TableHead className="text-right">Sisa Piutang (USD)</TableHead>
+                    <TableHead className="text-right">Nilai Piutang (IDR)</TableHead>
+                    <TableHead>Status Pembayaran</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {exportInvoices.length === 0 ? (
+                    <TableEmpty colSpan={7} message="Tidak ada piutang ekspor." />
+                  ) : (
+                    exportInvoices.map(inv => (
+                      <TableRow key={inv.id || inv.invoiceNo}>
+                        <TableCell><strong>{inv.invoiceNo}</strong></TableCell>
+                        <TableCell>{inv.date}</TableCell>
+                        <TableCell><strong>{inv.buyerName}</strong></TableCell>
+                        <TableCell className="text-right font-medium">$ {(inv.totalUSD || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-bold text-gold-light">
+                          $ {(typeof inv.remainingBalanceUSD !== 'undefined' ? inv.remainingBalanceUSD : inv.totalUSD || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-emerald-light font-bold">
+                          Rp {(inv.totalIDR || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <span className={`badge ${inv.paymentStatus === 'PAID' ? 'badge-emerald' : 'badge-gold'}`}>
+                            {inv.paymentStatus || 'UNPAID'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
 
             <div>
               <h4 className="text-danger font-bold text-sm mb-3">📋 REKAPITULASI HUTANG PEMBELIAN EMAS (ACCOUNTS PAYABLE):</h4>
-              <div className="table-container">
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>Ref Dokumen</th>
-                      <th>Tanggal</th>
-                      <th>Supplier Emas</th>
-                      <th>Jenis Pengadaan</th>
-                      <th className="text-right">Total Tagihan (IDR)</th>
-                      <th className="text-right">Sisa Hutang (IDR)</th>
-                      <th>Status Pelunasan</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...localPurchases, ...importPOs].filter(p => p.paymentStatus !== 'PAID').length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="text-center py-6 text-fg-soft">
-                          Semua hutang pembelian emas telah lunas.
-                        </td>
-                      </tr>
-                    ) : (
-                      [...localPurchases, ...importPOs].filter(p => p.paymentStatus !== 'PAID').map((p, idx) => (
-                        <tr key={p.id || idx}>
-                          <td><strong>{p.poNumber || p.receiptNo || p.id}</strong></td>
-                          <td>{p.date || p.orderDate}</td>
-                          <td><strong>{p.supplierName || p.supplier}</strong></td>
-                          <td>
-                            <span className="badge text-xs">
-                              {String(p.poNumber || '').includes('IMP') ? 'Impor LBMA' : 'Lokal Tempo'}
-                            </span>
-                          </td>
-                          <td className="text-right">
-                            Rp {Number(p.totalAmount || p.totalLandedCostIDR || p.total || 0).toLocaleString()}
-                          </td>
-                          <td className="text-right font-extrabold text-danger">
-                            Rp {Number(p.remainingBalanceIDR || p.totalAmount || p.totalLandedCostIDR || 0).toLocaleString()}
-                          </td>
-                          <td>
-                            <span className="badge badge-rose">
-                              {p.paymentStatus || 'UNPAID'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ref Dokumen</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Supplier Emas</TableHead>
+                    <TableHead>Jenis Pengadaan</TableHead>
+                    <TableHead className="text-right">Total Tagihan (IDR)</TableHead>
+                    <TableHead className="text-right">Sisa Hutang (IDR)</TableHead>
+                    <TableHead>Status Pelunasan</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...localPurchases, ...importPOs].filter(p => p.paymentStatus !== 'PAID').length === 0 ? (
+                    <TableEmpty colSpan={7} message="Semua hutang pembelian emas telah lunas." />
+                  ) : (
+                    [...localPurchases, ...importPOs].filter(p => p.paymentStatus !== 'PAID').map((p, idx) => (
+                      <TableRow key={p.id || idx}>
+                        <TableCell><strong>{p.poNumber || p.receiptNo || p.id}</strong></TableCell>
+                        <TableCell>{p.date || p.orderDate}</TableCell>
+                        <TableCell><strong>{p.supplierName || p.supplier}</strong></TableCell>
+                        <TableCell>
+                          <span className="badge text-xs">
+                            {String(p.poNumber || '').includes('IMP') ? 'Impor LBMA' : 'Lokal Tempo'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          Rp {Number(p.totalAmount || p.totalLandedCostIDR || p.total || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-extrabold text-danger">
+                          Rp {Number(p.remainingBalanceIDR || p.totalAmount || p.totalLandedCostIDR || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <span className="badge badge-rose">
+                            {p.paymentStatus || 'UNPAID'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>
@@ -767,7 +755,7 @@ export default function AccountingReports() {
             <div>
               <h4 className="text-gold-light font-bold text-sm mb-1">1. Entitas & Kegiatan Usaha</h4>
               <p className="text-fg-soft">
-                PT Trifactor Alura Nusantara (PT TAN) adalah perseroan terbatas yang bergerak dalam bidang perdagangan besar logam mulia dan perhiasan emas (KBLI 46691) serta industri manufaktur perhiasan emas khusus ekspor (KBLI 32111). Laporan keuangan disusun berdasarkan Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).
+                PT. Triliun Anugrah Nusantara (PT TAN) adalah perseroan terbatas yang bergerak dalam bidang perdagangan besar logam mulia dan perhiasan emas (KBLI 46691) serta industri manufaktur perhiasan emas khusus ekspor (KBLI 32111). Laporan keuangan disusun berdasarkan Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).
               </p>
             </div>
 

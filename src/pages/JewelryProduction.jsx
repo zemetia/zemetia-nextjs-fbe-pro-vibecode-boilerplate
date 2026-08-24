@@ -1,8 +1,27 @@
 import React, { useState } from 'react';
 import { Hammer, Sparkles, Layers, RefreshCw, Plus, CheckCircle2, Settings, Package, Sliders, Save } from 'lucide-react';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  getProductionSPK,
+  saveProductionSPKList,
+  getProductionSettlements,
+  saveProductionSettlements,
+  getJournalEntries,
+  saveJournalEntries,
+  getNextReferenceNumber
+} from '../services/storageService';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function JewelryProduction() {
   const { modalProps, showModal } = useModal();
@@ -65,104 +84,102 @@ export default function JewelryProduction() {
 
   const handleIssueToWIP = async (e) => {
     e.preventDefault();
-    if (typeof window !== 'undefined' && window.Storage) {
-      const spkId = `SPK-${Date.now().toString().slice(-6)}`;
-      const spkRecord = {
-        id: spkId,
-        spkNo: `SPK-PROD-${Date.now().toString().slice(-4)}`,
-        date: new Date().toISOString().split('T')[0],
-        buyerName: orderForm.buyerName,
-        jewelryType: orderForm.jewelryType,
-        targetKarat: orderForm.targetKarat,
-        grossWeight: Number(orderForm.grossWeight),
-        lossTolerancePct: Number(orderForm.lossTolerancePct),
-        fineGoldNeeded: Number(fineGoldNeeded.toFixed(2)),
-        masterAlloyNeeded: Number(masterAlloyNeeded.toFixed(2)),
-        status: 'IN_WIP',
-        createdAt: new Date().toISOString()
-      };
+    const spkId = `SPK-${Date.now().toString().slice(-6)}`;
+    const spkRecord = {
+      id: spkId,
+      spkNo: `SPK-PROD-${Date.now().toString().slice(-4)}`,
+      date: new Date().toISOString().split('T')[0],
+      buyerName: orderForm.buyerName,
+      jewelryType: orderForm.jewelryType,
+      targetKarat: orderForm.targetKarat,
+      grossWeight: Number(orderForm.grossWeight),
+      lossTolerancePct: Number(orderForm.lossTolerancePct),
+      fineGoldNeeded: Number(fineGoldNeeded.toFixed(2)),
+      masterAlloyNeeded: Number(masterAlloyNeeded.toFixed(2)),
+      status: 'IN_WIP',
+      createdAt: new Date().toISOString()
+    };
 
-      const spkList = window.Storage.get('pttan_production_spk') || [];
-      spkList.unshift(spkRecord);
-      await window.Storage.set('pttan_production_spk', spkList);
+    const spkList = getProductionSPK();
+    spkList.unshift(spkRecord);
+    await saveProductionSPKList(spkList);
 
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: `JRN-${Date.now().toString().slice(-6)}`,
-        date: spkRecord.date,
-        description: `Pengeluaran Bahan SPK Produksi ${orderForm.jewelryType} (${spkRecord.spkNo}) - ${orderForm.buyerName}`,
-        lines: [
-          { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: fineGoldNeeded * 1300000, credit: 0 },
-          { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (LM Utama)', debit: 0, credit: fineGoldNeeded * 1300000 }
-        ],
-        createdAt: new Date().toISOString()
-      });
-      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: spkRecord.date,
+      description: `Pengeluaran Bahan SPK Produksi ${orderForm.jewelryType} (${spkRecord.spkNo}) - ${orderForm.buyerName}`,
+      lines: [
+        { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: fineGoldNeeded * 1300000, credit: 0 },
+        { accountCode: '1157', accountName: 'Persediaan Emas Murni 999.9 (LM Utama)', debit: 0, credit: fineGoldNeeded * 1300000 }
+      ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
 
-      showModal({
-        variant: 'success',
-        title: `✅ SPK Produksi (${spkRecord.spkNo}) Terbit`,
-        message: `• ${fineGoldNeeded.toFixed(2)}g emas murni 999.9 dikeluarkan dari Vault Utama (1157) ke Vault Emas WIP (11502).\n• Master Alloy Campuran: ${masterAlloyNeeded.toFixed(2)}g`
-      });
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ SPK Produksi (${spkRecord.spkNo}) Terbit`,
+      message: `• ${fineGoldNeeded.toFixed(2)}g emas murni 999.9 dikeluarkan dari Vault Utama (1157) ke Vault Emas WIP (11502).\n• Master Alloy Campuran: ${masterAlloyNeeded.toFixed(2)}g`
+    });
   };
 
   const handleSettlementProduction = async (e) => {
     e.preventDefault();
-    if (typeof window !== 'undefined' && window.Storage) {
-      const outputWeight = Number(settlementForm.jewelryOutputWeight || 0);
-      const scrapWeight = Number(settlementForm.scrapReturnWeight || 0);
-      const lossWeight = Number(settlementForm.goldLossWeight || 0);
-      const laborFee = Number(settlementForm.laborFeeIDR || 0);
-      const totalWipDeducted = outputWeight + scrapWeight + lossWeight;
+    const outputWeight = Number(settlementForm.jewelryOutputWeight || 0);
+    const scrapWeight = Number(settlementForm.scrapReturnWeight || 0);
+    const lossWeight = Number(settlementForm.goldLossWeight || 0);
+    const laborFee = Number(settlementForm.laborFeeIDR || 0);
+    const totalWipDeducted = outputWeight + scrapWeight + lossWeight;
 
-      const settlementRecord = {
-        id: settlementForm.joNumber,
-        joNumber: settlementForm.joNumber,
-        date: new Date().toISOString().split('T')[0],
-        jewelryOutputWeight: outputWeight,
-        scrapReturnWeight: scrapWeight,
-        goldLossWeight: lossWeight,
-        laborFeeIDR: laborFee,
-        karat: orderForm.targetKarat || '750',
-        status: 'COMPLETED',
-        createdAt: new Date().toISOString()
-      };
+    const settlementRecord = {
+      id: settlementForm.joNumber,
+      joNumber: settlementForm.joNumber,
+      date: new Date().toISOString().split('T')[0],
+      jewelryOutputWeight: outputWeight,
+      scrapReturnWeight: scrapWeight,
+      goldLossWeight: lossWeight,
+      laborFeeIDR: laborFee,
+      karat: orderForm.targetKarat || '750',
+      status: 'COMPLETED',
+      createdAt: new Date().toISOString()
+    };
 
-      const settlements = window.Storage.get('pttan_production_settlements') || [];
-      settlements.unshift(settlementRecord);
-      await window.Storage.set('pttan_production_settlements', settlements);
+    const settlements = getProductionSettlements();
+    settlements.unshift(settlementRecord);
+    await saveProductionSettlements(settlements);
 
-      // Auto-post settlement journal
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      const totalWipValue = totalWipDeducted * 1300000;
-      const jewelryValue = (outputWeight * 1350000) + laborFee;
-      const scrapValue = scrapWeight * 1200000;
-      const lossValue = lossWeight * 1300000;
+    // Auto-post settlement journal
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
+    const totalWipValue = totalWipDeducted * 1300000;
+    const jewelryValue = (outputWeight * 1350000) + laborFee;
+    const scrapValue = scrapWeight * 1200000;
+    const lossValue = lossWeight * 1300000;
 
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: `JRN-SETTLE-${Date.now().toString().slice(-6)}`,
-        date: settlementRecord.date,
-        description: `Settlement Produksi Workshop (${settlementForm.joNumber}): Hasil Perhiasan ${outputWeight}g (Vault 1160) | Scrap Retur ${scrapWeight}g (Vault 1152) | Susut Lebur ${lossWeight}g`,
-        lines: [
-          { accountCode: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor', debit: jewelryValue, credit: 0 },
-          ...(scrapWeight > 0 ? [{ accountCode: '1152', accountName: 'Persediaan Emas Scrap & Leburan', debit: scrapValue, credit: 0 }] : []),
-          ...(lossWeight > 0 ? [{ accountCode: '5120', accountName: 'Beban Susut Lebur / Gold Loss', debit: lossValue, credit: 0 }] : []),
-          { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: 0, credit: totalWipValue },
-          ...(laborFee > 0 ? [{ accountCode: '2111', accountName: 'Hutang Biaya Ongkos Tukang (Labor)', debit: 0, credit: laborFee }] : [])
-        ],
-        createdAt: new Date().toISOString()
-      });
-      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: settlementRecord.date,
+      description: `Settlement Produksi Workshop (${settlementForm.joNumber}): Hasil Perhiasan ${outputWeight}g (Vault 1160) | Scrap Retur ${scrapWeight}g (Vault 1152) | Susut Lebur ${lossWeight}g`,
+      lines: [
+        { accountCode: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor', debit: jewelryValue, credit: 0 },
+        ...(scrapWeight > 0 ? [{ accountCode: '1152', accountName: 'Persediaan Emas Scrap & Leburan', debit: scrapValue, credit: 0 }] : []),
+        ...(lossWeight > 0 ? [{ accountCode: '5120', accountName: 'Beban Susut Lebur / Gold Loss', debit: lossValue, credit: 0 }] : []),
+        { accountCode: '11502', accountName: 'Persediaan Emas WIP (Produksi)', debit: 0, credit: totalWipValue },
+        ...(laborFee > 0 ? [{ accountCode: '2111', accountName: 'Hutang Biaya Ongkos Tukang (Labor)', debit: 0, credit: laborFee }] : [])
+      ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
 
-      showModal({
-        variant: 'success',
-        title: `✅ Settlement Produksi (${settlementForm.joNumber}) Selesai`,
-        message: `• ${outputWeight}g perhiasan jadi dipindahkan ke Vault Perhiasan Siap Ekspor (Akun 1160).\n• ${scrapWeight}g scrap retur masuk ke Vault Scrap (Akun 1152).\n• Saldo Vault WIP (11502) berkurang ${totalWipDeducted}g.`
-      });
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ Settlement Produksi (${settlementForm.joNumber}) Selesai`,
+      message: `• ${outputWeight}g perhiasan jadi dipindahkan ke Vault Perhiasan Siap Ekspor (Akun 1160).\n• ${scrapWeight}g scrap retur masuk ke Vault Scrap (Akun 1152).\n• Saldo Vault WIP (11502) berkurang ${totalWipDeducted}g.`
+    });
   };
 
   return (
@@ -172,7 +189,7 @@ export default function JewelryProduction() {
         <div className="flex justify-between items-center flex-wrap gap-4 mb-5">
           <div>
             <h2 className="font-heading text-[1.3rem] flex items-center gap-2.5">
-              <Hammer color="#8b5cf6" size={24} /> Produksi Perhiasan & Dynamic BOM Karat Setting
+              <Hammer color="#f97316" size={24} /> Produksi Perhiasan & Dynamic BOM Karat Setting
             </h2>
             <p className="text-[0.8rem] text-fg-soft">
               Kalkulator Raw Material Ekspor, Setting Formula BOM Karat Manual, & Settlement Hasil In-House Workshop
@@ -192,7 +209,7 @@ export default function JewelryProduction() {
               onClick={() => setActiveTab(tab.id)}
               className={`cursor-pointer rounded-[10px] border border-line px-4.5 py-2.5 text-[0.85rem] ${
                 activeTab === tab.id
-                  ? 'bg-linear-135 from-purple to-purple-dark font-bold text-white'
+                  ? 'bg-linear-135 from-orange to-orange-dark font-bold text-white'
                   : 'bg-[rgba(15,23,42,0.6)] font-medium text-fg-soft'
               }`}
             >
@@ -205,7 +222,7 @@ export default function JewelryProduction() {
       {/* Tab 1: Calculator & SPK Issue */}
       {activeTab === 'calculator' && (
         <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.1rem] mb-4 text-[#a78bfa]">
+          <h3 className="font-heading text-[1.1rem] mb-4 text-orange-light">
             🧮 Kalkulator Konversi Raw Material Pesanan Ekspor
           </h3>
 
@@ -257,8 +274,8 @@ export default function JewelryProduction() {
             </div>
 
             {/* Real-time Dynamic BOM Output Card */}
-            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] my-5 mx-0 border border-[rgba(139,92,246,0.4)]">
-              <h4 className="text-[#a78bfa] mb-3 text-[0.9rem] flex items-center gap-2">
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] my-5 mx-0 border border-orange/40">
+              <h4 className="text-orange-light mb-3 text-[0.9rem] flex items-center gap-2">
                 <Sparkles size={16} /> Rincian Konversi Bahan Baku berdasarkan Setting Formula BOM {selectedFormula.code}:
               </h4>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
@@ -285,7 +302,7 @@ export default function JewelryProduction() {
               </div>
             </div>
 
-            <button type="submit" className="btn-primary bg-[linear-gradient(135deg,_#8b5cf6,_#6d28d9)]">
+            <button type="submit" className="btn-primary bg-linear-135 from-orange to-orange-dark">
               <Layers size={18} /> Terbitkan SPK & Keluarkan Bahan Emas Murni Ke Vault WIP
             </button>
           </form>
@@ -361,41 +378,43 @@ export default function JewelryProduction() {
 
           {/* Active Preset Formulas Table */}
           <h4 className="text-sky-light text-[0.95rem] mb-3">📋 Daftar Preset Formula BOM Karat Aktif</h4>
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Kode Karat</th>
-                  <th>Nama Formula</th>
-                  <th>Kadar Emas (%)</th>
-                  <th>Safety Margin (%)</th>
-                  <th>Effective Target (%)</th>
-                  <th>Komposisi Alloy (Ag/Cu)</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bomFormulas.map(f => (
-                  <tr key={f.code}>
-                    <td><strong>{f.code}</strong></td>
-                    <td>{f.name}</td>
-                    <td className="text-gold-light font-bold">{f.fineGoldPct}%</td>
-                    <td>+{f.safetyMarginPct}%</td>
-                    <td className="text-emerald-light font-bold">{(f.fineGoldPct + f.safetyMarginPct).toFixed(1)}%</td>
-                    <td>Perak: {f.alloyAgPct}% | Tembaga: {f.alloyCuPct}%</td>
-                    <td>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kode Karat</TableHead>
+                <TableHead>Nama Formula</TableHead>
+                <TableHead className="text-right">Kadar Emas (%)</TableHead>
+                <TableHead className="text-right">Safety Margin (%)</TableHead>
+                <TableHead className="text-right">Effective Target (%)</TableHead>
+                <TableHead>Komposisi Alloy (Ag/Cu)</TableHead>
+                <TableHead>Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bomFormulas.length === 0 ? (
+                <TableEmpty colSpan={7} message="Belum ada formula BOM (Bill of Material) alloy." />
+              ) : (
+                bomFormulas.map(f => (
+                  <TableRow key={f.code}>
+                    <TableCell><strong>{f.code}</strong></TableCell>
+                    <TableCell>{f.name}</TableCell>
+                    <TableCell className="text-right text-gold-light font-bold">{f.fineGoldPct}%</TableCell>
+                    <TableCell className="text-right">+{f.safetyMarginPct}%</TableCell>
+                    <TableCell className="text-right text-emerald-light font-bold">{(f.fineGoldPct + f.safetyMarginPct).toFixed(1)}%</TableCell>
+                    <TableCell>Perak: {f.alloyAgPct}% | Tembaga: {f.alloyCuPct}%</TableCell>
+                    <TableCell>
                       <button
                         className="btn-primary py-1.5 px-3 text-xs"
                         onClick={() => setEditingFormula(f)}
                       >
                         Edit Formula
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 

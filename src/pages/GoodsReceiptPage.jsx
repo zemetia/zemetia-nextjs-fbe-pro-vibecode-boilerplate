@@ -1,9 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { PackageCheck, Plus, Search, Printer, CheckCircle2, ShieldCheck, FileText, Warehouse, PlaneTakeoff, ShoppingCart } from 'lucide-react';
-import { getPurchaseOrders, getSuppliers } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  getPurchaseOrders,
+  savePurchaseOrders,
+  getSuppliers,
+  getGoodsReceipts,
+  saveGoodsReceipts,
+  getJournalEntries,
+  saveJournalEntries,
+  getNextReferenceNumber
+} from '../services/storageService';
+import { exportTTBPdf } from '../services/pdfService';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function GoodsReceiptPage() {
   const { modalProps, showModal } = useModal();
@@ -45,30 +65,7 @@ export default function GoodsReceiptPage() {
     setSuppliers(getSuppliers());
 
     // 2. Goods Receipts
-    if (typeof window !== 'undefined' && window.Storage) {
-      const storedGRN = window.Storage.get('pttan_goods_receipts') || [
-        {
-          id: 'GRN-2026-001',
-          grnNumber: 'GRN-2026-001',
-          poNumber: 'PO-IMP-2026-001',
-          supplierDoNumber: 'SJ-SUP-VAL-998811',
-          pibNo: '001234/PIB/KPU-TP/2026',
-          sppbNo: 'SPPB-009876/KPU.01/2026',
-          mawbNo: 'SQ-618-99881122',
-          date: '2026-08-10',
-          supplierName: 'Valcambi SA Switzerland',
-          targetVault: '1158',
-          targetVaultName: 'Vault Impor 999.9 (Akun 1158)',
-          itemDescription: 'Emas Batangan 999.9 Valcambi Cast Bar 1kg',
-          barSerialNumbers: 'VAL-99120, VAL-99121',
-          assayCertificateNo: 'ASSAY-VAL-88912',
-          receivedWeightGram: 1000,
-          totalValueIDR: 1350000000,
-          status: 'RECEIVED & VERIFIED'
-        }
-      ];
-      setReceipts(storedGRN);
-    }
+    setReceipts(getGoodsReceipts());
   };
 
   // Handler Pull From Purchase Order (PO)
@@ -107,7 +104,7 @@ export default function GoodsReceiptPage() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.grnNumber || !form.supplierName || !form.receivedWeightGram || !form.poNumber || !form.supplierDoNumber) {
       showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No TTB/GRN, Ref No. PO PT TAN, No. Surat Jalan Supplier, Supplier, dan Berat Emas.' });
@@ -126,49 +123,45 @@ export default function GoodsReceiptPage() {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      // 1. Save Goods Receipt
-      const list = window.Storage.get('pttan_goods_receipts') || [];
-      list.unshift(newGRN);
-      window.Storage.set('pttan_goods_receipts', list);
+    // 1. Save Goods Receipt
+    const list = getGoodsReceipts();
+    list.unshift(newGRN);
+    await saveGoodsReceipts(list);
 
-      // 2. Auto Posting EMKM Journal & Update Vault Inventory
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      const entryNum = typeof window.Storage.getNextReferenceNumber === 'function'
-        ? window.Storage.getNextReferenceNumber('journal')
-        : `JRN-GRN-${Date.now().toString().slice(-6)}`;
+    // 2. Auto Posting EMKM Journal & Update Vault Inventory
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
 
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: entryNum,
-        date: form.date,
-        description: `Penerimaan Emas Fisik (${newGRN.grnNumber}) Ref PO PT TAN: ${newGRN.poNumber} | SJ: ${newGRN.supplierDoNumber}${newGRN.pibNo ? ` | PIB: ${newGRN.pibNo}` : ''} - ${newGRN.supplierName} [Vault: ${newGRN.targetVault}]`,
-        lines: [
-          { accountCode: form.targetVault, accountName: form.targetVaultName, debit: form.totalValueIDR, credit: 0 },
-          { accountCode: '2111', accountName: 'Hutang Usaha (Trade Payables)', debit: 0, credit: form.totalValueIDR }
-        ],
-        createdAt: new Date().toISOString()
-      });
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: form.date,
+      description: `Penerimaan Emas Fisik (${newGRN.grnNumber}) Ref PO PT TAN: ${newGRN.poNumber} | SJ: ${newGRN.supplierDoNumber}${newGRN.pibNo ? ` | PIB: ${newGRN.pibNo}` : ''} - ${newGRN.supplierName} [Vault: ${newGRN.targetVault}]`,
+      lines: [
+        { accountCode: form.targetVault, accountName: form.targetVaultName, debit: form.totalValueIDR, credit: 0 },
+        { accountCode: '2111', accountName: 'Hutang Usaha (Trade Payables)', debit: 0, credit: form.totalValueIDR }
+      ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
 
-      // Update PO status to received
-      const storedPOs = window.Storage.get(window.Storage.KEYS.PURCHASE_ORDERS) || [];
-      const updatedPOs = storedPOs.map(p => {
-        if (p.poNumber === form.poNumber || p.id === form.poNumber) {
-          return { ...p, status: 'received', receivedAt: new Date().toISOString(), grnNumber: newGRN.grnNumber };
-        }
-        return p;
-      });
-      window.Storage.set(window.Storage.KEYS.PURCHASE_ORDERS, updatedPOs);
+    // Update PO status to received
+    const storedPOs = getPurchaseOrders();
+    const updatedPOs = storedPOs.map(p => {
+      if (p.poNumber === form.poNumber || p.id === form.poNumber) {
+        return { ...p, status: 'received', receivedAt: new Date().toISOString(), grnNumber: newGRN.grnNumber };
+      }
+      return p;
+    });
+    await savePurchaseOrders(updatedPOs);
 
-      showModal({
-        variant: 'success',
-        title: `✅ Penerimaan Barang (TTB ${newGRN.grnNumber}) Tersimpan`,
-        message: `• Ref PO PT TAN: ${newGRN.poNumber}\n• No. SJ Supplier: ${newGRN.supplierDoNumber}${newGRN.pibNo ? `\n• No. PIB: ${newGRN.pibNo}` : ''}\n• Stok Vault ${form.targetVaultName} bertambah ${newGRN.receivedWeightGram}g`
-      });
-      loadInitialData();
-      setActiveView('list');
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ Penerimaan Barang (TTB ${newGRN.grnNumber}) Tersimpan`,
+      message: `• Ref PO PT TAN: ${newGRN.poNumber}\n• No. SJ Supplier: ${newGRN.supplierDoNumber}${newGRN.pibNo ? `\n• No. PIB: ${newGRN.pibNo}` : ''}\n• Stok Vault ${form.targetVaultName} bertambah ${newGRN.receivedWeightGram}g`
+    });
+    loadInitialData();
+    setActiveView('list');
   };
 
   const filteredReceipts = receipts.filter(r =>
@@ -236,29 +229,31 @@ export default function GoodsReceiptPage() {
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. TTB (GRN)</th>
-                  <th>Ref No. PO PT TAN</th>
-                  <th>Surat Jalan & Dokumen Impor</th>
-                  <th>Tanggal Terima</th>
-                  <th>Supplier Emas</th>
-                  <th>Vault Tujuan</th>
-                  <th>Deskripsi Emas</th>
-                  <th>Berat Gram Diterima</th>
-                  <th className="text-right">Total Valuasi IDR</th>
-                  <th>Status Verifikasi</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredReceipts.map(r => (
-                  <tr key={r.id || r.grnNumber}>
-                    <td><strong>{r.grnNumber}</strong></td>
-                    <td><span className="badge badge-gold text-xs">{r.poNumber}</span></td>
-                    <td>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. TTB (GRN)</TableHead>
+                <TableHead>Ref No. PO PT TAN</TableHead>
+                <TableHead>Surat Jalan & Dokumen Impor</TableHead>
+                <TableHead>Tanggal Terima</TableHead>
+                <TableHead>Supplier Emas</TableHead>
+                <TableHead>Vault Tujuan</TableHead>
+                <TableHead>Deskripsi Emas</TableHead>
+                <TableHead className="text-right">Berat Gram Diterima</TableHead>
+                <TableHead className="text-right">Total Valuasi IDR</TableHead>
+                <TableHead>Status Verifikasi</TableHead>
+                <TableHead>Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredReceipts.length === 0 ? (
+                <TableEmpty colSpan={11} message="Belum ada catatan penerimaan barang (TTB/GRN)." />
+              ) : (
+                filteredReceipts.map(r => (
+                  <TableRow key={r.id || r.grnNumber}>
+                    <TableCell><strong>{r.grnNumber}</strong></TableCell>
+                    <TableCell><span className="badge badge-gold text-xs">{r.poNumber}</span></TableCell>
+                    <TableCell>
                       <div><small className="text-sky-light font-semibold block">{r.supplierDoNumber || 'SJ-SUP-998811'}</small></div>
                       {(r.pibNo || r.sppbNo || r.mawbNo) && (
                         <div className="text-[0.7rem] text-fg-muted mt-0.5">
@@ -266,31 +261,34 @@ export default function GoodsReceiptPage() {
                           {r.sppbNo && <div>SPPB: <span className="text-[#86efac]">{r.sppbNo}</span></div>}
                         </div>
                       )}
-                    </td>
-                    <td>{r.date}</td>
-                    <td><strong>{r.supplierName}</strong></td>
-                    <td><span className="badge badge-emerald">{r.targetVaultName || r.targetVault}</span></td>
-                    <td>{r.itemDescription}</td>
-                    <td className="font-extrabold text-sky-light">{r.receivedWeightGram} g</td>
-                    <td className="text-right font-bold text-emerald-light">Rp {(r.totalValueIDR || 0).toLocaleString()}</td>
-                    <td><span className="badge badge-emerald"><ShieldCheck className="inline mr-1" size={12} />{r.status || 'VERIFIED'}</span></td>
-                    <td>
+                    </TableCell>
+                    <TableCell>{r.date}</TableCell>
+                    <TableCell><strong>{r.supplierName}</strong></TableCell>
+                    <TableCell><span className="badge badge-emerald">{r.targetVaultName || r.targetVault}</span></TableCell>
+                    <TableCell>{r.itemDescription}</TableCell>
+                    <TableCell className="text-right font-extrabold text-sky-light">{r.receivedWeightGram} g</TableCell>
+                    <TableCell className="text-right font-bold text-emerald-light">Rp {(r.totalValueIDR || 0).toLocaleString()}</TableCell>
+                    <TableCell><span className="badge badge-emerald"><ShieldCheck className="inline mr-1" size={12} />{r.status || 'VERIFIED'}</span></TableCell>
+                    <TableCell>
                       <button
-                        className="btn-primary py-1.5 px-2.5 text-xs"
-                        onClick={() => showModal({
-                          variant: 'info',
-                          title: `🖨️ Cetak TTB / GRN ${r.grnNumber}`,
-                          message: `• Ref PO PT TAN: ${r.poNumber}\n• SJ Supplier: ${r.supplierDoNumber}\n• Dokumen Kepabeanan:\n   - PIB: ${r.pibNo || '-'}\n   - SPPB: ${r.sppbNo || '-'}\n   - MAWB: ${r.mawbNo || '-'}\n• Supplier: ${r.supplierName}\n• Total Valuasi: Rp ${(r.totalValueIDR || 0).toLocaleString()}`
-                        })}
+                        className="btn-primary py-1.5 px-2.5 text-xs flex items-center gap-1 cursor-pointer"
+                        onClick={async () => {
+                          await exportTTBPdf(r);
+                          showModal({
+                            variant: 'success',
+                            title: `🖨️ Cetak TTB / GRN ${r.grnNumber}`,
+                            message: `Dokumen Tanda Terima Barang (TTB) ${r.grnNumber} berhasil di-generate dan dibuka di tab baru untuk langsung dicetak.\n\n• Ref PO PT TAN: ${r.poNumber}\n• SJ Supplier: ${r.supplierDoNumber || '-'}\n• Dokumen Kepabeanan:\n   - PIB: ${r.pibNo || '-'}\n   - SPPB: ${r.sppbNo || '-'}\n   - MAWB: ${r.mawbNo || '-'}\n• Supplier: ${r.supplierName}\n• Total Valuasi: Rp ${(r.totalValueIDR || 0).toLocaleString()}`
+                          });
+                        }}
                       >
                         <Printer size={14} /> Cetak TTB
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 

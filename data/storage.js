@@ -1778,7 +1778,7 @@ const Storage = {
     },
 
     // Default Chart of Accounts (SAK EMKM compliant) - Gold Refinery Edition
-        getDefaultChartOfAccounts() {
+    getDefaultChartOfAccounts() {
         return [
           {
                     "code": "1000",
@@ -3586,7 +3586,7 @@ const Storage = {
                     "category": "pendapatan_lain",
                     "balance": 0
           }
-];
+        ];
     },
 
     seedTestData() {

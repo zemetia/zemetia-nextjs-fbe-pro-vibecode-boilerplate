@@ -37,30 +37,30 @@ export const PAGES = [
   {
     id: 'dashboard',
     title: 'Executive Dashboard & Control Center',
-    label: 'Executive Dashboard',
+    label: 'Dashboard',
     icon: LayoutDashboard,
     component: Dashboard
   },
   {
+    id: 'purchase-request',
+    title: 'Purchase Request (PR - Permintaan Pengadaan Barang & Bahan Operasional)',
+    label: 'Purchase Request',
+    icon: ClipboardList,
+    component: PurchaseRequestPage
+  },
+  {
     id: 'import-trading',
     title: 'Pembelian LM Import & Landed Costing',
-    label: 'PO LM Import & Landed Cost',
+    label: 'PO Emas Impor',
     icon: PlaneTakeoff,
     component: LmImportTrading
   },
   {
     id: 'local-trading',
     title: 'Pembelian & Trading LM Lokal IDR',
-    label: 'PO LM Lokal IDR',
+    label: 'PO Emas Lokal',
     icon: ShoppingCart,
     component: LmLocalTrading
-  },
-  {
-    id: 'purchase-request',
-    title: 'Purchase Request (PR - Permintaan Pengadaan Barang & Bahan Operasional)',
-    label: 'Purchase Request (PR)',
-    icon: ClipboardList,
-    component: PurchaseRequestPage
   },
   {
     id: 'scrap-melting',
@@ -72,105 +72,105 @@ export const PAGES = [
   {
     id: 'goods-receipt',
     title: 'Penerimaan Barang Vault (Goods Receipt Note - TTB)',
-    label: 'Penerimaan Barang (TTB / GRN)',
+    label: 'Penerimaan Barang (TTB)',
     icon: PackageCheck,
     component: GoodsReceiptPage
   },
   {
+    id: 'warehouse-mgmt',
+    title: 'Modul Gudang & Kartu Stok Brankas Vault',
+    label: 'Stok & Kartu Vault',
+    icon: Warehouse,
+    component: WarehouseManagement
+  },
+  {
     id: 'jewelry-production',
     title: 'Produksi Perhiasan & Alloy Karat Calculator',
-    label: 'Produksi Perhiasan & Alloy',
+    label: 'Produksi Perhiasan',
     icon: Hammer,
     component: JewelryProduction
   },
   {
     id: 'export-so',
     title: 'Export Sales Order (SO Ekspor & Gold Price Fixing)',
-    label: 'Export Sales Order (Price Fixing)',
+    label: 'Sales Order Ekspor',
     icon: ShoppingBag,
     component: ExportSalesOrderPage
   },
   {
     id: 'export-invoicing',
     title: 'Faktur Ekspor USD (PPN 0%)',
-    label: 'Faktur Ekspor USD (PPN 0%)',
+    label: 'Faktur Ekspor',
     icon: FileText,
     component: ExportInvoicing
   },
   {
     id: 'export-do',
     title: 'Surat Jalan Ekspor (Export Delivery Order & Packing List)',
-    label: 'Surat Jalan Ekspor (Delivery Order)',
+    label: 'Surat Jalan Ekspor',
     icon: Truck,
     component: ExportDeliveryOrderPage
   },
   {
-    id: 'warehouse-mgmt',
-    title: 'Modul Gudang & Kartu Stok Brankas Vault',
-    label: 'Posisi Vault & Kartu Stok',
-    icon: Warehouse,
-    component: WarehouseManagement
-  },
-  {
     id: 'voucher-mgmt',
     title: 'Manajemen Voucher Kas & Bank (BKK / BKM / BBK / BBM / BCK)',
-    label: 'Voucher Kas/Bank & Cek BG',
+    label: 'Voucher Kas & Bank',
     icon: CreditCard,
     component: VoucherManagement
   },
   {
     id: 'master-cheques',
     title: 'Master Buku Cek / Bilyet Giro & Kontrol Plafon Bank',
-    label: 'Master Buku Cek & Limit Bank',
+    label: 'Master Buku Cek',
     icon: BookOpen,
     component: MasterChequePage
   },
   {
-    id: 'master-finished-goods',
-    title: 'Master Finished Goods (Katalog Perhiasan Emas Ekspor)',
-    label: 'Master Finished Goods (Perhiasan)',
-    icon: Sparkles,
-    component: MasterFinishedGoods
-  },
-  {
-    id: 'master-items',
-    title: 'Master Emas & Bahan Baku',
-    label: 'Master Emas & Bahan Baku',
-    icon: Package,
-    component: MasterItemPage
-  },
-  {
-    id: 'master-customers',
-    title: 'Master Customer & Buyer Ekspor',
-    label: 'Master Buyer Ekspor',
-    icon: Users,
-    component: MasterCustomer
-  },
-  {
-    id: 'master-suppliers',
-    title: 'Master Supplier Emas (Impor & Lokal)',
-    label: 'Master Supplier Emas',
-    icon: Truck,
-    component: MasterSupplier
-  },
-  {
     id: 'accounting-reports',
     title: 'Jurnal Mutasi & Laporan Keuangan SAK EMKM',
-    label: 'Jurnal Mutasi & Laporan Keuangan',
+    label: 'Laporan Keuangan',
     icon: BarChart3,
     component: AccountingReports
   },
   {
     id: 'coa-setting',
     title: 'Setting COA SAK EMKM',
-    label: 'Setting COA SAK EMKM',
+    label: 'Bagan Akun (COA)',
     icon: BookOpen,
     component: ChartOfAccounts
   },
   {
+    id: 'master-suppliers',
+    title: 'Master Supplier Emas (Impor & Lokal)',
+    label: 'Master Supplier',
+    icon: Truck,
+    component: MasterSupplier
+  },
+  {
+    id: 'master-items',
+    title: 'Master Emas & Bahan Baku',
+    label: 'Master Bahan Baku',
+    icon: Package,
+    component: MasterItemPage
+  },
+  {
+    id: 'master-finished-goods',
+    title: 'Master Finished Goods (Katalog Perhiasan Emas Ekspor)',
+    label: 'Master Perhiasan',
+    icon: Sparkles,
+    component: MasterFinishedGoods
+  },
+  {
+    id: 'master-customers',
+    title: 'Master Customer & Buyer Ekspor',
+    label: 'Master Customer',
+    icon: Users,
+    component: MasterCustomer
+  },
+  {
     id: 'system-settings',
     title: 'Setting Logo Perusahaan, Backup & Restore Database System',
-    label: 'Setting Logo, Backup & Restore',
+    label: 'Pengaturan Sistem',
     icon: Settings,
     component: SystemSettingsPage
   }
@@ -183,34 +183,53 @@ export const PINNED_PAGE_IDS = ['dashboard'];
 export const PAGE_GROUPS = [
   {
     id: 'purchasing',
-    title: '📦 MODUL PEMBELIAN',
-    items: ['import-trading', 'local-trading', 'purchase-request', 'scrap-melting', 'goods-receipt', 'master-suppliers']
-  },
-  {
-    id: 'sales',
-    title: '🏷️ MODUL PENJUALAN',
-    items: ['export-so', 'export-invoicing', 'export-do', 'master-customers']
+    title: '📦 PEMBELIAN',
+    items: [
+      'purchase-request',
+      'import-trading',
+      'local-trading',
+      'scrap-melting',
+      'goods-receipt',
+      'master-suppliers'
+    ]
   },
   {
     id: 'vault',
-    title: '🏛️ GUDANG VAULT & OPERASIONAL',
+    title: '🏛️ GUDANG & VAULT',
     items: [
-      'warehouse-mgmt',
       { id: 'goods-receipt', label: 'Penerimaan Barang (TTB)' },
+      'warehouse-mgmt',
       'jewelry-production',
-      'master-finished-goods',
-      'master-items'
+      'master-items',
+      'master-finished-goods'
+    ]
+  },
+  {
+    id: 'sales',
+    title: '🏷️ PENJUALAN',
+    items: [
+      'export-so',
+      'export-invoicing',
+      'export-do',
+      'master-customers'
     ]
   },
   {
     id: 'accounting',
     title: '💼 AKUNTANSI & KEUANGAN',
-    items: ['accounting-reports', 'voucher-mgmt', 'master-cheques', 'coa-setting']
+    items: [
+      'voucher-mgmt',
+      'master-cheques',
+      'accounting-reports',
+      'coa-setting'
+    ]
   },
   {
     id: 'system',
-    title: '⚙️ SETTING & UTILITY',
-    items: ['system-settings']
+    title: '⚙️ PENGATURAN',
+    items: [
+      'system-settings'
+    ]
   }
 ];
 

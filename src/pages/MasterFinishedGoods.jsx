@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Plus, Search, CheckCircle2, Tag, Sparkles, Sliders } from 'lucide-react';
 import { getFinishedGoods, saveFinishedGood } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function MasterFinishedGoods() {
   const { modalProps, showModal } = useModal();
@@ -220,38 +230,40 @@ export default function MasterFinishedGoods() {
           📋 Katalog Barang Jadi Perhiasan Ekspor ({filteredGoods.length})
         </h3>
 
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Kode SKU</th>
-                <th>Nama Model / Style Design</th>
-                <th>Jenis Perhiasan</th>
-                <th>Kode Karat</th>
-                <th>Warna Gold</th>
-                <th>Berat Standar (g)</th>
-                <th>Ongkos Tukang / g</th>
-                <th>HS Code PEB</th>
-                <th>Akun GL Stok</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredGoods.map(fg => (
-                <tr key={fg.id || fg.sku}>
-                  <td><strong>{fg.sku}</strong></td>
-                  <td>{fg.name}</td>
-                  <td>{fg.type}</td>
-                  <td><span className="badge badge-gold text-xs">Karat {fg.karat} ({fg.purity}%)</span></td>
-                  <td><span className="badge badge-emerald text-xs">{fg.goldColor}</span></td>
-                  <td className="font-bold">{fg.stdWeightGram} g</td>
-                  <td>Rp {(fg.laborFeeIDRPerGram || 0).toLocaleString()}</td>
-                  <td><small className="text-sky-light">{fg.hsCode || '7113.19.90'}</small></td>
-                  <td><small className="text-emerald-light">1160 (Perhiasan Ekspor)</small></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Kode SKU</TableHead>
+              <TableHead>Nama Model / Style Design</TableHead>
+              <TableHead>Jenis Perhiasan</TableHead>
+              <TableHead>Kode Karat</TableHead>
+              <TableHead>Warna Gold</TableHead>
+              <TableHead className="text-right">Berat Standar (g)</TableHead>
+              <TableHead className="text-right">Ongkos Tukang / g</TableHead>
+              <TableHead>HS Code PEB</TableHead>
+              <TableHead>Akun GL Stok</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredGoods.length === 0 ? (
+              <TableEmpty colSpan={9} message="Belum ada data master perhiasan jadi." />
+            ) : (
+              filteredGoods.map(fg => (
+                <TableRow key={fg.id || fg.sku}>
+                  <TableCell><strong>{fg.sku}</strong></TableCell>
+                  <TableCell>{fg.name}</TableCell>
+                  <TableCell><span className="badge badge-blue text-xs">{fg.type}</span></TableCell>
+                  <TableCell><span className="badge badge-gold text-xs">Karat {fg.karat} ({fg.purity}%)</span></TableCell>
+                  <TableCell><span className="badge badge-emerald text-xs">{fg.goldColor}</span></TableCell>
+                  <TableCell className="text-right font-bold">{fg.stdWeightGram} g</TableCell>
+                  <TableCell className="text-right">Rp {(fg.laborFeeIDRPerGram || 0).toLocaleString()}</TableCell>
+                  <TableCell><small className="text-sky-light">{fg.hsCode || '7113.19.90'}</small></TableCell>
+                  <TableCell><small className="text-emerald-light">1160 (Perhiasan Ekspor)</small></TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <Modal {...modalProps} />

@@ -1,10 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, Plus, Search, Filter, Printer, CheckCircle2, ShieldCheck, ArrowRight, DollarSign } from 'lucide-react';
-import { getCustomers, getFinishedGoods } from '../services/storageService';
+import {
+  getCustomers,
+  getFinishedGoods,
+  getExportSalesOrders,
+  saveExportSalesOrders
+} from '../services/storageService';
 import { getStoredUsdRate } from '../services/currencyService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function ExportSalesOrderPage() {
   const { modalProps, showModal } = useModal();
@@ -55,27 +70,7 @@ export default function ExportSalesOrderPage() {
     setFinishedGoods(fgs);
 
     // 3. Stored Sales Orders
-    if (typeof window !== 'undefined' && window.Storage) {
-      const stored = window.Storage.get('pttan_export_sales_orders') || [
-        {
-          id: 'SO-EXP-2026-001',
-          soNumber: 'SO-EXP-2026-001',
-          customerPONumber: 'PO-DMCC-2026-8899',
-          date: '2026-08-10',
-          buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
-          country: 'United Arab Emirates (UAE)',
-          itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
-          weightGrams: 1000,
-          pricePerGramUSD: 85.00,
-          totalUSD: 85000,
-          exchangeRate: 16250,
-          totalIDR: 1381250000,
-          status: 'FIXED / IN PRODUCTION',
-          invoiced: false
-        }
-      ];
-      setSalesOrders(stored);
-    }
+    setSalesOrders(getExportSalesOrders());
   };
 
   const handleCustomerSelect = (custId) => {
@@ -105,7 +100,7 @@ export default function ExportSalesOrderPage() {
   const totalUSD = (form.weightGrams || 0) * (form.pricePerGramUSD || 0);
   const totalIDR = totalUSD * (form.exchangeRate || 16250);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.soNumber || !form.buyerName || !form.weightGrams || !form.pricePerGramUSD) {
       showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No SO, Buyer, Berat Gram, dan Harga USD/Gram Fixing.' });
@@ -122,19 +117,17 @@ export default function ExportSalesOrderPage() {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      const list = window.Storage.get('pttan_export_sales_orders') || [];
-      list.unshift(newSO);
-      window.Storage.set('pttan_export_sales_orders', list);
+    const list = getExportSalesOrders();
+    list.unshift(newSO);
+    await saveExportSalesOrders(list);
 
-      showModal({
-        variant: 'success',
-        title: `✅ Export Sales Order (${newSO.soNumber}) Tersimpan`,
-        message: `• Buyer: ${newSO.buyerName}\n• Harga dikunci (fixed price): $ ${form.pricePerGramUSD}/g\n• Berat: ${newSO.weightGrams}g`
-      });
-      loadInitialData();
-      setActiveView('list');
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ Export Sales Order (${newSO.soNumber}) Tersimpan`,
+      message: `• Buyer: ${newSO.buyerName}\n• Harga dikunci (fixed price): $ ${form.pricePerGramUSD}/g\n• Berat: ${newSO.weightGrams}g`
+    });
+    loadInitialData();
+    setActiveView('list');
   };
 
   const filteredOrders = salesOrders.filter(so =>
@@ -201,58 +194,56 @@ export default function ExportSalesOrderPage() {
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. SO Ekspor</th>
-                  <th>Tanggal Fixing</th>
-                  <th>Buyer Overseas</th>
-                  <th>Negara</th>
-                  <th>Berat Gram</th>
-                  <th className="text-right">Harga Fixing USD/g</th>
-                  <th className="text-right">Total Contract USD</th>
-                  <th>Status Pesanan</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.length === 0 ? (
-                  <tr><td className="text-center p-7.5 text-fg-muted" colSpan="9">Belum ada Sales Order Ekspor dibuat</td></tr>
-                ) : (
-                  filteredOrders.map(so => (
-                    <tr key={so.id || so.soNumber}>
-                      <td>
-                        <strong>{so.soNumber}</strong>
-                        {so.customerPONumber && (
-                          <small className="text-fg-muted block text-xs">PO Cust: {so.customerPONumber}</small>
-                        )}
-                      </td>
-                      <td>{so.date}</td>
-                      <td><strong>{so.buyerName}</strong></td>
-                      <td>{so.country}</td>
-                      <td className="font-bold">{so.weightGrams} g</td>
-                      <td className="text-right text-gold-light font-bold">$ {so.pricePerGramUSD} / g</td>
-                      <td className="text-right font-extrabold text-sky-light">$ {(so.totalUSD || 0).toLocaleString()} USD</td>
-                      <td><span className="badge badge-gold">{so.status || 'FIXED / IN PRODUCTION'}</span></td>
-                      <td>
-                        <button
-                          className="btn-primary py-1.5 px-2.5 text-xs"
-                          onClick={() => showModal({
-                            variant: 'info',
-                            title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
-                            message: `• Buyer: ${so.buyerName}\n• No. PO Customer: ${so.customerPONumber || '-'}\n• Berat: ${so.weightGrams}g\n• Total Nilai: $ ${(so.totalUSD || 0).toLocaleString()} USD`
-                          })}
-                        >
-                          <Printer size={14} /> Cetak SO
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. SO Ekspor</TableHead>
+                <TableHead>Tanggal Fixing</TableHead>
+                <TableHead>Buyer Overseas</TableHead>
+                <TableHead>Negara</TableHead>
+                <TableHead className="text-right">Berat Gram</TableHead>
+                <TableHead className="text-right">Harga Fixing USD/g</TableHead>
+                <TableHead className="text-right">Total Contract USD</TableHead>
+                <TableHead>Status Pesanan</TableHead>
+                <TableHead>Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredOrders.length === 0 ? (
+                <TableEmpty colSpan={9} message="Belum ada Sales Order Ekspor dibuat" />
+              ) : (
+                filteredOrders.map(so => (
+                  <TableRow key={so.id || so.soNumber}>
+                    <TableCell>
+                      <strong>{so.soNumber}</strong>
+                      {so.customerPONumber && (
+                        <small className="text-fg-muted block text-xs">PO Cust: {so.customerPONumber}</small>
+                      )}
+                    </TableCell>
+                    <TableCell>{so.date}</TableCell>
+                    <TableCell><strong>{so.buyerName}</strong></TableCell>
+                    <TableCell>{so.country}</TableCell>
+                    <TableCell className="text-right font-bold">{so.weightGrams} g</TableCell>
+                    <TableCell className="text-right text-gold-light font-bold">$ {so.pricePerGramUSD} / g</TableCell>
+                    <TableCell className="text-right font-extrabold text-sky-light">$ {(so.totalUSD || 0).toLocaleString()} USD</TableCell>
+                    <TableCell><span className="badge badge-gold">{so.status || 'FIXED / IN PRODUCTION'}</span></TableCell>
+                    <TableCell>
+                      <button
+                        className="btn-primary py-1.5 px-2.5 text-xs"
+                        onClick={() => showModal({
+                          variant: 'info',
+                          title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
+                          message: `• Buyer: ${so.buyerName}\n• No. PO Customer: ${so.customerPONumber || '-'}\n• Berat: ${so.weightGrams}g\n• Total Nilai: $ ${(so.totalUSD || 0).toLocaleString()} USD`
+                        })}
+                      >
+                        <Printer size={14} /> Cetak SO
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 

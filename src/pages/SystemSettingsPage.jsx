@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Download, Upload, Image, Building2, ShieldCheck, Database, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import {
+  getCompanyProfile,
+  saveCompanyProfile,
+  getAllSystemData,
+  restoreSystemData
+} from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
 
 export default function SystemSettingsPage() {
   const { modalProps, showModal } = useModal();
   const [profile, setProfile] = useState({
-    companyName: 'PT TAN (Trifactor Export & Trading)',
-    logoUrl: '',
-    address: 'Kawasan Industri & Pergudangan Gold Center, Jakarta, Indonesia',
-    phone: '+62-21-555-8899',
-    email: 'info@pt-tan.co.id',
-    npwp: '01.234.567.8-012.000',
+    companyName: 'PT. Triliun Anugrah Nusantara (PT TAN)',
+    logoUrl: '/logo/logo-tan.png',
+    address: 'Sentra Niaga Puri Indah Blok T2 No. 12, Kembangan, Jakarta Barat 11610',
+    phone: '(021) 5830-1988 / 0811-9876-5432',
+    email: 'procurement@tan-gold.co.id',
+    npwp: '01.234.567.8-035.000',
     nibPeb: '1234567890123 (NIB Ekspor PPN 0%)',
     currencyDefault: 'USD'
   });
@@ -22,18 +28,14 @@ export default function SystemSettingsPage() {
   }, []);
 
   const loadSettings = () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const saved = window.Storage.get('pttan_company_profile');
-      if (saved) setProfile(saved);
-    }
+    const saved = getCompanyProfile();
+    if (saved) setProfile(saved);
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (typeof window !== 'undefined' && window.Storage) {
-      window.Storage.set('pttan_company_profile', profile);
-      showModal({ variant: 'success', title: '✅ Profil Perusahaan Tersimpan', message: 'Profil perusahaan & setting logo PT TAN berhasil disimpan.' });
-    }
+    await saveCompanyProfile(profile);
+    showModal({ variant: 'success', title: '✅ Profil Perusahaan Tersimpan', message: 'Profil perusahaan & setting logo PT TAN berhasil disimpan.' });
   };
 
   const handleLogoUpload = (e) => {
@@ -49,32 +51,18 @@ export default function SystemSettingsPage() {
 
   // Backup System JSON Export
   const handleBackupExport = () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const backupData = {
-        app: 'PT TAN ERP',
-        version: '1.0.0',
-        timestamp: new Date().toISOString(),
-        chartOfAccounts: window.Storage.get(window.Storage.KEYS.CHART_OF_ACCOUNTS) || [],
-        items: window.Storage.get(window.Storage.KEYS.ITEMS) || [],
-        customers: window.Storage.get(window.Storage.KEYS.CUSTOMERS) || [],
-        suppliers: window.Storage.get(window.Storage.KEYS.SUPPLIERS) || [],
-        purchaseOrders: window.Storage.get('erp_purchase_orders') || [],
-        paymentVouchers: window.Storage.get(window.Storage.KEYS.PAYMENT_VOUCHERS) || [],
-        receiptVouchers: window.Storage.get(window.Storage.KEYS.RECEIPT_VOUCHERS) || [],
-        journals: window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [],
-        companyProfile: profile
-      };
+    const backupData = getAllSystemData();
+    backupData.companyProfile = profile;
 
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `BACKUP_PTTAN_ERP_${new Date().toISOString().split('T')[0]}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `BACKUP_PTTAN_ERP_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
 
-      showModal({ variant: 'success', title: '✅ Backup Terunduh', message: 'File backup database sistem PT TAN (.json) berhasil diunduh.' });
-    }
+    showModal({ variant: 'success', title: '✅ Backup Terunduh', message: 'File backup database sistem PT TAN (.json) berhasil diunduh.' });
   };
 
   // Restore System JSON Import
@@ -107,30 +95,20 @@ export default function SystemSettingsPage() {
     reader.readAsText(restoreFile);
   };
 
-  const applyRestore = (data) => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      if (data.chartOfAccounts) window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, data.chartOfAccounts);
-      if (data.items) window.Storage.set(window.Storage.KEYS.ITEMS, data.items);
-      if (data.customers) window.Storage.set(window.Storage.KEYS.CUSTOMERS, data.customers);
-      if (data.suppliers) window.Storage.set(window.Storage.KEYS.SUPPLIERS, data.suppliers);
-      if (data.purchaseOrders) window.Storage.set('erp_purchase_orders', data.purchaseOrders);
-      if (data.paymentVouchers) window.Storage.set(window.Storage.KEYS.PAYMENT_VOUCHERS, data.paymentVouchers);
-      if (data.receiptVouchers) window.Storage.set(window.Storage.KEYS.RECEIPT_VOUCHERS, data.receiptVouchers);
-      if (data.journals) window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, data.journals);
-      if (data.companyProfile) {
-        setProfile(data.companyProfile);
-        window.Storage.set('pttan_company_profile', data.companyProfile);
-      }
-
-      // Reload dijalankan saat modal ditutup — kalau langsung, pesannya tak sempat terbaca.
-      showModal({
-        variant: 'success',
-        title: '🎉 Restore Data System PT TAN Berhasil',
-        message: 'Halaman akan dimuat ulang setelah dialog ini ditutup.',
-        confirmLabel: 'Muat Ulang Halaman',
-        onDismiss: () => window.location.reload()
-      });
+  const applyRestore = async (data) => {
+    await restoreSystemData(data);
+    if (data.companyProfile) {
+      setProfile(data.companyProfile);
     }
+
+    // Reload dijalankan saat modal ditutup — kalau langsung, pesannya tak sempat terbaca.
+    showModal({
+      variant: 'success',
+      title: '🎉 Restore Data System PT TAN Berhasil',
+      message: 'Halaman akan dimuat ulang setelah dialog ini ditutup.',
+      confirmLabel: 'Muat Ulang Halaman',
+      onDismiss: () => window.location.reload()
+    });
   };
 
   return (

@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, CheckCircle, AlertTriangle, ShieldCheck, Filter, Search, Ban, Clock, CheckSquare, Layers, Lock, BookOpen } from 'lucide-react';
-import Modal, { useModal } from '../components/ui/Modal';
-import NumberInput from '../components/ui/NumberInput';
+import { getChequeBooks, saveChequeBooks } from '../services/storageService';
+import {
+  Modal,
+  useModal,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function MasterChequePage() {
   const { modalProps, showModal } = useModal();
@@ -29,64 +40,11 @@ export default function MasterChequePage() {
   }, []);
 
   const loadChequeData = () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const stored = window.Storage.get('pttan_cheque_books') || [
-        {
-          id: 'BOOK-BCA-2026A',
-          bookNumber: 'BOOK-BCA-2026A',
-          bankCode: 'BCA-001',
-          bankName: 'Bank BCA (KCU Thamrin)',
-          accountNumber: '889-012-3456',
-          currency: 'IDR',
-          seriesPrefix: 'BG-BCA-',
-          startNumber: 998801,
-          endNumber: 998825,
-          totalLeaves: 25,
-          maxLimitPerCheque: 500000000,
-          totalBookLimit: 5000000000,
-          issuedDate: '2026-08-01',
-          leaves: [
-            { checkNumber: 'BG-BCA-998801', status: 'USED', voucherNo: 'BCK-000101', payee: 'PT Antam Tbk', amount: 150000000, dueDate: '2026-08-15', isCleared: true },
-            { checkNumber: 'BG-BCA-998802', status: 'USED', voucherNo: 'BCK-000102', payee: 'Pegadaian Jakarta', amount: 350000000, dueDate: '2026-08-20', isCleared: false },
-            { checkNumber: 'BG-BCA-998803', status: 'VOID', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false, notes: 'Salah Tulis / Batal' },
-            { checkNumber: 'BG-BCA-998804', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'BG-BCA-998805', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'BG-BCA-998806', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'BG-BCA-998807', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'BG-BCA-998808', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'BG-BCA-998809', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'BG-BCA-998810', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false }
-          ]
-        },
-        {
-          id: 'BOOK-MANDIRI-2026A',
-          bookNumber: 'BOOK-MANDIRI-2026A',
-          bankCode: 'MANDIRI-001',
-          bankName: 'Bank Mandiri (Cabang Jakarta)',
-          accountNumber: '123-00-9988776-5',
-          currency: 'IDR',
-          seriesPrefix: 'CEK-MDR-',
-          startNumber: 445501,
-          endNumber: 445525,
-          totalLeaves: 25,
-          maxLimitPerCheque: 300000000, // Rp 300 Juta
-          totalBookLimit: 3000000000,
-          issuedDate: '2026-08-05',
-          leaves: [
-            { checkNumber: 'CEK-MDR-445501', status: 'USED', voucherNo: 'BCK-000201', payee: 'Toko Emas Mulia', amount: 200000000, dueDate: '2026-08-18', isCleared: false },
-            { checkNumber: 'CEK-MDR-445502', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'CEK-MDR-445503', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
-            { checkNumber: 'CEK-MDR-445504', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false }
-          ]
-        }
-      ];
-      setChequeBooks(stored);
-      window.Storage.set('pttan_cheque_books', stored);
-    }
+    setChequeBooks(getChequeBooks());
   };
 
   // Tambah Master Buku Cek Baru
-  const handleCreateBook = (e) => {
+  const handleCreateBook = async (e) => {
     e.preventDefault();
     const start = Number(newBookForm.startNumber);
     const end = Number(newBookForm.endNumber);
@@ -127,18 +85,16 @@ export default function MasterChequePage() {
       leaves: generatedLeaves
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      const list = window.Storage.get('pttan_cheque_books') || [];
-      list.unshift(newBook);
-      window.Storage.set('pttan_cheque_books', list);
-      showModal({
-        variant: 'success',
-        title: `✅ Buku Cek/BG (${newBook.bookNumber}) Terdaftar`,
-        message: `• Jumlah lembar: ${totalLeaves} lembar\n• Plafon maks per lembar: Rp ${newBook.maxLimitPerCheque.toLocaleString()}`
-      });
-      loadChequeData();
-      setShowAddBookModal(false);
-    }
+    const list = getChequeBooks();
+    list.unshift(newBook);
+    await saveChequeBooks(list);
+    showModal({
+      variant: 'success',
+      title: `✅ Buku Cek/BG (${newBook.bookNumber}) Terdaftar`,
+      message: `• Jumlah lembar: ${totalLeaves} lembar\n• Plafon maks per lembar: Rp ${newBook.maxLimitPerCheque.toLocaleString()}`
+    });
+    loadChequeData();
+    setShowAddBookModal(false);
   };
 
   // Batalkan Lembar Cek (Void)
@@ -152,22 +108,20 @@ export default function MasterChequePage() {
     });
   };
 
-  const voidLeaf = (bookId, checkNumber) => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const list = window.Storage.get('pttan_cheque_books') || [];
-      const updated = list.map(b => {
-        if (b.id === bookId || b.bookNumber === bookId) {
-          return {
-            ...b,
-            leaves: b.leaves.map(l => l.checkNumber === checkNumber ? { ...l, status: 'VOID', notes: 'Dibatalkan / Rusak' } : l)
-          };
-        }
-        return b;
-      });
-      window.Storage.set('pttan_cheque_books', updated);
-      showModal({ variant: 'success', title: '🚫 Lembar Cek Dibatalkan', message: `Lembar cek ${checkNumber} berhasil di-VOID.` });
-      loadChequeData();
-    }
+  const voidLeaf = async (bookId, checkNumber) => {
+    const list = getChequeBooks();
+    const updated = list.map(b => {
+      if (b.id === bookId || b.bookNumber === bookId) {
+        return {
+          ...b,
+          leaves: b.leaves.map(l => l.checkNumber === checkNumber ? { ...l, status: 'VOID', notes: 'Dibatalkan / Rusak' } : l)
+        };
+      }
+      return b;
+    });
+    await saveChequeBooks(updated);
+    showModal({ variant: 'success', title: '🚫 Lembar Cek Dibatalkan', message: `Lembar cek ${checkNumber} berhasil di-VOID.` });
+    loadChequeData();
   };
 
   // Filtered Books
@@ -306,7 +260,11 @@ export default function MasterChequePage() {
       </div>
 
       {/* Books and Leaf Register */}
-      {filteredBooks.map(book => {
+      {filteredBooks.length === 0 ? (
+        <div className="glass-panel p-6 mb-6">
+          <div className="text-center py-8 text-fg-soft">Belum ada buku cek/BG yang sesuai dengan pencarian.</div>
+        </div>
+      ) : filteredBooks.map(book => {
         const availableLeaves = (book.leaves || []).filter(l => l.status === 'AVAILABLE');
         const usedLeaves = (book.leaves || []).filter(l => l.status === 'USED');
         const voidLeaves = (book.leaves || []).filter(l => l.status === 'VOID');
@@ -341,45 +299,47 @@ export default function MasterChequePage() {
             </div>
 
             {/* Table of Leaves */}
-            <div className="table-container">
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th>No. Seri Lembar Cek/BG</th>
-                    <th>Status Lembar</th>
-                    <th>No. Voucher Terkait</th>
-                    <th>Penerima (Payee)</th>
-                    <th className="text-right">Nominal Digunakan</th>
-                    <th>Jatuh Tempo Kliring</th>
-                    <th>Status Pencairan</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(book.leaves || []).map((leaf, idx) => (
-                    <tr key={idx}>
-                      <td>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>No. Seri Lembar Cek/BG</TableHead>
+                  <TableHead>Status Lembar</TableHead>
+                  <TableHead>No. Voucher Terkait</TableHead>
+                  <TableHead>Penerima (Payee)</TableHead>
+                  <TableHead className="text-right">Nominal Digunakan</TableHead>
+                  <TableHead>Jatuh Tempo Kliring</TableHead>
+                  <TableHead>Status Pencairan</TableHead>
+                  <TableHead>Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(book.leaves || []).length === 0 ? (
+                  <TableEmpty colSpan={8} message="Belum ada lembar cek/BG pada buku ini." />
+                ) : (
+                  (book.leaves || []).map((leaf, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
                         <strong className={leaf.status === 'AVAILABLE' ? 'text-emerald-light' : leaf.status === 'VOID' ? 'text-danger' : 'text-gold-light'}>
                           {leaf.checkNumber}
                         </strong>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {leaf.status === 'AVAILABLE' && <span className="badge badge-emerald">🟢 TERSEDIA (SIAP PAKAI)</span>}
                         {leaf.status === 'USED' && <span className="badge badge-gold">⏳ TERPAKAI (DIKELUARKAN)</span>}
                         {leaf.status === 'VOID' && <span className="badge badge-rose">🚫 BATAL (VOID)</span>}
-                      </td>
-                      <td>{leaf.voucherNo || '-'}</td>
-                      <td>{leaf.payee || '-'}</td>
-                      <td className={`text-right font-bold ${leaf.amount > 0 ? 'text-emerald-light' : 'text-fg-muted'}`}>
+                      </TableCell>
+                      <TableCell>{leaf.voucherNo || '-'}</TableCell>
+                      <TableCell>{leaf.payee || '-'}</TableCell>
+                      <TableCell className={`text-right font-bold ${leaf.amount > 0 ? 'text-emerald-light' : 'text-fg-muted'}`}>
                         {leaf.amount > 0 ? `Rp ${leaf.amount.toLocaleString()}` : '-'}
-                      </td>
-                      <td>{leaf.dueDate || '-'}</td>
-                      <td>
+                      </TableCell>
+                      <TableCell>{leaf.dueDate || '-'}</TableCell>
+                      <TableCell>
                         {leaf.status === 'USED' ? (
                           leaf.isCleared ? <span className="badge badge-emerald">✅ CAIR DI BANK</span> : <span className="badge badge-gold">⏳ MENUNGGU KLIRING</span>
                         ) : '-'}
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {leaf.status === 'AVAILABLE' && (
                           <button
                             className="btn-primary py-1 px-2 text-[0.7rem] bg-[rgba(239,68,68,0.2)] border border-danger text-danger"
@@ -388,12 +348,12 @@ export default function MasterChequePage() {
                             <Ban size={12} /> Batalkan (Void)
                           </button>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         );
       })}

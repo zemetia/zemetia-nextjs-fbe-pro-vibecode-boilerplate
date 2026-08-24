@@ -1,17 +1,96 @@
-// Storage Service Layer wrapping backend handlers in data/storage.js & modules/purchaseOrder.js
+// Storage Service Layer
+// Clean ES module abstraction wrapping data persistence, sequencers, and SAK EMKM business entities
+
+export const KEYS = {
+  JOURNAL_ENTRIES: 'erp_journal_entries',
+  CHART_OF_ACCOUNTS: 'erp_chart_of_accounts',
+  PURCHASE_ORDERS: 'erp_purchase_orders',
+  CUSTOMERS: 'erp_customers',
+  SUPPLIERS: 'erp_suppliers',
+  ITEMS: 'erp_items',
+  WAREHOUSES: 'erp_warehouses',
+  VOUCHERS: 'erp_vouchers',
+  CHEQUES: 'erp_cheques',
+  CHEQUE_BOOKS: 'pttan_cheque_books',
+  EXPORT_INVOICES: 'pttan_export_invoices',
+  EXPORT_SALES_ORDERS: 'pttan_export_sales_orders',
+  EXPORT_DELIVERY_ORDERS: 'pttan_export_delivery_orders',
+  GOODS_RECEIPTS: 'pttan_goods_receipts',
+  LOCAL_PURCHASES: 'pttan_local_purchases',
+  SCRAP_PURCHASES: 'pttan_scrap_purchases',
+  PRODUCTION_SPK: 'pttan_production_spk',
+  PRODUCTION_SETTLEMENTS: 'pttan_production_settlements',
+  PURCHASE_REQUESTS: 'pttan_purchase_requests',
+  VAULT_TRANSFERS: 'pttan_vault_transfers',
+  COMPANY_PROFILE: 'pttan_company_profile',
+  MASTER_FINISHED_GOODS: 'pttan_master_finished_goods'
+};
+
+const getGlobalStorage = () => {
+  if (typeof window !== 'undefined' && window.Storage) {
+    return window.Storage;
+  }
+  return null;
+};
+
+export const getStorage = (key, defaultValue = null) => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.get === 'function') {
+    const val = storage.get(key);
+    return val !== undefined && val !== null ? val : defaultValue;
+  }
+  return defaultValue;
+};
+
+export const setStorage = async (key, value, silent = false) => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.set === 'function') {
+    return await storage.set(key, value, silent);
+  }
+  return false;
+};
+
+export const getNextReferenceNumber = async (type) => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.getNextReferenceNumber === 'function') {
+    return await storage.getNextReferenceNumber(type);
+  }
+  const prefixMap = {
+    po: 'PO-',
+    grn: 'GRN-',
+    voucher: 'VCH-',
+    journal: 'JRN-',
+    invoice: 'INV-',
+    pr: 'PR-'
+  };
+  const pfx = prefixMap[type] || `${(type || 'DOC').toUpperCase()}-`;
+  return `${pfx}${Date.now().toString().slice(-6)}`;
+};
+
+// ==========================================
+// CHART OF ACCOUNTS (COA)
+// ==========================================
 
 export const getCOA = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get(window.Storage.KEYS.CHART_OF_ACCOUNTS) || window.Storage.getDefaultChartOfAccounts();
+  const storage = getGlobalStorage();
+  if (storage) {
+    return storage.get(KEYS.CHART_OF_ACCOUNTS) || (typeof storage.getDefaultChartOfAccounts === 'function' ? storage.getDefaultChartOfAccounts() : []);
   }
   return [];
 };
 
 export const saveCOA = async (accounts) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return await window.Storage.set(window.Storage.KEYS.CHART_OF_ACCOUNTS, accounts);
+  return await setStorage(KEYS.CHART_OF_ACCOUNTS, accounts, true);
+};
+
+export const resetToDefaultCOA = async () => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.getDefaultChartOfAccounts === 'function') {
+    const officialCoa = storage.getDefaultChartOfAccounts();
+    await saveCOA(officialCoa);
+    return officialCoa;
   }
-  return false;
+  return getCOA();
 };
 
 export const addCOAAccount = async (newAccount) => {
@@ -25,93 +104,132 @@ export const addCOAAccount = async (newAccount) => {
   return { success: true };
 };
 
+// ==========================================
+// MASTER DATA (Items, FG, Customers, Suppliers)
+// ==========================================
+
 export const getMasterItems = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.getItems() || [];
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.getItems === 'function') {
+    return storage.getItems() || [];
   }
-  return [];
+  return getStorage(KEYS.ITEMS, []);
 };
 
 export const saveMasterItem = async (item) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const items = getMasterItems();
-    items.unshift(item);
-    return await window.Storage.set(window.Storage.KEYS.ITEMS, items);
-  }
-  return false;
+  const items = getMasterItems();
+  items.unshift(item);
+  return await setStorage(KEYS.ITEMS, items);
+};
+
+export const saveMasterItems = async (items) => {
+  return await setStorage(KEYS.ITEMS, items);
 };
 
 export const getFinishedGoods = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_master_finished_goods') || [
-      { id: 'JWL-RNG-750-001', sku: 'JWL-RNG-750-001', name: 'Dubai Arabian Casting Ring', type: 'Cincin (Ring)', karat: '750', purity: 75.0, goldColor: 'Yellow Gold', stdWeightGram: 4.50, laborFeeIDRPerGram: 15000, hsCode: '7113.19.90', inventoryAccount: '1160' },
-      { id: 'JWL-CHN-700-005', sku: 'JWL-CHN-700-005', name: 'Italian Hollow Rope Chain', type: 'Kalung (Necklace)', karat: '700', purity: 70.0, goldColor: 'Rose Gold', stdWeightGram: 12.00, laborFeeIDRPerGram: 18000, hsCode: '7113.19.90', inventoryAccount: '1160' },
-      { id: 'JWL-BNG-375-010', sku: 'JWL-BNG-375-010', name: 'Stamped Diamond Cut Bangle', type: 'Gelang (Bangle)', karat: '375', purity: 37.5, goldColor: 'White Gold', stdWeightGram: 8.50, laborFeeIDRPerGram: 12000, hsCode: '7113.19.90', inventoryAccount: '1160' }
-    ];
-  }
-  return [];
+  return getStorage(KEYS.MASTER_FINISHED_GOODS, [
+    { id: 'JWL-RNG-750-001', sku: 'JWL-RNG-750-001', name: 'Dubai Arabian Casting Ring', type: 'Cincin (Ring)', karat: '750', purity: 75.0, goldColor: 'Yellow Gold', stdWeightGram: 4.50, laborFeeIDRPerGram: 15000, hsCode: '7113.19.90', inventoryAccount: '1160' },
+    { id: 'JWL-CHN-700-005', sku: 'JWL-CHN-700-005', name: 'Italian Hollow Rope Chain', type: 'Kalung (Necklace)', karat: '700', purity: 70.0, goldColor: 'Rose Gold', stdWeightGram: 12.00, laborFeeIDRPerGram: 18000, hsCode: '7113.19.90', inventoryAccount: '1160' },
+    { id: 'JWL-BNG-375-010', sku: 'JWL-BNG-375-010', name: 'Stamped Diamond Cut Bangle', type: 'Gelang (Bangle)', karat: '375', purity: 37.5, goldColor: 'White Gold', stdWeightGram: 8.50, laborFeeIDRPerGram: 12000, hsCode: '7113.19.90', inventoryAccount: '1160' }
+  ]);
 };
 
 export const saveFinishedGood = async (fg) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const list = getFinishedGoods();
-    list.unshift(fg);
-    return await window.Storage.set('pttan_master_finished_goods', list);
-  }
-  return false;
+  const list = getFinishedGoods();
+  list.unshift(fg);
+  return await setStorage(KEYS.MASTER_FINISHED_GOODS, list);
+};
+
+export const saveFinishedGoods = async (list) => {
+  return await setStorage(KEYS.MASTER_FINISHED_GOODS, list);
 };
 
 export const getCustomers = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get(window.Storage.KEYS.CUSTOMERS) || [];
-  }
-  return [];
+  return getStorage(KEYS.CUSTOMERS, []);
 };
 
 export const saveCustomer = async (cust) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const customers = getCustomers();
-    customers.unshift(cust);
-    return await window.Storage.set(window.Storage.KEYS.CUSTOMERS, customers);
-  }
-  return false;
+  const customers = getCustomers();
+  customers.unshift(cust);
+  return await setStorage(KEYS.CUSTOMERS, customers);
+};
+
+export const saveCustomers = async (customers) => {
+  return await setStorage(KEYS.CUSTOMERS, customers);
 };
 
 export const getSuppliers = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get(window.Storage.KEYS.SUPPLIERS) || [];
-  }
-  return [];
+  return getStorage(KEYS.SUPPLIERS, []);
 };
 
 export const saveSupplier = async (supp) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const suppliers = getSuppliers();
-    suppliers.unshift(supp);
-    return await window.Storage.set(window.Storage.KEYS.SUPPLIERS, suppliers);
-  }
-  return false;
+  const suppliers = getSuppliers();
+  suppliers.unshift(supp);
+  return await setStorage(KEYS.SUPPLIERS, suppliers);
 };
 
+export const saveSuppliers = async (suppliers) => {
+  return await setStorage(KEYS.SUPPLIERS, suppliers);
+};
+
+// ==========================================
+// JOURNAL ENTRIES & FINANCIAL POSTINGS
+// ==========================================
+
+export const getJournalEntries = () => {
+  return getStorage(KEYS.JOURNAL_ENTRIES, []);
+};
+
+export const saveJournalEntries = async (journals) => {
+  return await setStorage(KEYS.JOURNAL_ENTRIES, journals);
+};
+
+export const addJournalEntry = async (entry) => {
+  const journals = getJournalEntries();
+  const entryNum = entry.entryNumber || await getNextReferenceNumber('journal');
+  const newEntry = {
+    id: entry.id || Date.now(),
+    entryNumber: entryNum,
+    date: entry.date || new Date().toISOString().split('T')[0],
+    description: entry.description || 'Jurnal Penyesuaian',
+    lines: entry.lines || [],
+    createdAt: entry.createdAt || new Date().toISOString()
+  };
+  journals.unshift(newEntry);
+  await saveJournalEntries(journals);
+  return { success: true, entry: newEntry };
+};
+
+// ==========================================
+// PURCHASE ORDERS (IMPORT & LOCAL)
+// ==========================================
+
 export const getPurchaseOrders = () => {
-  if (typeof window !== 'undefined' && window.PurchaseOrder) {
+  if (typeof window !== 'undefined' && window.PurchaseOrder && typeof window.PurchaseOrder.getStoredOrders === 'function') {
     return window.PurchaseOrder.getStoredOrders() || [];
   }
-  return [];
+  return getStorage(KEYS.PURCHASE_ORDERS, []);
+};
+
+export const savePurchaseOrders = async (orders) => {
+  return await setStorage(KEYS.PURCHASE_ORDERS, orders);
 };
 
 export const createPurchaseOrder = async (orderData) => {
-  if (typeof window !== 'undefined' && window.PurchaseOrder) {
+  if (typeof window !== 'undefined' && window.PurchaseOrder && typeof window.PurchaseOrder.createOrder === 'function') {
     return await window.PurchaseOrder.createOrder(orderData);
   }
-  return { success: false, errors: { system: 'PurchaseOrder module not ready' } };
+  const orders = getPurchaseOrders();
+  orders.unshift(orderData);
+  await savePurchaseOrders(orders);
+  return { success: true, order: orderData };
 };
 
 export const recordPOPayment = async (poNumberOrId, paymentData) => {
   let updated = false;
 
   // 1. Update di PurchaseOrder (PO Impor & Standar)
-  if (typeof window !== 'undefined' && window.PurchaseOrder) {
+  if (typeof window !== 'undefined' && window.PurchaseOrder && typeof window.PurchaseOrder.recordPayment === 'function') {
     const res = await window.PurchaseOrder.recordPayment(poNumberOrId, paymentData);
     if (res && res.success) {
       updated = true;
@@ -119,90 +237,576 @@ export const recordPOPayment = async (poNumberOrId, paymentData) => {
   }
 
   // 2. Update di Local Purchases (PO Lokal Tempo) jika ada
-  if (typeof window !== 'undefined' && window.Storage) {
-    const localPurchases = window.Storage.get('pttan_local_purchases') || [];
-    const pIndex = localPurchases.findIndex(p => p.id === poNumberOrId || p.poNumber === poNumberOrId || p.receiptNo === poNumberOrId);
-    if (pIndex !== -1) {
-      const p = localPurchases[pIndex];
-      const pmtAmount = parseFloat(paymentData.amount || 0);
-      const category = paymentData.category || paymentData.paymentCategory || 'PO_PRINCIPAL';
+  const localPurchases = getLocalPurchases();
+  const pIndex = localPurchases.findIndex(p => p.id === poNumberOrId || p.poNumber === poNumberOrId || p.receiptNo === poNumberOrId);
+  if (pIndex !== -1) {
+    const p = localPurchases[pIndex];
+    const pmtAmount = parseFloat(paymentData.amount || 0);
+    const category = paymentData.category || paymentData.paymentCategory || 'PO_PRINCIPAL';
 
-      let categoryLabel = paymentData.categoryLabel;
-      if (!categoryLabel) {
-        switch (category) {
-          case 'CUSTOMS_DUTY_PPH22':
-            categoryLabel = '🏛️ Pajak PPh 22 Impor (0,25%)';
-            break;
-          case 'LOGISTICS_HANDLING':
-            categoryLabel = '🚚 Logistik & Handling';
-            break;
-          case 'OTHER_EXPENSE':
-            categoryLabel = '📑 Biaya Tambahan';
-            break;
-          default:
-            categoryLabel = '💰 Pelunasan Pokok Supplier';
-            break;
-        }
+    let categoryLabel = paymentData.categoryLabel;
+    if (!categoryLabel) {
+      switch (category) {
+        case 'CUSTOMS_DUTY_PPH22':
+          categoryLabel = '🏛️ Pajak PPh 22 Impor (0,25%)';
+          break;
+        case 'LOGISTICS_HANDLING':
+          categoryLabel = '🚚 Logistik & Handling';
+          break;
+        case 'OTHER_EXPENSE':
+          categoryLabel = '📑 Biaya Tambahan';
+          break;
+        default:
+          categoryLabel = '💰 Pelunasan Pokok Supplier';
+          break;
       }
-
-      const historyEntry = {
-        id: paymentData.id || Date.now(),
-        voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
-        voucherType: paymentData.voucherType || 'BBK',
-        date: paymentData.date || new Date().toISOString().split('T')[0],
-        category,
-        categoryLabel,
-        payee: paymentData.payee || p.supplierName || 'Supplier',
-        bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
-        bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
-        accountCode: paymentData.accountCode || (category === 'CUSTOMS_DUTY_PPH22' ? '1135' : '2111'),
-        amount: pmtAmount,
-        notes: paymentData.notes || paymentData.description || '',
-        recordedAt: new Date().toISOString()
-      };
-
-      const existingHistory = Array.isArray(p.paymentHistory) ? p.paymentHistory : [];
-
-      let curPaid = parseFloat(p.paidAmountIDR || 0);
-      const totalAmt = parseFloat(p.totalAmount || 0);
-      let rem = typeof p.remainingBalanceIDR !== 'undefined' ? parseFloat(p.remainingBalanceIDR) : Math.max(0, totalAmt - curPaid);
-      let customsPaid = parseFloat(p.customsPaidAmountIDR || 0);
-      let logisticsPaid = parseFloat(p.logisticsPaidAmountIDR || 0);
-      let otherExpensesPaid = parseFloat(p.otherExpensesPaidAmountIDR || 0);
-
-      if (category === 'PO_PRINCIPAL') {
-        curPaid += pmtAmount;
-        rem = Math.max(0, totalAmt - curPaid);
-      } else if (category === 'CUSTOMS_DUTY_PPH22') {
-        customsPaid += pmtAmount;
-      } else if (category === 'LOGISTICS_HANDLING') {
-        logisticsPaid += pmtAmount;
-      } else {
-        otherExpensesPaid += pmtAmount;
-      }
-
-      const isPaid = rem === 0;
-
-      localPurchases[pIndex] = {
-        ...p,
-        paidAmountIDR: curPaid,
-        remainingBalanceIDR: rem,
-        customsPaidAmountIDR: customsPaid,
-        logisticsPaidAmountIDR: logisticsPaid,
-        otherExpensesPaidAmountIDR: otherExpensesPaid,
-        paymentStatus: isPaid ? 'PAID' : curPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
-        lastPaymentVoucher: historyEntry.voucherNo,
-        lastPaymentDate: historyEntry.date,
-        paymentHistory: [historyEntry, ...existingHistory],
-        updatedAt: new Date().toISOString()
-      };
-
-      await window.Storage.set('pttan_local_purchases', localPurchases);
-      updated = true;
     }
+
+    const historyEntry = {
+      id: paymentData.id || Date.now(),
+      voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
+      voucherType: paymentData.voucherType || 'BBK',
+      date: paymentData.date || new Date().toISOString().split('T')[0],
+      category,
+      categoryLabel,
+      payee: paymentData.payee || p.supplierName || 'Supplier',
+      bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
+      bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
+      accountCode: paymentData.accountCode || (category === 'CUSTOMS_DUTY_PPH22' ? '1135' : '2111'),
+      amount: pmtAmount,
+      notes: paymentData.notes || paymentData.description || '',
+      recordedAt: new Date().toISOString()
+    };
+
+    const existingHistory = Array.isArray(p.paymentHistory) ? p.paymentHistory : [];
+    let curPaid = parseFloat(p.paidAmountIDR || 0);
+    const totalAmt = parseFloat(p.totalAmount || 0);
+    let rem = typeof p.remainingBalanceIDR !== 'undefined' ? parseFloat(p.remainingBalanceIDR) : Math.max(0, totalAmt - curPaid);
+    let customsPaid = parseFloat(p.customsPaidAmountIDR || 0);
+    let logisticsPaid = parseFloat(p.logisticsPaidAmountIDR || 0);
+    let otherExpensesPaid = parseFloat(p.otherExpensesPaidAmountIDR || 0);
+
+    if (category === 'PO_PRINCIPAL') {
+      curPaid += pmtAmount;
+      rem = Math.max(0, totalAmt - curPaid);
+    } else if (category === 'CUSTOMS_DUTY_PPH22') {
+      customsPaid += pmtAmount;
+    } else if (category === 'LOGISTICS_HANDLING') {
+      logisticsPaid += pmtAmount;
+    } else {
+      otherExpensesPaid += pmtAmount;
+    }
+
+    const isPaid = rem === 0;
+
+    localPurchases[pIndex] = {
+      ...p,
+      paidAmountIDR: curPaid,
+      remainingBalanceIDR: rem,
+      customsPaidAmountIDR: customsPaid,
+      logisticsPaidAmountIDR: logisticsPaid,
+      otherExpensesPaidAmountIDR: otherExpensesPaid,
+      paymentStatus: isPaid ? 'PAID' : curPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+      lastPaymentVoucher: historyEntry.voucherNo,
+      lastPaymentDate: historyEntry.date,
+      paymentHistory: [historyEntry, ...existingHistory],
+      updatedAt: new Date().toISOString()
+    };
+
+    await saveLocalPurchases(localPurchases);
+    updated = true;
   }
 
   return { success: updated };
+};
+
+// ==========================================
+// LOCAL PURCHASES (Emas Lokal IDR)
+// ==========================================
+
+export const getLocalPurchases = () => {
+  return getStorage(KEYS.LOCAL_PURCHASES, [
+    {
+      id: '1723450001',
+      receiptNo: 'NOTA-PGD-2026-001',
+      poNumber: 'PO-LOK-2026-001',
+      orderDate: '2026-08-11',
+      supplierName: 'PT Pegadaian (Persero) Jakarta',
+      itemName: 'Emas Batangan Antam 1kg (999.9)',
+      quantityGrams: 1000,
+      pricePerGramIDR: 1300000,
+      totalAmount: 1300000000,
+      barSerialNumbers: 'ANT-991100',
+      status: 'RECEIVED & STOCKED IN VAULT (VERIFIED 4 TTD)',
+      isVaultReceived: true,
+      courierName: 'Bpk. Budi Santoso'
+    }
+  ]);
+};
+
+export const saveLocalPurchases = async (list) => {
+  return await setStorage(KEYS.LOCAL_PURCHASES, list);
+};
+
+export const saveLocalPurchase = async (lp) => {
+  const list = getLocalPurchases();
+  const existingIdx = list.findIndex(item => item.id === lp.id || (lp.receiptNo && item.receiptNo === lp.receiptNo));
+  if (existingIdx !== -1) {
+    list[existingIdx] = { ...list[existingIdx], ...lp, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift({ ...lp, createdAt: lp.createdAt || new Date().toISOString() });
+  }
+  return await saveLocalPurchases(list);
+};
+
+// ==========================================
+// SCRAP PURCHASES & MELTING
+// ==========================================
+
+export const getScrapPurchases = () => {
+  return getStorage(KEYS.SCRAP_PURCHASES, [
+    {
+      id: 'SCRAP-2026-001',
+      receiptNo: 'NOTA-SCRAP-2026-001',
+      spkMeltingNo: 'SPK-MLT-2026-001',
+      date: '2026-08-11',
+      supplierName: 'Toko Emas Mitra Sejahtera',
+      itemDescription: 'Pecahan Perhiasan Emas Bekas Karat Campur',
+      grossWeight: 500,
+      xrfPurity: 75.5,
+      estimatedFineGold: 377.5,
+      pricePerFineGram: 1200000,
+      totalAmount: 453000000,
+      paymentMethod: 'CASH',
+      creditAccount: '1110',
+      creditAccountName: 'Kas Kecil (Petty Cash)',
+      targetVault: '1152',
+      targetVaultName: 'Vault Pecahan Scrap & Leburan (Akun 1152)',
+      status: 'RECEIVED & STORED IN SCRAP VAULT',
+      createdAt: '2026-08-11T09:00:00.000Z'
+    }
+  ]);
+};
+
+export const saveScrapPurchases = async (list) => {
+  return await setStorage(KEYS.SCRAP_PURCHASES, list);
+};
+
+export const saveScrapPurchase = async (scrapData) => {
+  const list = getScrapPurchases();
+  const newScrap = {
+    id: scrapData.receiptNo || `SCRAP-${Date.now().toString().slice(-6)}`,
+    receiptNo: scrapData.receiptNo || `NOTA-SCRAP-${Date.now().toString().slice(-4)}`,
+    spkMeltingNo: scrapData.spkMeltingNo || `SPK-MLT-${Date.now().toString().slice(-4)}`,
+    date: scrapData.date || new Date().toISOString().split('T')[0],
+    supplierName: scrapData.supplierName || 'Toko Emas Mitra',
+    itemDescription: scrapData.itemDescription || 'Pecahan Perhiasan Emas Scrap',
+    grossWeight: Number(scrapData.grossWeight || 0),
+    xrfPurity: Number(scrapData.xrfPurity || 0),
+    estimatedFineGold: Number(scrapData.estimatedFineGold || 0),
+    pricePerFineGram: Number(scrapData.pricePerFineGram || 0),
+    totalAmount: Number(scrapData.totalAmount || 0),
+    paymentMethod: scrapData.paymentMethod || 'CASH',
+    creditAccount: scrapData.creditAccount || '1110',
+    creditAccountName: scrapData.creditAccountName || 'Kas Kecil',
+    targetVault: scrapData.targetVault || '1152',
+    targetVaultName: scrapData.targetVaultName || 'Vault Pecahan Scrap (1152)',
+    status: scrapData.status || 'RECEIVED & STORED IN SCRAP VAULT',
+    createdAt: new Date().toISOString()
+  };
+
+  list.unshift(newScrap);
+  await saveScrapPurchases(list);
+
+  // Auto-post journal for scrap purchase
+  const journals = getJournalEntries();
+  const entryNum = await getNextReferenceNumber('journal');
+
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum,
+    date: newScrap.date,
+    description: `Pembelian Scrap Emas (${newScrap.receiptNo}) - ${newScrap.supplierName} [${newScrap.grossWeight}g @ ${newScrap.xrfPurity}% XRF = ${newScrap.estimatedFineGold}g Fine Gold]`,
+    lines: [
+      { accountCode: newScrap.targetVault, accountName: newScrap.targetVaultName, debit: newScrap.totalAmount, credit: 0 },
+      { accountCode: newScrap.creditAccount, accountName: newScrap.creditAccountName, debit: 0, credit: newScrap.totalAmount }
+    ],
+    createdAt: new Date().toISOString()
+  });
+
+  await saveJournalEntries(journals);
+  return { success: true, scrap: newScrap };
+};
+
+// ==========================================
+// GOODS RECEIPTS (TTB / Penerimaan Barang)
+// ==========================================
+
+export const getGoodsReceipts = () => {
+  return getStorage(KEYS.GOODS_RECEIPTS, [
+    {
+      id: 'GRN-2026-001',
+      grnNumber: 'GRN-2026-001',
+      poNumber: 'PO-IMP-2026-001',
+      supplierDoNumber: 'SJ-SUP-VAL-998811',
+      pibNo: '001234/PIB/KPU-TP/2026',
+      date: '2026-08-10',
+      supplierName: 'Valcambi SA Switzerland',
+      targetVault: '1158',
+      targetVaultName: 'Vault Impor 999.9 (Akun 1158)',
+      itemDescription: 'Emas Batangan 999.9 Valcambi Cast Bar 1kg',
+      barSerialNumbers: 'VAL-99120, VAL-99121',
+      assayCertificateNo: 'ASSAY-VAL-88912',
+      receivedWeightGram: 1000,
+      unitPriceIDRPerGram: 1350000,
+      totalValueIDR: 1350000000,
+      status: 'RECEIVED & VERIFIED'
+    }
+  ]);
+};
+
+export const saveGoodsReceipts = async (list) => {
+  return await setStorage(KEYS.GOODS_RECEIPTS, list);
+};
+
+export const saveGoodsReceipt = async (receipt) => {
+  const list = getGoodsReceipts();
+  list.unshift(receipt);
+  return await saveGoodsReceipts(list);
+};
+
+// ==========================================
+// PURCHASE REQUESTS (PR)
+// ==========================================
+
+export const getPurchaseRequests = () => {
+  return getStorage(KEYS.PURCHASE_REQUESTS, []);
+};
+
+export const savePurchaseRequests = async (list) => {
+  return await setStorage(KEYS.PURCHASE_REQUESTS, list);
+};
+
+export const savePurchaseRequest = async (pr) => {
+  const list = getPurchaseRequests();
+  const idx = list.findIndex(item => item.id === pr.id || (pr.prNumber && item.prNumber === pr.prNumber));
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...pr, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift({ ...pr, createdAt: pr.createdAt || new Date().toISOString() });
+  }
+  return await savePurchaseRequests(list);
+};
+
+// PR to PO conversion prefill cache (sessionStorage based)
+const PR_PREFILL_KEY = 'pttan_pr_po_prefill';
+
+export const setPRConversionPrefill = (prefillData) => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(PR_PREFILL_KEY, JSON.stringify(prefillData));
+    } catch (e) {
+      console.warn('Failed to save PR prefill to sessionStorage', e);
+    }
+  }
+};
+
+export const getPRConversionPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      const raw = window.sessionStorage.getItem(PR_PREFILL_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to read PR prefill from sessionStorage', e);
+    }
+  }
+  return null;
+};
+
+export const clearPRConversionPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.removeItem(PR_PREFILL_KEY);
+    } catch (e) {
+      console.warn('Failed to clear PR prefill from sessionStorage', e);
+    }
+  }
+};
+
+export const markPRAsConverted = async (prIdOrNumber, { poNumber, poType, supplier }) => {
+  const list = getPurchaseRequests();
+  let found = false;
+  const updated = list.map(pr => {
+    if (pr.id === prIdOrNumber || pr.prNumber === prIdOrNumber) {
+      found = true;
+      return {
+        ...pr,
+        status: 'CONVERTED TO PO',
+        convertedPoNumber: poNumber,
+        convertedPoType: poType,
+        convertedSupplier: supplier || pr.recommendedSupplier,
+        convertedAt: new Date().toISOString()
+      };
+    }
+    return pr;
+  });
+  if (found) {
+    await savePurchaseRequests(updated);
+  }
+  return { success: found };
+};
+
+// ==========================================
+// EXPORT SALES (SO, Invoices, DO)
+// ==========================================
+
+export const getExportSalesOrders = () => {
+  return getStorage(KEYS.EXPORT_SALES_ORDERS, []);
+};
+
+export const saveExportSalesOrders = async (list) => {
+  return await setStorage(KEYS.EXPORT_SALES_ORDERS, list);
+};
+
+export const saveExportSalesOrder = async (so) => {
+  const list = getExportSalesOrders();
+  list.unshift(so);
+  return await saveExportSalesOrders(list);
+};
+
+export const getExportInvoices = () => {
+  return getStorage(KEYS.EXPORT_INVOICES, []);
+};
+
+export const saveExportInvoices = async (list) => {
+  return await setStorage(KEYS.EXPORT_INVOICES, list);
+};
+
+export const saveExportInvoice = async (inv) => {
+  const list = getExportInvoices();
+  list.unshift(inv);
+  return await saveExportInvoices(list);
+};
+
+export const getExportDeliveryOrders = () => {
+  return getStorage(KEYS.EXPORT_DELIVERY_ORDERS, [
+    {
+      id: 'DO-EXP-2026-001',
+      doNumber: 'DO-EXP-2026-001',
+      customerPONumber: 'PO-DMCC-2026-8899',
+      invoiceNo: 'INV-EXP-2026-001',
+      soNumber: 'SO-EXP-2026-001',
+      goldCertificateNo: 'CERT-FINEGOLD-998812',
+      purityCertificateNo: 'ASSAY-KARAT-750-0012',
+      date: '2026-08-15',
+      buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
+      country: 'United Arab Emirates (UAE)',
+      courierName: 'Brinks Global Secured Transport',
+      awbNumber: 'AWB-FEDEX-99881122',
+      pebNumber: 'PEB-2026-088912',
+      securitySealNo: 'SEAL-GOLD-998812',
+      boxCount: 2,
+      itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
+      netWeightGram: 450,
+      grossWeightGram: 560,
+      status: 'SHIPPED / IN TRANSIT'
+    }
+  ]);
+};
+
+export const saveExportDeliveryOrders = async (list) => {
+  return await setStorage(KEYS.EXPORT_DELIVERY_ORDERS, list);
+};
+
+export const saveExportDeliveryOrder = async (doItem) => {
+  const list = getExportDeliveryOrders();
+  list.unshift(doItem);
+  return await saveExportDeliveryOrders(list);
+};
+
+// ==========================================
+// JEWELRY PRODUCTION (SPK & Settlement)
+// ==========================================
+
+export const getProductionSPK = () => {
+  return getStorage(KEYS.PRODUCTION_SPK, [
+    {
+      id: 'SPK-2026-001',
+      spkNo: 'SPK-PROD-2026-001',
+      date: '2026-08-12',
+      buyerName: 'Dubai Gold & Jewelry DMCC',
+      jewelryType: 'Cincin & Kalung Emas 18K',
+      targetKarat: '750',
+      grossWeight: 500,
+      fineGoldNeeded: 381.65,
+      masterAlloyNeeded: 124.00,
+      status: 'IN_WIP',
+      notes: 'Pengeluaran bahan baku emas murni ke Brankas WIP'
+    }
+  ]);
+};
+
+export const saveProductionSPKList = async (list) => {
+  return await setStorage(KEYS.PRODUCTION_SPK, list);
+};
+
+export const saveProductionSPK = async (spk) => {
+  const list = getProductionSPK();
+  list.unshift(spk);
+  return await saveProductionSPKList(list);
+};
+
+export const getProductionSettlements = () => {
+  return getStorage(KEYS.PRODUCTION_SETTLEMENTS, [
+    {
+      id: 'JO-2026-001',
+      joNumber: 'JO-2026-001',
+      date: '2026-08-14',
+      jewelryOutputWeight: 490,
+      scrapReturnWeight: 8,
+      goldLossWeight: 2,
+      laborFeeIDR: 7500000,
+      karat: '750',
+      status: 'COMPLETED'
+    }
+  ]);
+};
+
+export const saveProductionSettlements = async (list) => {
+  return await setStorage(KEYS.PRODUCTION_SETTLEMENTS, list);
+};
+
+export const saveProductionSettlement = async (settlement) => {
+  const list = getProductionSettlements();
+  list.unshift(settlement);
+  return await saveProductionSettlements(list);
+};
+
+// ==========================================
+// CHEQUE & VOUCHER MANAGEMENT
+// ==========================================
+
+export const getChequeBooks = () => {
+  return getStorage(KEYS.CHEQUE_BOOKS, [
+    {
+      id: 'BOOK-BCA-2026A',
+      bookNumber: 'BOOK-BCA-2026A',
+      bankCode: 'BCA-001',
+      bankName: 'Bank BCA (KCU Thamrin)',
+      accountNumber: '889-012-3456',
+      currency: 'IDR',
+      seriesPrefix: 'BG-BCA-',
+      startNumber: 998801,
+      endNumber: 998825,
+      totalLeaves: 25,
+      maxLimitPerCheque: 500000000,
+      totalBookLimit: 5000000000,
+      issuedDate: '2026-08-01',
+      leaves: [
+        { checkNumber: 'BG-BCA-998801', status: 'USED', voucherNo: 'BCK-000101', payee: 'PT Antam Tbk', amount: 150000000, dueDate: '2026-08-15', isCleared: true },
+        { checkNumber: 'BG-BCA-998802', status: 'USED', voucherNo: 'BCK-000102', payee: 'Pegadaian Jakarta', amount: 350000000, dueDate: '2026-08-20', isCleared: false },
+        { checkNumber: 'BG-BCA-998803', status: 'VOID', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false, notes: 'Salah Tulis / Batal' },
+        { checkNumber: 'BG-BCA-998804', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998805', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998806', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998807', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998808', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998809', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998810', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false }
+      ]
+    }
+  ]);
+};
+
+export const saveChequeBooks = async (books) => {
+  return await setStorage(KEYS.CHEQUE_BOOKS, books);
+};
+
+export const getCheques = getChequeBooks;
+export const saveCheques = saveChequeBooks;
+
+export const getVouchers = () => {
+  return getStorage(KEYS.VOUCHERS, []);
+};
+
+export const saveVouchers = async (vouchers) => {
+  return await setStorage(KEYS.VOUCHERS, vouchers);
+};
+
+export const saveVoucher = async (voucher) => {
+  const list = getVouchers();
+  list.unshift(voucher);
+  return await saveVouchers(list);
+};
+
+// ==========================================
+// SYSTEM SETTINGS, PROFILE & BACKUPS
+// ==========================================
+
+export const getCompanyProfile = () => {
+  return getStorage(KEYS.COMPANY_PROFILE, {
+    companyName: 'PT. Triliun Anugrah Nusantara (PT TAN)',
+    logoUrl: '/logo/logo-tan.png',
+    address: 'Sentra Niaga Puri Indah Blok T2 No. 12, Kembangan, Jakarta Barat 11610',
+    phone: '(021) 5830-1988 / 0811-9876-5432',
+    email: 'procurement@tan-gold.co.id',
+    npwp: '01.234.567.8-035.000',
+    nibPeb: '1234567890123 (NIB Ekspor PPN 0%)',
+    currencyDefault: 'USD'
+  });
+};
+
+export const saveCompanyProfile = async (profile) => {
+  return await setStorage(KEYS.COMPANY_PROFILE, profile);
+};
+
+export const getAllSystemData = () => {
+  return {
+    app: 'PT TAN ERP',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    chartOfAccounts: getCOA(),
+    items: getMasterItems(),
+    customers: getCustomers(),
+    suppliers: getSuppliers(),
+    purchaseOrders: getPurchaseOrders(),
+    paymentVouchers: getVouchers(),
+    receiptVouchers: getVouchers(),
+    journals: getJournalEntries(),
+    companyProfile: getCompanyProfile(),
+    goodsReceipts: getGoodsReceipts(),
+    localPurchases: getLocalPurchases(),
+    scrapPurchases: getScrapPurchases(),
+    productionSPK: getProductionSPK(),
+    productionSettlements: getProductionSettlements(),
+    exportSalesOrders: getExportSalesOrders(),
+    exportInvoices: getExportInvoices(),
+    exportDeliveryOrders: getExportDeliveryOrders(),
+    purchaseRequests: getPurchaseRequests(),
+    chequeBooks: getChequeBooks()
+  };
+};
+
+export const restoreSystemData = async (data) => {
+  if (data.chartOfAccounts) await saveCOA(data.chartOfAccounts);
+  if (data.items) await saveMasterItems(data.items);
+  if (data.customers) await saveCustomers(data.customers);
+  if (data.suppliers) await saveSuppliers(data.suppliers);
+  if (data.purchaseOrders) await savePurchaseOrders(data.purchaseOrders);
+  if (data.journals) await saveJournalEntries(data.journals);
+  if (data.paymentVouchers) await saveVouchers(data.paymentVouchers);
+  if (data.companyProfile) await saveCompanyProfile(data.companyProfile);
+  if (data.goodsReceipts) await saveGoodsReceipts(data.goodsReceipts);
+  if (data.localPurchases) await saveLocalPurchases(data.localPurchases);
+  if (data.scrapPurchases) await saveScrapPurchases(data.scrapPurchases);
+  if (data.productionSPK) await saveProductionSPKList(data.productionSPK);
+  if (data.productionSettlements) await saveProductionSettlements(data.productionSettlements);
+  if (data.exportSalesOrders) await saveExportSalesOrders(data.exportSalesOrders);
+  if (data.exportInvoices) await saveExportInvoices(data.exportInvoices);
+  if (data.exportDeliveryOrders) await saveExportDeliveryOrders(data.exportDeliveryOrders);
+  if (data.purchaseRequests) await savePurchaseRequests(data.purchaseRequests);
+  if (data.chequeBooks) await saveChequeBooks(data.chequeBooks);
+  return { success: true };
 };
 
 // ==========================================
@@ -218,268 +822,62 @@ export const getDefaultWarehouses = () => [
 ];
 
 export const getWarehouses = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const stored = window.Storage.get('pttan_warehouses') || window.Storage.get(window.Storage.KEYS.WAREHOUSES);
-    if (Array.isArray(stored) && stored.length > 0) return stored;
-  }
+  const stored = getStorage('pttan_warehouses') || getStorage(KEYS.WAREHOUSES);
+  if (Array.isArray(stored) && stored.length > 0) return stored;
   return getDefaultWarehouses();
 };
 
-export const getGoodsReceipts = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_goods_receipts') || [
-      {
-        id: 'GRN-2026-001',
-        grnNumber: 'GRN-2026-001',
-        poNumber: 'PO-IMP-2026-001',
-        supplierDoNumber: 'SJ-SUP-VAL-998811',
-        pibNo: '001234/PIB/KPU-TP/2026',
-        date: '2026-08-10',
-        supplierName: 'Valcambi SA Switzerland',
-        targetVault: '1158',
-        targetVaultName: 'Vault Impor 999.9 (Akun 1158)',
-        itemDescription: 'Emas Batangan 999.9 Valcambi Cast Bar 1kg',
-        barSerialNumbers: 'VAL-99120, VAL-99121',
-        assayCertificateNo: 'ASSAY-VAL-88912',
-        receivedWeightGram: 1000,
-        unitPriceIDRPerGram: 1350000,
-        totalValueIDR: 1350000000,
-        status: 'RECEIVED & VERIFIED'
-      }
-    ];
-  }
-  return [];
-};
-
-export const getLocalPurchases = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_local_purchases') || [
-      {
-        id: '1723450001',
-        receiptNo: 'NOTA-PGD-2026-001',
-        poNumber: 'PO-LOK-2026-001',
-        orderDate: '2026-08-11',
-        supplierName: 'PT Pegadaian (Persero) Jakarta',
-        itemName: 'Emas Batangan Antam 1kg (999.9)',
-        quantityGrams: 1000,
-        pricePerGramIDR: 1300000,
-        totalAmount: 1300000000,
-        barSerialNumbers: 'ANT-991100',
-        status: 'RECEIVED & STOCKED IN VAULT (VERIFIED 4 TTD)',
-        isVaultReceived: true,
-        courierName: 'Bpk. Budi Santoso'
-      }
-    ];
-  }
-  return [];
-};
-
-export const getScrapPurchases = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_scrap_purchases') || [
-      {
-        id: 'SCRAP-2026-001',
-        receiptNo: 'NOTA-SCRAP-2026-001',
-        spkMeltingNo: 'SPK-MLT-2026-001',
-        date: '2026-08-11',
-        supplierName: 'Toko Emas Mitra Sejahtera',
-        itemDescription: 'Pecahan Perhiasan Emas Bekas Karat Campur',
-        grossWeight: 500,
-        xrfPurity: 75.5,
-        estimatedFineGold: 377.5,
-        pricePerFineGram: 1200000,
-        totalAmount: 453000000,
-        paymentMethod: 'CASH',
-        creditAccount: '1110',
-        creditAccountName: 'Kas Kecil (Petty Cash)',
-        targetVault: '1152',
-        targetVaultName: 'Vault Pecahan Scrap & Leburan (Akun 1152)',
-        status: 'RECEIVED & STORED IN SCRAP VAULT',
-        createdAt: '2026-08-11T09:00:00.000Z'
-      }
-    ];
-  }
-  return [];
-};
-
-export const saveScrapPurchase = async (scrapData) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const list = getScrapPurchases();
-    const newScrap = {
-      id: scrapData.receiptNo || `SCRAP-${Date.now().toString().slice(-6)}`,
-      receiptNo: scrapData.receiptNo || `NOTA-SCRAP-${Date.now().toString().slice(-4)}`,
-      spkMeltingNo: scrapData.spkMeltingNo || `SPK-MLT-${Date.now().toString().slice(-4)}`,
-      date: scrapData.date || new Date().toISOString().split('T')[0],
-      supplierName: scrapData.supplierName || 'Toko Emas Mitra',
-      itemDescription: scrapData.itemDescription || 'Pecahan Perhiasan Emas Scrap',
-      grossWeight: Number(scrapData.grossWeight || 0),
-      xrfPurity: Number(scrapData.xrfPurity || 0),
-      estimatedFineGold: Number(scrapData.estimatedFineGold || 0),
-      pricePerFineGram: Number(scrapData.pricePerFineGram || 0),
-      totalAmount: Number(scrapData.totalAmount || 0),
-      paymentMethod: scrapData.paymentMethod || 'CASH',
-      creditAccount: scrapData.creditAccount || '1110',
-      creditAccountName: scrapData.creditAccountName || 'Kas Kecil',
-      targetVault: scrapData.targetVault || '1152',
-      targetVaultName: scrapData.targetVaultName || 'Vault Pecahan Scrap (1152)',
-      status: scrapData.status || 'RECEIVED & STORED IN SCRAP VAULT',
-      createdAt: new Date().toISOString()
-    };
-
-    list.unshift(newScrap);
-    await window.Storage.set('pttan_scrap_purchases', list);
-
-    // Auto-post journal for scrap purchase
-    const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-    const entryNum = typeof window.Storage.getNextReferenceNumber === 'function'
-      ? await window.Storage.getNextReferenceNumber('journal')
-      : `JRN-SCRAP-${Date.now().toString().slice(-6)}`;
-
-    journals.unshift({
-      id: Date.now(),
-      entryNumber: entryNum,
-      date: newScrap.date,
-      description: `Pembelian Scrap Emas (${newScrap.receiptNo}) - ${newScrap.supplierName} [${newScrap.grossWeight}g @ ${newScrap.xrfPurity}% XRF = ${newScrap.estimatedFineGold}g Fine Gold]`,
-      lines: [
-        { accountCode: newScrap.targetVault, accountName: newScrap.targetVaultName, debit: newScrap.totalAmount, credit: 0 },
-        { accountCode: newScrap.creditAccount, accountName: newScrap.creditAccountName, debit: 0, credit: newScrap.totalAmount }
-      ],
-      createdAt: new Date().toISOString()
-    });
-
-    await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
-
-    return { success: true, scrap: newScrap };
-  }
-  return { success: false, error: 'Storage not available' };
-};
-
-export const getProductionSPK = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_production_spk') || [
-      {
-        id: 'SPK-2026-001',
-        spkNo: 'SPK-PROD-2026-001',
-        date: '2026-08-12',
-        buyerName: 'Dubai Gold & Jewelry DMCC',
-        jewelryType: 'Cincin & Kalung Emas 18K',
-        targetKarat: '750',
-        grossWeight: 500,
-        fineGoldNeeded: 381.65,
-        masterAlloyNeeded: 124.00,
-        status: 'IN_WIP',
-        notes: 'Pengeluaran bahan baku emas murni ke Brankas WIP'
-      }
-    ];
-  }
-  return [];
-};
-
-export const getProductionSettlements = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_production_settlements') || [
-      {
-        id: 'JO-2026-001',
-        joNumber: 'JO-2026-001',
-        date: '2026-08-14',
-        jewelryOutputWeight: 490,
-        scrapReturnWeight: 8,
-        goldLossWeight: 2,
-        laborFeeIDR: 7500000,
-        karat: '750',
-        status: 'COMPLETED'
-      }
-    ];
-  }
-  return [];
-};
-
-export const getExportDeliveryOrders = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_export_delivery_orders') || [
-      {
-        id: 'DO-EXP-2026-001',
-        doNumber: 'DO-EXP-2026-001',
-        customerPONumber: 'PO-DMCC-2026-8899',
-        invoiceNo: 'INV-EXP-2026-001',
-        soNumber: 'SO-EXP-2026-001',
-        goldCertificateNo: 'CERT-FINEGOLD-998812',
-        purityCertificateNo: 'ASSAY-KARAT-750-0012',
-        date: '2026-08-15',
-        buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
-        country: 'United Arab Emirates (UAE)',
-        courierName: 'Brinks Global Secured Transport',
-        awbNumber: 'AWB-FEDEX-99881122',
-        pebNumber: 'PEB-2026-088912',
-        securitySealNo: 'SEAL-GOLD-998812',
-        boxCount: 2,
-        itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
-        netWeightGram: 450,
-        grossWeightGram: 560,
-        status: 'SHIPPED / IN TRANSIT'
-      }
-    ];
-  }
-  return [];
-};
-
 export const getVaultTransfers = () => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    return window.Storage.get('pttan_vault_transfers') || [];
-  }
-  return [];
+  return getStorage(KEYS.VAULT_TRANSFERS, []);
+};
+
+export const saveVaultTransfers = async (list) => {
+  return await setStorage(KEYS.VAULT_TRANSFERS, list);
 };
 
 export const recordVaultTransfer = async (transferData) => {
-  if (typeof window !== 'undefined' && window.Storage) {
-    const list = getVaultTransfers();
-    const newTransfer = {
-      id: `TRF-${Date.now().toString().slice(-6)}`,
-      date: transferData.date || new Date().toISOString().split('T')[0],
-      fromVaultId: transferData.fromVaultId,
-      fromVaultName: transferData.fromVaultName,
-      fromAccount: transferData.fromAccount,
-      toVaultId: transferData.toVaultId,
-      toVaultName: transferData.toVaultName,
-      toAccount: transferData.toAccount,
-      itemCode: transferData.itemCode || 'GOLD-GENERIC',
-      itemName: transferData.itemName || 'Logam Mulia Emas',
-      quantityGrams: Number(transferData.quantityGrams || 0),
-      estimatedValueIDR: Number(transferData.estimatedValueIDR || 0),
-      transferNotes: transferData.transferNotes || 'Transfer internal brankas vault',
-      createdAt: new Date().toISOString()
-    };
+  const list = getVaultTransfers();
+  const newTransfer = {
+    id: `TRF-${Date.now().toString().slice(-6)}`,
+    date: transferData.date || new Date().toISOString().split('T')[0],
+    fromVaultId: transferData.fromVaultId,
+    fromVaultName: transferData.fromVaultName,
+    fromAccount: transferData.fromAccount,
+    toVaultId: transferData.toVaultId,
+    toVaultName: transferData.toVaultName,
+    toAccount: transferData.toAccount,
+    itemCode: transferData.itemCode || 'GOLD-GENERIC',
+    itemName: transferData.itemName || 'Logam Mulia Emas',
+    quantityGrams: Number(transferData.quantityGrams || 0),
+    estimatedValueIDR: Number(transferData.estimatedValueIDR || 0),
+    transferNotes: transferData.transferNotes || 'Transfer internal brankas vault',
+    createdAt: new Date().toISOString()
+  };
 
-    list.unshift(newTransfer);
-    await window.Storage.set('pttan_vault_transfers', list);
+  list.unshift(newTransfer);
+  await saveVaultTransfers(list);
 
-    // Auto-Post Journal Entry for Vault Transfer
-    const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-    const entryNum = typeof window.Storage.getNextReferenceNumber === 'function'
-      ? await window.Storage.getNextReferenceNumber('journal')
-      : `JRN-TRF-${Date.now().toString().slice(-6)}`;
+  // Auto-Post Journal Entry for Vault Transfer
+  const journals = getJournalEntries();
+  const entryNum = await getNextReferenceNumber('journal');
+  const journalValue = newTransfer.estimatedValueIDR > 0
+    ? newTransfer.estimatedValueIDR
+    : newTransfer.quantityGrams * 1300000;
 
-    const journalValue = newTransfer.estimatedValueIDR > 0
-      ? newTransfer.estimatedValueIDR
-      : newTransfer.quantityGrams * 1300000;
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum,
+    date: newTransfer.date,
+    description: `Transfer Mutasi Antar-Vault: ${newTransfer.quantityGrams}g ${newTransfer.itemName} [${newTransfer.fromVaultName} (${newTransfer.fromAccount}) -> ${newTransfer.toVaultName} (${newTransfer.toAccount})] - ${newTransfer.transferNotes}`,
+    lines: [
+      { accountCode: newTransfer.toAccount, accountName: newTransfer.toVaultName, debit: journalValue, credit: 0 },
+      { accountCode: newTransfer.fromAccount, accountName: newTransfer.fromVaultName, debit: 0, credit: journalValue }
+    ],
+    createdAt: new Date().toISOString()
+  });
 
-    journals.unshift({
-      id: Date.now(),
-      entryNumber: entryNum,
-      date: newTransfer.date,
-      description: `Transfer Mutasi Antar-Vault: ${newTransfer.quantityGrams}g ${newTransfer.itemName} [${newTransfer.fromVaultName} (${newTransfer.fromAccount}) -> ${newTransfer.toVaultName} (${newTransfer.toAccount})] - ${newTransfer.transferNotes}`,
-      lines: [
-        { accountCode: newTransfer.toAccount, accountName: newTransfer.toVaultName, debit: journalValue, credit: 0 },
-        { accountCode: newTransfer.fromAccount, accountName: newTransfer.fromVaultName, debit: 0, credit: journalValue }
-      ],
-      createdAt: new Date().toISOString()
-    });
-
-    await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
-
-    return { success: true, transfer: newTransfer };
-  }
-  return { success: false, error: 'Storage not available' };
+  await saveJournalEntries(journals);
+  return { success: true, transfer: newTransfer };
 };
 
 // Compute Dynamic Vault Stock Positions & Movement Cards
@@ -856,4 +1254,3 @@ export const calculateVaultStockPosition = () => {
     }
   };
 };
-

@@ -1,9 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, Plus, Search, Printer, CheckCircle2, ShieldCheck, FileText, Package, Award, Tag } from 'lucide-react';
-import { getPurchaseOrders } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  getExportInvoices,
+  getExportDeliveryOrders,
+  saveExportDeliveryOrders,
+  getJournalEntries,
+  saveJournalEntries,
+  getNextReferenceNumber
+} from '../services/storageService';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function ExportDeliveryOrderPage() {
   const { modalProps, showModal } = useModal();
@@ -38,36 +55,9 @@ export default function ExportDeliveryOrderPage() {
 
   const loadInitialData = () => {
     // 1. Invoices
-    if (typeof window !== 'undefined' && window.Storage) {
-      const storedInv = window.Storage.get('pttan_export_invoices') || [];
-      setInvoices(storedInv);
-
-      // 2. Delivery Orders
-      const storedDO = window.Storage.get('pttan_export_delivery_orders') || [
-        {
-          id: 'DO-EXP-2026-001',
-          doNumber: 'DO-EXP-2026-001',
-          customerPONumber: 'PO-DMCC-2026-8899',
-          invoiceNo: 'INV-EXP-2026-001',
-          soNumber: 'SO-EXP-2026-001',
-          goldCertificateNo: 'CERT-FINEGOLD-998812',
-          purityCertificateNo: 'ASSAY-KARAT-750-0012',
-          date: '2026-08-10',
-          buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
-          country: 'United Arab Emirates (UAE)',
-          courierName: 'Brinks Global Secured Transport',
-          awbNumber: 'AWB-FEDEX-99881122',
-          pebNumber: 'PEB-2026-088912',
-          securitySealNo: 'SEAL-GOLD-998812',
-          boxCount: 2,
-          itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
-          netWeightGram: 1000,
-          grossWeightGram: 1250,
-          status: 'SHIPPED / IN TRANSIT'
-        }
-      ];
-      setDeliveryOrders(storedDO);
-    }
+    setInvoices(getExportInvoices());
+    // 2. Delivery Orders
+    setDeliveryOrders(getExportDeliveryOrders());
   };
 
   const handleInvoiceSelect = (invNo) => {
@@ -94,7 +84,7 @@ export default function ExportDeliveryOrderPage() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.doNumber || !form.buyerName || !form.netWeightGram || !form.soNumber) {
       showModal({ variant: 'warning', title: 'Data Belum Lengkap', message: 'Mohon lengkapi No. Surat Jalan, Ref Sales Order (SO), Buyer, dan Berat Barang.' });
@@ -109,38 +99,37 @@ export default function ExportDeliveryOrderPage() {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      // 1. Save DO
-      const list = window.Storage.get('pttan_export_delivery_orders') || [];
-      list.unshift(newDO);
-      window.Storage.set('pttan_export_delivery_orders', list);
+    // 1. Save DO
+    const list = getExportDeliveryOrders();
+    list.unshift(newDO);
+    await saveExportDeliveryOrders(list);
 
-      // 2. Auto-Post HPP Ekspor Jurnal (Pengakuan HPP saat barang keluar dari Vault 1160)
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      const hppCostPerGram = 1350000;
-      const totalHPP = (form.netWeightGram || 0) * hppCostPerGram;
+    // 2. Auto-Post HPP Ekspor Jurnal (Pengakuan HPP saat barang keluar dari Vault 1160)
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
+    const hppCostPerGram = 1350000;
+    const totalHPP = (form.netWeightGram || 0) * hppCostPerGram;
 
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: `JRN-HPP-${Date.now().toString().slice(-6)}`,
-        date: form.date,
-        description: `Pengakuan HPP Penjualan Ekspor (${newDO.doNumber}) Ref SO: ${newDO.soNumber} - ${newDO.buyerName} [${newDO.netWeightGram}g Perhiasan Karat 750]`,
-        lines: [
-          { accountCode: '5115', accountName: 'HPP Ekspor Logam Mulia & Perhiasan', debit: totalHPP, credit: 0 },
-          { accountCode: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor', debit: 0, credit: totalHPP }
-        ],
-        createdAt: new Date().toISOString()
-      });
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: form.date,
+      description: `Pengakuan HPP Penjualan Ekspor (${newDO.doNumber}) Ref SO: ${newDO.soNumber} - ${newDO.buyerName} [${newDO.netWeightGram}g Perhiasan Karat 750]`,
+      lines: [
+        { accountCode: '5115', accountName: 'HPP Ekspor Logam Mulia & Perhiasan', debit: totalHPP, credit: 0 },
+        { accountCode: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor', debit: 0, credit: totalHPP }
+      ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
 
-      showModal({
-        variant: 'success',
-        title: `✅ Surat Jalan Ekspor (${newDO.doNumber}) Diterbitkan`,
-        message: `• Ref SO: ${newDO.soNumber} | Ref Invoice: ${newDO.invoiceNo}\n• Pengeluaran Fisik: ${newDO.netWeightGram}g dari Vault Siap Ekspor (Akun 1160).\n• Jurnal HPP Diposting: Debet Akun 5115 vs Kredit Akun 1160 Rp ${totalHPP.toLocaleString()}.`
-      });
-      loadInitialData();
-      setActiveView('list');
-    }
+    showModal({
+      variant: 'success',
+      title: `✅ Surat Jalan Ekspor (${newDO.doNumber}) Diterbitkan`,
+      message: `• Ref SO: ${newDO.soNumber} | Ref Invoice: ${newDO.invoiceNo}\n• Pengeluaran Fisik: ${newDO.netWeightGram}g dari Vault Siap Ekspor (Akun 1160).\n• Jurnal HPP Diposting: Debet Akun 5115 vs Kredit Akun 1160 Rp ${totalHPP.toLocaleString()}.`
+    });
+    loadInitialData();
+    setActiveView('list');
   };
 
   const filteredDO = deliveryOrders.filter(d =>
@@ -209,40 +198,42 @@ export default function ExportDeliveryOrderPage() {
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. Surat Jalan</th>
-                  <th>Ref Sales Order (SO)</th>
-                  <th>Ref Invoice</th>
-                  <th>Tanggal Kirim</th>
-                  <th>Buyer Overseas</th>
-                  <th>No. Sertifikat Emas</th>
-                  <th>No. Sertifikat Kadar</th>
-                  <th>Net Weight (g)</th>
-                  <th>Status Shipping</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDO.map(d => (
-                  <tr key={d.id || d.doNumber}>
-                    <td>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. Surat Jalan</TableHead>
+                <TableHead>Ref Sales Order (SO)</TableHead>
+                <TableHead>Ref Invoice</TableHead>
+                <TableHead>Tanggal Kirim</TableHead>
+                <TableHead>Buyer Overseas</TableHead>
+                <TableHead>No. Sertifikat Emas</TableHead>
+                <TableHead>No. Sertifikat Kadar</TableHead>
+                <TableHead className="text-right">Net Weight (g)</TableHead>
+                <TableHead>Status Shipping</TableHead>
+                <TableHead>Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredDO.length === 0 ? (
+                <TableEmpty colSpan={10} message="Belum ada surat jalan ekspor (delivery order)." />
+              ) : (
+                filteredDO.map(d => (
+                  <TableRow key={d.id || d.doNumber}>
+                    <TableCell>
                       <strong>{d.doNumber}</strong>
                       {d.customerPONumber && (
                         <small className="text-fg-muted block text-xs">PO Cust: {d.customerPONumber}</small>
                       )}
-                    </td>
-                    <td><span className="badge badge-gold text-xs">{d.soNumber || 'SO-EXP-2026-001'}</span></td>
-                    <td><small className="text-emerald-light">{d.invoiceNo}</small></td>
-                    <td>{d.date}</td>
-                    <td><strong>{d.buyerName}</strong></td>
-                    <td><small className="text-sky-light font-semibold">{d.goldCertificateNo || 'CERT-GOLD-998812'}</small></td>
-                    <td><small className="text-[#a78bfa] font-semibold">{d.purityCertificateNo || 'ASSAY-750-0012'}</small></td>
-                    <td className="font-bold text-gold-light">{d.netWeightGram} g</td>
-                    <td><span className="badge badge-emerald">{d.status || 'SHIPPED'}</span></td>
-                    <td>
+                    </TableCell>
+                    <TableCell><span className="badge badge-gold text-xs">{d.soNumber || 'SO-EXP-2026-001'}</span></TableCell>
+                    <TableCell><small className="text-emerald-light">{d.invoiceNo}</small></TableCell>
+                    <TableCell>{d.date}</TableCell>
+                    <TableCell><strong>{d.buyerName}</strong></TableCell>
+                    <TableCell><small className="text-sky-light font-semibold">{d.goldCertificateNo || 'CERT-GOLD-998812'}</small></TableCell>
+                    <TableCell><small className="text-orange-light font-semibold">{d.purityCertificateNo || 'ASSAY-750-0012'}</small></TableCell>
+                    <TableCell className="text-right font-bold text-gold-light">{d.netWeightGram} g</TableCell>
+                    <TableCell><span className="badge badge-emerald">{d.status || 'SHIPPED'}</span></TableCell>
+                    <TableCell>
                       <button
                         className="btn-primary py-1.5 px-2.5 text-xs"
                         onClick={() => showModal({
@@ -253,12 +244,12 @@ export default function ExportDeliveryOrderPage() {
                       >
                         <Printer size={14} /> Cetak Surat Jalan
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -349,9 +340,9 @@ export default function ExportDeliveryOrderPage() {
 
               {/* INPUT NOMOR SERTIFIKAT KADAR / ASSAY */}
               <div className="form-group">
-                <label className="form-label text-[#a78bfa] font-bold">No. Sertifikat Kadar (Purity Assay Cert)</label>
+                <label className="form-label text-orange-light font-bold">No. Sertifikat Kadar (Purity Assay Cert)</label>
                 <input
-                  className="form-input border border-purple text-[#a78bfa] font-bold"
+                  className="form-input border border-orange text-orange-light font-bold"
                   value={form.purityCertificateNo}
                   onChange={e => setForm({ ...form, purityCertificateNo: e.target.value })}
                 />

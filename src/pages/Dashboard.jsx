@@ -33,7 +33,7 @@ export default function Dashboard({ setActivePage }) {
             <div className="stat-val">1.300 g</div>
             <p className="text-xs text-fg-soft">Karat 750 (18K) & 700 (17K)</p>
           </div>
-          <div className="p-3 bg-[rgba(139,92,246,0.1)] rounded-[12px] text-purple">
+          <div className="p-3 bg-[rgba(249,115,22,0.1)] rounded-[12px] text-orange-light">
             <Hammer size={24} />
           </div>
         </div>
@@ -61,7 +61,7 @@ export default function Dashboard({ setActivePage }) {
           <button className="btn-primary bg-[linear-gradient(135deg,_#10b981,_#059669)]" onClick={() => setActivePage('scrap-melting')}>
             <Flame size={18} /> Beli Scrap & Lebur (Melting)
           </button>
-          <button className="btn-primary bg-[linear-gradient(135deg,_#8b5cf6,_#6d28d9)]" onClick={() => setActivePage('jewelry-production')}>
+          <button className="btn-primary bg-linear-135 from-orange to-orange-dark" onClick={() => setActivePage('jewelry-production')}>
             <Hammer size={18} /> Alloy Karat & Produksi WIP
           </button>
         </div>

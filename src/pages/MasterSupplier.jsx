@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, Plus, Search, Globe, CheckCircle } from 'lucide-react';
 import { getSuppliers, saveSupplier } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function MasterSupplier() {
   const { modalProps, showModal } = useModal();
@@ -160,32 +170,34 @@ export default function MasterSupplier() {
         <h3 className="font-heading text-[1.1rem] mb-4">
           📋 Daftar Supplier Emas ({filteredSupp.length})
         </h3>
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Supplier</th>
-                <th>Kategori</th>
-                <th>Negara asal</th>
-                <th>Valas Utam</th>
-                <th>Email Kontak</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSupp.map(s => (
-                <tr key={s.id || s.code}>
-                  <td><strong>{s.code}</strong></td>
-                  <td>{s.name}</td>
-                  <td><span className="badge badge-gold text-xs">{s.category}</span></td>
-                  <td>{s.country || 'Indonesia'}</td>
-                  <td><strong className="text-sky-light">{s.currency || 'USD'}</strong></td>
-                  <td>{s.email || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Kode</TableHead>
+              <TableHead>Nama Supplier</TableHead>
+              <TableHead>Kategori</TableHead>
+              <TableHead>Negara Asal</TableHead>
+              <TableHead>Valas Utama</TableHead>
+              <TableHead>Email Kontak</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredSupp.length === 0 ? (
+              <TableEmpty colSpan={6} message="Belum ada data supplier emas." />
+            ) : (
+              filteredSupp.map(s => (
+                <TableRow key={s.id || s.code}>
+                  <TableCell><strong>{s.code}</strong></TableCell>
+                  <TableCell>{s.name}</TableCell>
+                  <TableCell><span className="badge badge-gold text-xs">{s.category}</span></TableCell>
+                  <TableCell>{s.country || 'Indonesia'}</TableCell>
+                  <TableCell><strong className="text-sky-light">{s.currency || 'USD'}</strong></TableCell>
+                  <TableCell>{s.email || '-'}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <Modal {...modalProps} />

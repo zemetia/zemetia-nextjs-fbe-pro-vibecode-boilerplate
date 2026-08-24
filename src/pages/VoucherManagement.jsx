@@ -1,9 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert, FileText, DollarSign, Calculator } from 'lucide-react';
-import { getCOA, getPurchaseOrders, recordPOPayment } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import {
+  getCOA,
+  getPurchaseOrders,
+  recordPOPayment,
+  getLocalPurchases,
+  getChequeBooks,
+  saveChequeBooks,
+  getStorage,
+  setStorage,
+  getJournalEntries,
+  saveJournalEntries,
+  getNextReferenceNumber,
+  KEYS
+} from '../services/storageService';
+import {
+  exportPaymentVoucherPdf,
+  exportReceiptVoucherPdf
+} from '../services/pdfService';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function VoucherManagement() {
   const { modalProps, showModal } = useModal();
@@ -44,9 +71,7 @@ export default function VoucherManagement() {
 
   const loadPurchaseOrders = () => {
     const importPOs = getPurchaseOrders();
-    const localPurchases = (typeof window !== 'undefined' && window.Storage)
-      ? (window.Storage.get('pttan_local_purchases') || []).filter(p => !p.paymentMode || p.paymentMode === 'credit' || String(p.poNumber || '').startsWith('PO-LOKAL'))
-      : [];
+    const localPurchases = getLocalPurchases().filter(p => !p.paymentMode || p.paymentMode === 'credit' || String(p.poNumber || '').startsWith('PO-LOKAL'));
 
     const unifiedList = [
       ...importPOs,
@@ -73,48 +98,43 @@ export default function VoucherManagement() {
   };
 
   const loadChequeBooks = () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const books = window.Storage.get('pttan_cheque_books') || [];
-      setChequeBooks(books);
-    }
+    setChequeBooks(getChequeBooks());
   };
 
   const loadVouchers = () => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      const pmt = window.Storage.get(window.Storage.KEYS.PAYMENT_VOUCHERS) || [
-        {
-          id: 'VOUCH-BBK-001',
-          voucherNumber: 'BBK-2026-001',
-          voucherType: 'BBK',
-          type: 'BBK',
-          date: new Date().toISOString().split('T')[0],
-          selectedPONumber: 'PO-IMP-2026-001',
-          paymentCategory: 'PO_PRINCIPAL',
-          payee: 'YLG Bullion Singapore Pte Ltd',
-          payer: 'PT TAN',
-          bankAccountCode: '1111-USD',
-          bankAccountName: 'Bank BCA Devisa USD',
-          accountCode: '2111',
-          amount: 21645000000,
-          description: 'Pelunasan Pembayaran Impor 16,000 oz Gold Bullion YLG Singapore (Ref: PO-IMP-2026-001)',
-          status: 'APPROVED & PAID',
-          isCleared: true,
-          createdAt: new Date().toISOString()
-        }
-      ];
-      const rcp = window.Storage.get(window.Storage.KEYS.RECEIPT_VOUCHERS) || [];
-      const all = [...pmt, ...rcp];
+    const pmt = getStorage(KEYS.PAYMENT_VOUCHERS, [
+      {
+        id: 'VOUCH-BBK-001',
+        voucherNumber: 'BBK-2026-001',
+        voucherType: 'BBK',
+        type: 'BBK',
+        date: new Date().toISOString().split('T')[0],
+        selectedPONumber: 'PO-IMP-2026-001',
+        paymentCategory: 'PO_PRINCIPAL',
+        payee: 'YLG Bullion Singapore Pte Ltd',
+        payer: 'PT TAN',
+        bankAccountCode: '1111-USD',
+        bankAccountName: 'Bank BCA Devisa USD',
+        accountCode: '2111',
+        amount: 21645000000,
+        description: 'Pelunasan Pembayaran Impor 16,000 oz Gold Bullion YLG Singapore (Ref: PO-IMP-2026-001)',
+        status: 'APPROVED & PAID',
+        isCleared: true,
+        createdAt: new Date().toISOString()
+      }
+    ]);
+    const rcp = getStorage(KEYS.RECEIPT_VOUCHERS, []);
+    const all = [...pmt, ...rcp];
 
-      const filtered = all.filter(v => {
-        if (activeTab === 'BBK') return v.voucherType === 'BBK' || v.type === 'BBK';
-        if (activeTab === 'BKK') return v.voucherType === 'BKK' || v.type === 'BKK';
-        if (activeTab === 'BCK') return v.voucherType === 'BCK' || v.type === 'BCK' || v.paymentMethod === 'cheque';
-        if (activeTab === 'BBM') return v.voucherType === 'BBM' || v.type === 'BBM';
-        if (activeTab === 'BKM') return v.voucherType === 'BKM' || v.type === 'BKM';
-        return true;
-      });
-      setVouchers(filtered);
-    }
+    const filtered = all.filter(v => {
+      if (activeTab === 'BBK') return v.voucherType === 'BBK' || v.type === 'BBK';
+      if (activeTab === 'BKK') return v.voucherType === 'BKK' || v.type === 'BKK';
+      if (activeTab === 'BCK') return v.voucherType === 'BCK' || v.type === 'BCK' || v.paymentMethod === 'cheque';
+      if (activeTab === 'BBM') return v.voucherType === 'BBM' || v.type === 'BBM';
+      if (activeTab === 'BKM') return v.voucherType === 'BKM' || v.type === 'BKM';
+      return true;
+    });
+    setVouchers(filtered);
   };
 
   // Helper untuk menentukan konfigurasi default per kategori pengeluaran PO
@@ -321,110 +341,109 @@ export default function VoucherManagement() {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof window !== 'undefined' && window.Storage) {
-      const key = currentType.startsWith('B') && (currentType.includes('K') || currentType === 'BCK')
-        ? window.Storage.KEYS.PAYMENT_VOUCHERS 
-        : window.Storage.KEYS.RECEIPT_VOUCHERS;
-      
-      const list = window.Storage.get(key) || [];
-      list.unshift(newVoucher);
-      await window.Storage.set(key, list);
+    const key = currentType.startsWith('B') && (currentType.includes('K') || currentType === 'BCK')
+      ? KEYS.PAYMENT_VOUCHERS 
+      : KEYS.RECEIPT_VOUCHERS;
+    
+    const list = getStorage(key, []);
+    list.unshift(newVoucher);
+    await setStorage(key, list);
 
-      // JURNAL SAK EMKM OTOMATIS:
-      const isReceipt = currentType === 'BBM' || currentType === 'BKM';
-      const bankGl = isCheque ? '2115' : form.bankAccountCode;
-      const bankName = isCheque 
-        ? 'Hutang Cek / Bilyet Giro Beredar' 
-        : form.bankAccountCode === '1111-USD'
-        ? 'Bank BCA Devisa USD'
-        : form.bankAccountCode === '1111-SGD'
-        ? 'Bank BCA Devisa SGD'
-        : form.bankAccountCode === '1110'
-        ? 'Kas Kecil (Petty Cash)'
-        : 'Bank BCA IDR Operasional';
+    // JURNAL SAK EMKM OTOMATIS:
+    const isReceipt = currentType === 'BBM' || currentType === 'BKM';
+    const bankGl = isCheque ? '2115' : form.bankAccountCode;
+    const bankName = isCheque 
+      ? 'Hutang Cek / Bilyet Giro Beredar' 
+      : form.bankAccountCode === '1111-USD'
+      ? 'Bank BCA Devisa USD'
+      : form.bankAccountCode === '1111-SGD'
+      ? 'Bank BCA Devisa SGD'
+      : form.bankAccountCode === '1110'
+      ? 'Kas Kecil (Petty Cash)'
+      : 'Bank BCA IDR Operasional';
 
-      const lawanAccountName = coaAccounts.find(a => a.code === form.accountCode)?.name || (
-        form.accountCode === '1135' ? 'PPh 22 Dibayar Di Muka (Impor Emas)' :
-        form.accountCode === '5150' ? 'Biaya Freight & Insurance Impor / Ekspor' :
-        form.accountCode === '1159' ? 'Persediaan Emas Transit' :
-        isReceipt ? 'Piutang Usaha' : 'Hutang Usaha'
-      );
+    const lawanAccountName = coaAccounts.find(a => a.code === form.accountCode)?.name || (
+      form.accountCode === '1135' ? 'PPh 22 Dibayar Di Muka (Impor Emas)' :
+      form.accountCode === '5150' ? 'Biaya Freight & Insurance Impor / Ekspor' :
+      form.accountCode === '1159' ? 'Persediaan Emas Transit' :
+      isReceipt ? 'Piutang Usaha' : 'Hutang Usaha'
+    );
 
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: `JRN-${currentType}-${Date.now().toString().slice(-6)}`,
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: form.date,
+      description: isCheque
+        ? `Penerbitan Cek/Bilyet Giro (${newVoucher.checkNumber}) - ${newVoucher.payee} [${newVoucher.categoryLabel}] [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
+        : isReceipt
+        ? `Penerimaan Kas/Bank Voucher ${currentType} (${newVoucher.voucherNumber}) dari ${newVoucher.payer} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
+        : `Pembayaran Voucher ${currentType} (${newVoucher.voucherNumber}) - ${newVoucher.payee} [${newVoucher.categoryLabel}] [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`,
+      lines: isReceipt
+        ? [
+            { accountCode: bankGl, accountName: bankName, debit: Number(form.amount), credit: 0 },
+            { accountCode: form.accountCode, accountName: lawanAccountName, debit: 0, credit: Number(form.amount) }
+          ]
+        : [
+            { accountCode: form.accountCode, accountName: lawanAccountName, debit: Number(form.amount), credit: 0 },
+            { accountCode: bankGl, accountName: bankName, debit: 0, credit: Number(form.amount) }
+          ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
+
+    // UPDATE REKONSILIASI CICILAN / SISA HUTANG PADA PURCHASE ORDER TERKAIT
+    if (form.selectedPONumber) {
+      await recordPOPayment(form.selectedPONumber, {
+        id: newVoucher.id,
+        voucherNo: newVoucher.voucherNumber,
+        voucherType: currentType,
+        category: form.paymentCategory || 'PO_PRINCIPAL',
+        categoryLabel: newVoucher.categoryLabel,
         date: form.date,
-        description: isCheque
-          ? `Penerbitan Cek/Bilyet Giro (${newVoucher.checkNumber}) - ${newVoucher.payee} [${newVoucher.categoryLabel}] [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
-          : isReceipt
-          ? `Penerimaan Kas/Bank Voucher ${currentType} (${newVoucher.voucherNumber}) dari ${newVoucher.payer} [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`
-          : `Pembayaran Voucher ${currentType} (${newVoucher.voucherNumber}) - ${newVoucher.payee} [${newVoucher.categoryLabel}] [Ref: ${newVoucher.selectedPONumber || 'Non-PO'}]`,
-        lines: isReceipt
-          ? [
-              { accountCode: bankGl, accountName: bankName, debit: Number(form.amount), credit: 0 },
-              { accountCode: form.accountCode, accountName: lawanAccountName, debit: 0, credit: Number(form.amount) }
-            ]
-          : [
-              { accountCode: form.accountCode, accountName: lawanAccountName, debit: Number(form.amount), credit: 0 },
-              { accountCode: bankGl, accountName: bankName, debit: 0, credit: Number(form.amount) }
-            ],
-        createdAt: new Date().toISOString()
+        amount: Number(form.amount),
+        payee: form.payeePayer,
+        bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : bankName,
+        bankAccountCode: bankGl,
+        accountCode: form.accountCode,
+        description: form.description
       });
-      await window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
-
-      // UPDATE REKONSILIASI CICILAN / SISA HUTANG PADA PURCHASE ORDER TERKAIT
-      if (form.selectedPONumber) {
-        await recordPOPayment(form.selectedPONumber, {
-          id: newVoucher.id,
-          voucherNo: newVoucher.voucherNumber,
-          voucherType: currentType,
-          category: form.paymentCategory || 'PO_PRINCIPAL',
-          categoryLabel: newVoucher.categoryLabel,
-          date: form.date,
-          amount: Number(form.amount),
-          payee: form.payeePayer,
-          bank: isCheque ? `Cek/BG: ${newVoucher.checkNumber}` : bankName,
-          bankAccountCode: bankGl,
-          accountCode: form.accountCode,
-          description: form.description
-        });
-        loadPurchaseOrders();
-      }
-
-      // KUNCI STATUS LEMBAR CEK MENJADI 'USED' DI MASTER BUKU CEK
-      if (isCheque) {
-        const books = window.Storage.get('pttan_cheque_books') || [];
-        const updatedBooks = books.map(b => {
-          if (b.bankName === form.checkBankName) {
-            return {
-              ...b,
-              leaves: (b.leaves || []).map(l => l.checkNumber === form.checkNumber ? {
-                ...l,
-                status: 'USED',
-                voucherNo: newVoucher.voucherNumber,
-                payee: newVoucher.payee,
-                amount: newVoucher.amount,
-                dueDate: newVoucher.checkDueDate,
-                isCleared: false
-              } : l)
-            };
-          }
-          return b;
-        });
-        window.Storage.set('pttan_cheque_books', updatedBooks);
-        setChequeBooks(updatedBooks);
-      }
-
-      showModal({
-        variant: 'success',
-        title: `Voucher ${currentType} Diterbitkan!`,
-        message: `Voucher (${newVoucher.voucherNumber}) [${newVoucher.categoryLabel}] berhasil disimpan dan diposting ke Buku Besar!\n${newVoucher.selectedPONumber ? `• Tagihan PO: ${newVoucher.selectedPONumber} berhasil dikaitkan.\n` : ''}${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Status: BEREDAR (Akun 2115)` : `• Sumber Kas/Bank: ${bankName} (${bankGl})`}`
-      });
-
-      loadVouchers();
-      setShowForm(false);
+      loadPurchaseOrders();
     }
+
+    // KUNCI STATUS LEMBAR CEK MENJADI 'USED' DI MASTER BUKU CEK
+    if (isCheque) {
+      const books = getChequeBooks();
+      const updatedBooks = books.map(b => {
+        if (b.bankName === form.checkBankName) {
+          return {
+            ...b,
+            leaves: (b.leaves || []).map(l => l.checkNumber === form.checkNumber ? {
+              ...l,
+              status: 'USED',
+              voucherNo: newVoucher.voucherNumber,
+              payee: newVoucher.payee,
+              amount: newVoucher.amount,
+              dueDate: newVoucher.checkDueDate,
+              isCleared: false
+            } : l)
+          };
+        }
+        return b;
+      });
+      await saveChequeBooks(updatedBooks);
+      setChequeBooks(updatedBooks);
+    }
+
+    showModal({
+      variant: 'success',
+      title: `Voucher ${currentType} Diterbitkan!`,
+      message: `Voucher (${newVoucher.voucherNumber}) [${newVoucher.categoryLabel}] berhasil disimpan dan diposting ke Buku Besar!\n${newVoucher.selectedPONumber ? `• Tagihan PO: ${newVoucher.selectedPONumber} berhasil dikaitkan.\n` : ''}${isCheque ? `• No. Cek/BG Terkunci: ${newVoucher.checkNumber}\n• Status: BEREDAR (Akun 2115)` : `• Sumber Kas/Bank: ${bankName} (${bankGl})`}`
+    });
+
+    loadVouchers();
+    setShowForm(false);
   };
 
   // Handler Pencairan / Kliring Cek di Bank
@@ -443,54 +462,53 @@ export default function VoucherManagement() {
     });
   };
 
-  const postChequeClearing = (voucher) => {
-    if (typeof window !== 'undefined' && window.Storage) {
-      // 1. Update Voucher Status
-      const pmt = window.Storage.get(window.Storage.KEYS.PAYMENT_VOUCHERS) || [];
-      const updated = pmt.map(v => {
-        if (v.id === voucher.id || v.voucherNumber === voucher.voucherNumber) {
-          return {
-            ...v,
-            status: 'CLEARED (SUDAH CAIR)',
-            isCleared: true,
-            clearedDate: new Date().toISOString().split('T')[0]
-          };
-        }
-        return v;
-      });
-      window.Storage.set(window.Storage.KEYS.PAYMENT_VOUCHERS, updated);
+  const postChequeClearing = async (voucher) => {
+    // 1. Update Voucher Status
+    const pmt = getStorage(KEYS.PAYMENT_VOUCHERS, []);
+    const updated = pmt.map(v => {
+      if (v.id === voucher.id || v.voucherNumber === voucher.voucherNumber) {
+        return {
+          ...v,
+          status: 'CLEARED (SUDAH CAIR)',
+          isCleared: true,
+          clearedDate: new Date().toISOString().split('T')[0]
+        };
+      }
+      return v;
+    });
+    await setStorage(KEYS.PAYMENT_VOUCHERS, updated);
 
-      // 2. Post Jurnal Pencairan Bank (Debet 2115 Hutang BG vs Kredit 1111 Bank BCA)
-      const journals = window.Storage.get(window.Storage.KEYS.JOURNAL_ENTRIES) || [];
-      journals.unshift({
-        id: Date.now(),
-        entryNumber: `JRN-CLR-${Date.now().toString().slice(-6)}`,
-        date: new Date().toISOString().split('T')[0],
-        description: `Kliring & Pencairan Cek/Bilyet Giro (${voucher.checkNumber}) - ${voucher.payee} [Bank BCA Resmi Terpotong]`,
-        lines: [
-          { accountCode: '2115', accountName: 'Hutang Cek / Bilyet Giro Beredar', debit: voucher.amount, credit: 0 },
-          { accountCode: '1111-IDR', accountName: 'Bank BCA IDR Operasional', debit: 0, credit: voucher.amount }
-        ],
-        createdAt: new Date().toISOString()
-      });
-      window.Storage.set(window.Storage.KEYS.JOURNAL_ENTRIES, journals);
+    // 2. Post Jurnal Pencairan Bank (Debet 2115 Hutang BG vs Kredit 1111 Bank BCA)
+    const journals = getJournalEntries();
+    const entryNum = await getNextReferenceNumber('journal');
+    journals.unshift({
+      id: Date.now(),
+      entryNumber: entryNum,
+      date: new Date().toISOString().split('T')[0],
+      description: `Kliring & Pencairan Cek/Bilyet Giro (${voucher.checkNumber}) - ${voucher.payee} [Bank BCA Resmi Terpotong]`,
+      lines: [
+        { accountCode: '2115', accountName: 'Hutang Cek / Bilyet Giro Beredar', debit: voucher.amount, credit: 0 },
+        { accountCode: '1111-IDR', accountName: 'Bank BCA IDR Operasional', debit: 0, credit: voucher.amount }
+      ],
+      createdAt: new Date().toISOString()
+    });
+    await saveJournalEntries(journals);
 
-      // 3. Update Master Cheque Leaf Status to isCleared = true
-      const books = window.Storage.get('pttan_cheque_books') || [];
-      const updatedBooks = books.map(b => ({
-        ...b,
-        leaves: (b.leaves || []).map(l => l.checkNumber === voucher.checkNumber ? { ...l, isCleared: true } : l)
-      }));
-      window.Storage.set('pttan_cheque_books', updatedBooks);
-      setChequeBooks(updatedBooks);
+    // 3. Update Master Cheque Leaf Status to isCleared = true
+    const books = getChequeBooks();
+    const updatedBooks = books.map(b => ({
+      ...b,
+      leaves: (b.leaves || []).map(l => l.checkNumber === voucher.checkNumber ? { ...l, isCleared: true } : l)
+    }));
+    await saveChequeBooks(updatedBooks);
+    setChequeBooks(updatedBooks);
 
-      showModal({
-        variant: 'success',
-        title: 'Cek Sukses Dicairkan!',
-        message: `Cek/BG (${voucher.checkNumber}) sukses dikliringkan di Bank BCA!\n• Saldo Bank Terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun Cek Gantung (2115) Ditutup Nol.`
-      });
-      loadVouchers();
-    }
+    showModal({
+      variant: 'success',
+      title: 'Cek Sukses Dicairkan!',
+      message: `Cek/BG (${voucher.checkNumber}) sukses dikliringkan di Bank BCA!\n• Saldo Bank Terpotong: Rp ${voucher.amount.toLocaleString()}\n• Akun Cek Gantung (2115) Ditutup Nol.`
+    });
+    loadVouchers();
   };
 
   const getTabLabel = (tab) => {
@@ -649,8 +667,8 @@ export default function VoucherManagement() {
                           onClick={() => handleCategoryChange('OTHER_EXPENSE')}
                           className={`p-2.5 text-left rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
                             form.paymentCategory === 'OTHER_EXPENSE'
-                              ? 'bg-purple-500/20 border-purple-400 text-purple-300 shadow-md'
-                              : 'bg-canvas/60 border-line text-fg-soft hover:border-purple-400/50'
+                              ? 'bg-orange/20 border-orange text-orange-light shadow-md'
+                              : 'bg-canvas/60 border-line text-fg-soft hover:border-orange/50'
                           }`}
                         >
                           <div className="font-bold text-[0.85rem] mb-0.5">📑 Biaya Tambahan</div>
@@ -826,109 +844,109 @@ export default function VoucherManagement() {
           </div>
         </div>
 
-        <div className="table-container">
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>No. Voucher</th>
-                <th>Tanggal</th>
-                <th>Ref No. PO & Kategori</th>
-                <th>Penerima Pembayaran</th>
-                {activeTab === 'BCK' && <th>No. Cek / Bank</th>}
-                {activeTab === 'BCK' && <th>Jatuh Tempo Kliring</th>}
-                <th>Rekening / COA</th>
-                <th className="text-right">Nominal (IDR)</th>
-                <th>Status Pembayaran</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredVouchers.length === 0 ? (
-                <tr>
-                  <td className="text-center text-fg-muted p-7.5" colSpan={activeTab === 'BCK' ? 10 : 8}>
-                    {searchTerm ? 'Tidak ada data voucher yang cocok dengan pencarian.' : `Belum ada data voucher ${activeTab} yang diterbitkan.`}
-                  </td>
-                </tr>
-              ) : (
-                filteredVouchers.map(v => (
-                  <tr key={v.id || v.voucherNumber}>
-                    <td><strong>{v.voucherNumber}</strong></td>
-                    <td>{v.date}</td>
-                    <td>
-                      {v.selectedPONumber ? (
-                        <div className="flex flex-col gap-1 items-start">
-                          <span className="badge badge-gold text-xs">
-                            <FileText className="inline mr-1" size={11} />
-                            {v.selectedPONumber}
-                          </span>
-                          <span className="badge text-[0.68rem] bg-sky-950/60 text-sky-300 border border-sky-700/50">
-                            {v.categoryLabel || (v.paymentCategory === 'CUSTOMS_DUTY_PPH22' ? '🏛️ PPh 22 (0,25%)' : v.paymentCategory === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-fg-muted text-[0.8rem]">Non-PO</span>
-                      )}
-                    </td>
-                    <td><strong>{v.payee || v.payer || '-'}</strong></td>
-                    {activeTab === 'BCK' && (
-                      <td>
-                        <strong className="text-gold-light">{v.checkNumber || 'BG-BCA-001'}</strong><br/>
-                        <small className="text-fg-muted">{v.checkBankName || 'Bank BCA'}</small>
-                      </td>
-                    )}
-                    {activeTab === 'BCK' && (
-                      <td>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>No. Voucher</TableHead>
+              <TableHead>Tanggal</TableHead>
+              <TableHead>Ref No. PO & Kategori</TableHead>
+              <TableHead>Penerima Pembayaran</TableHead>
+              {activeTab === 'BCK' && <TableHead>No. Cek / Bank</TableHead>}
+              {activeTab === 'BCK' && <TableHead>Jatuh Tempo Kliring</TableHead>}
+              <TableHead>Rekening / COA</TableHead>
+              <TableHead className="text-right">Nominal (IDR)</TableHead>
+              <TableHead>Status Pembayaran</TableHead>
+              <TableHead>Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredVouchers.length === 0 ? (
+              <TableEmpty
+                colSpan={activeTab === 'BCK' ? 10 : 8}
+                message={searchTerm ? 'Tidak ada data voucher yang cocok dengan pencarian.' : `Belum ada data voucher ${activeTab} yang diterbitkan.`}
+              />
+            ) : (
+              filteredVouchers.map(v => (
+                <TableRow key={v.id || v.voucherNumber}>
+                  <TableCell><strong>{v.voucherNumber}</strong></TableCell>
+                  <TableCell>{v.date}</TableCell>
+                  <TableCell>
+                    {v.selectedPONumber ? (
+                      <div className="flex flex-col gap-1 items-start">
                         <span className="badge badge-gold text-xs">
-                          <Clock className="inline mr-1" size={12} />
-                          {v.checkDueDate || v.date}
+                          <FileText className="inline mr-1" size={11} />
+                          {v.selectedPONumber}
                         </span>
-                      </td>
-                    )}
-                    <td>
-                      <small className="text-sky-light">
-                        {v.bankAccountCode || v.accountCode}
-                      </small>
-                    </td>
-                    <td className="text-right font-extrabold text-emerald-light">
-                      Rp {(v.amount || 0).toLocaleString()}
-                    </td>
-                    <td>
-                      {v.isCleared ? (
-                        <span className="badge badge-emerald">✅ CAIR / LUNAS</span>
-                      ) : (
-                        <span className="badge badge-gold bg-[rgba(245,158,11,0.2)] border border-gold">
-                          ⏳ BEREDAR (OUTSTANDING)
+                        <span className="badge text-[0.68rem] bg-sky-950/60 text-sky-300 border border-sky-700/50">
+                          {v.categoryLabel || (v.paymentCategory === 'CUSTOMS_DUTY_PPH22' ? '🏛️ PPh 22 (0,25%)' : v.paymentCategory === 'LOGISTICS_HANDLING' ? '🚚 Logistik' : '💰 Pokok Supplier')}
                         </span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="flex gap-1.5">
-                        {activeTab === 'BCK' && !v.isCleared && (
-                          <button
-                            className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#10b981,_#059669)]"
-                            onClick={() => handleClearCheque(v)}
-                          >
-                            <CheckSquare size={13} /> Kliringkan Cair
-                          </button>
-                        )}
-                        <button
-                          className="btn-primary py-1.5 px-2.5 text-xs"
-                          onClick={() => showModal({
-                            variant: 'info',
-                            title: `🖨️ Cetak PDF Voucher ${v.voucherNumber}`,
-                            message: `• Ref PO: ${v.selectedPONumber || 'Non-PO'}\n• Kategori: ${v.categoryLabel || 'Pembayaran'}\n• Untuk: ${v.payee}\n• Nominal: Rp ${(v.amount || 0).toLocaleString()}`
-                          })}
-                        >
-                          <Printer size={13} /> Cetak
-                        </button>
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    ) : (
+                      <span className="text-fg-muted text-[0.8rem]">Non-PO</span>
+                    )}
+                  </TableCell>
+                  <TableCell><strong>{v.payee || v.payer || '-'}</strong></TableCell>
+                  {activeTab === 'BCK' && (
+                    <TableCell>
+                      <strong className="text-gold-light">{v.checkNumber || 'BG-BCA-001'}</strong><br/>
+                      <small className="text-fg-muted">{v.checkBankName || 'Bank BCA'}</small>
+                    </TableCell>
+                  )}
+                  {activeTab === 'BCK' && (
+                    <TableCell>
+                      <span className="badge badge-gold text-xs">
+                        <Clock className="inline mr-1" size={12} />
+                        {v.checkDueDate || v.date}
+                      </span>
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <small className="text-sky-light">
+                      {v.bankAccountCode || v.accountCode}
+                    </small>
+                  </TableCell>
+                  <TableCell className="text-right font-extrabold text-emerald-light">
+                    Rp {(v.amount || 0).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    {v.isCleared ? (
+                      <span className="badge badge-emerald">✅ CAIR / LUNAS</span>
+                    ) : (
+                      <span className="badge badge-gold bg-[rgba(245,158,11,0.2)] border border-gold">
+                        ⏳ BEREDAR (OUTSTANDING)
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1.5">
+                      {activeTab === 'BCK' && !v.isCleared && (
+                        <button
+                          className="btn-primary py-1.5 px-2.5 text-xs bg-[linear-gradient(135deg,_#10b981,_#059669)]"
+                          onClick={() => handleClearCheque(v)}
+                        >
+                          <CheckSquare size={13} /> Kliringkan Cair
+                        </button>
+                      )}
+                      <button
+                        className="btn-primary py-1.5 px-2.5 text-xs flex items-center gap-1 cursor-pointer"
+                        onClick={async () => {
+                          await exportPaymentVoucherPdf(v);
+                          showModal({
+                            variant: 'success',
+                            title: `🖨️ Cetak PDF Voucher ${v.voucherNumber}`,
+                            message: `Dokumen Voucher ${v.voucherNumber} berhasil di-generate dan dibuka di tab baru untuk langsung dicetak.\n\n• Ref PO: ${v.selectedPONumber || 'Non-PO'}\n• Kategori: ${v.categoryLabel || 'Pembayaran'}\n• Dibayarkan Ke: ${v.payee}\n• Nominal: Rp ${(v.amount || 0).toLocaleString()}`
+                          });
+                        }}
+                      >
+                        <Printer size={13} /> Cetak
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <Modal {...modalProps} />

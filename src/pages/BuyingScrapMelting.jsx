@@ -10,9 +10,20 @@ import {
   getSuppliers,
   getWarehouses
 } from '../services/storageService';
-import Modal, { useModal } from '../components/ui/Modal';
-import Combobox from '../components/ui/Combobox';
-import NumberInput from '../components/ui/NumberInput';
+import { exportScrapPurchaseReceiptPdf } from '../services/pdfService';
+import {
+  Modal,
+  useModal,
+  Combobox,
+  NumberInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty
+} from '../components/ui';
 
 export default function BuyingScrapMelting() {
   const { modalProps, showModal } = useModal();
@@ -368,52 +379,62 @@ export default function BuyingScrapMelting() {
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>No. Nota</th>
-                  <th>Tanggal</th>
-                  <th>Supplier / Toko</th>
-                  <th>Deskripsi Barang</th>
-                  <th className="text-right">Berat Kotor</th>
-                  <th className="text-right">Kadar XRF</th>
-                  <th className="text-right">Fine Gold (g)</th>
-                  <th className="text-right">Total Pembelian</th>
-                  <th>Status & Brankas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPurchases.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-8 text-fg-soft">
-                      Belum ada catatan pembelian scrap emas.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPurchases.map(p => (
-                    <tr key={p.id || p.receiptNo}>
-                      <td><strong>{p.receiptNo}</strong></td>
-                      <td>{p.date}</td>
-                      <td><strong>{p.supplierName}</strong></td>
-                      <td>{p.itemDescription}</td>
-                      <td className="text-right font-medium">{p.grossWeight} g</td>
-                      <td className="text-right text-rose-400 font-bold">{p.xrfPurity}%</td>
-                      <td className="text-right text-gold-light font-extrabold">{p.estimatedFineGold} g</td>
-                      <td className="text-right text-emerald-light font-bold">
-                        Rp {Number(p.totalAmount || 0).toLocaleString()}
-                      </td>
-                      <td>
-                        <span className="badge badge-emerald text-xs">
-                          {p.targetVault === '11502' ? 'WIP Lebur' : 'Vault Scrap (1152)'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. Nota</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Supplier / Toko</TableHead>
+                <TableHead>Deskripsi Barang</TableHead>
+                <TableHead className="text-right">Berat Kotor</TableHead>
+                <TableHead className="text-right">Kadar XRF</TableHead>
+                <TableHead className="text-right">Fine Gold (g)</TableHead>
+                <TableHead className="text-right">Total Pembelian</TableHead>
+                <TableHead>Status & Brankas</TableHead>
+                <TableHead>Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPurchases.length === 0 ? (
+                <TableEmpty colSpan={10} message="Belum ada catatan pembelian scrap emas." />
+              ) : (
+                filteredPurchases.map(p => (
+                  <TableRow key={p.id || p.receiptNo}>
+                    <TableCell><strong>{p.receiptNo}</strong></TableCell>
+                    <TableCell>{p.date}</TableCell>
+                    <TableCell><strong>{p.supplierName}</strong></TableCell>
+                    <TableCell>{p.itemDescription}</TableCell>
+                    <TableCell className="text-right font-medium">{p.grossWeight} g</TableCell>
+                    <TableCell className="text-right text-rose-400 font-bold">{p.xrfPurity}%</TableCell>
+                    <TableCell className="text-right text-gold-light font-extrabold">{p.estimatedFineGold} g</TableCell>
+                    <TableCell className="text-right text-emerald-light font-bold">
+                      Rp {Number(p.totalAmount || 0).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <span className="badge badge-emerald text-xs">
+                        {p.targetVault === '11502' ? 'WIP Lebur' : 'Vault Scrap (1152)'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        className="btn-primary py-1 px-2.5 text-xs flex items-center gap-1 cursor-pointer"
+                        onClick={async () => {
+                          await exportScrapPurchaseReceiptPdf(p);
+                          showModal({
+                            variant: 'success',
+                            title: `🖨️ Cetak Nota Scrap ${p.receiptNo}`,
+                            message: `Dokumen Nota Pembelian Scrap (${p.receiptNo}) berhasil di-generate dan dibuka di tab baru untuk langsung dicetak.\n\n• Penjual: ${p.supplierName}\n• Berat Kotor: ${p.grossWeight} g\n• Kadar XRF: ${p.xrfPurity}%\n• Fine Gold 24K: ${p.estimatedFineGold} g\n• Total Bayar: Rp ${Number(p.totalAmount || 0).toLocaleString()}`
+                          });
+                        }}
+                      >
+                        <Printer size={12} /> Cetak
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
 

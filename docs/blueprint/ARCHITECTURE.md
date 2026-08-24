@@ -13,7 +13,7 @@ graph TB
     IDX["index.html<br/>satu-satunya entry"] --> MAIN["src/main.jsx"]
 
     subgraph UI["Lapisan UI — React 19 (aktif)"]
-        APP["App.jsx<br/>router: useState activePage"]
+        APP["App.jsx<br/>router: HTML5 Path /page-id + activePage"]
         CFG["src/config/pages.js<br/>registry halaman + grup sidebar"]
         SIDE["src/components/layout/<br/>Sidebar.jsx · Navbar.jsx"]
         PAGES["18 halaman di src/pages/"]
@@ -81,29 +81,26 @@ Menambahkan modul legacy baru = menambah baris `import` di langkah 3. Tidak ada 
 
 ## Routing
 
-Tidak ada React Router. `App.jsx` menyimpan satu state:
+Aplikasi menggunakan **Clean URL Path Routing** berbasis HTML5 History API standar (`window.location.pathname`, `pushState`, `popstate`) tanpa dependensi berat React Router. `App.jsx` mengelola state `activePage` yang tersinkronisasi dua arah dengan path URL:
 
 ```js
-const [activePage, setActivePage] = useState('dashboard');
+// URL format bersih per page: http://localhost:5173/import-trading
+const getPageIdFromLocation = () => {
+  const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
+  if (rawHash && getPage(rawHash)) return rawHash;
+
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '').trim();
+  if (!path || path === 'index.html') return DEFAULT_PAGE_ID;
+  return getPage(path) ? path : DEFAULT_PAGE_ID;
+};
 ```
 
-`setActivePage` diturunkan ke `Sidebar` dan ke halaman aktif (dipakai `Dashboard` untuk tombol pintas; halaman lain mengabaikannya).
-
-Pemetaan id → judul → komponen tinggal di [src/config/pages.js](../../src/config/pages.js), bukan di `switch` yang tersebar:
-
-```js
-const page = getPage(activePage) || getPage(DEFAULT_PAGE_ID);
-const PageComponent = page.component;
-// …
-<Navbar pageTitle={getPageTitle(activePage)} />
-<PageComponent setActivePage={setActivePage} />
-```
-
-`Sidebar.jsx` membaca `PAGE_GROUPS` + `PINNED_PAGE_IDS` dari file yang sama lewat `getMenuItems()`. Satu `id` boleh muncul di lebih dari satu grup — `goods-receipt` tampil di **📦 Pembelian** dan **🏛️ Vault** — dengan label berbeda per grup lewat bentuk `{ id, label }`.
-
-**Menambah halaman berarti menyentuh satu file**: entri baru di `PAGES`, lalu `id`-nya dimasukkan ke `items` grup yang sesuai. Terlewat dari `PAGES` = halaman tak bisa dibuka; terlewat dari `PAGE_GROUPS` = tak muncul di sidebar.
-
-Efek samping yang perlu disadari: pindah halaman meng-unmount halaman lama. Tidak ada state yang bertahan, tidak ada URL yang bisa di-bookmark, tombol Back browser keluar dari aplikasi.
+- **Navigasi Bersih & Alami:** Setiap halaman memiliki URL murni (misal `/dashboard`, `/import-trading`, `/purchase-request`, `/goods-receipt`, `/accounting-reports`) tanpa karakter pagar (`#`).
+- **Navigasi Klik / Tombol:** `setActivePage(pageId)` memperbarui URL melalui `window.history.pushState({}, '', '/' + pageId)` dan mengupdate state `activePage`.
+- **Browser History & Bookmark:** Event listener `popstate` menangkap tombol Back / Forward browser dan memperbarui tampilan halaman secara instan.
+- **Server SPA Rewrite:** Didukung penuh oleh Vite dev server dan Firebase Hosting rewrite (`**` → `/index.html` di `firebase.json`), sehingga direct access atau refresh (F5) pada URL `/import-trading` berjalan lancar.
+- **Pembersihan URL Otomatis:** Sisa hash `#` lama (jika ada) otomatis dibersihkan saat boot.
+- **Fallback Keamanan:** Jika URL path tidak dikenal, router otomatis fallback ke `DEFAULT_PAGE_ID` (`'dashboard'`).
 
 ---
 
