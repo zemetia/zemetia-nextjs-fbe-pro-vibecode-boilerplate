@@ -226,6 +226,24 @@ const Payroll = {
     const startDateStr = dates.startDate;
     const endDateStr = dates.endDate;
 
+    // Filter eligible employees and purge obsolete draft records of archived/resigned employees
+    const eligibleEmployees = Storage.getEligibleEmployeesForPeriod 
+      ? Storage.getEligibleEmployeesForPeriod(startDateStr, endDateStr)
+      : this.employees.filter(emp => Storage.isEmployeeActiveInPeriod ? Storage.isEmployeeActiveInPeriod(emp, startDateStr, endDateStr) : true);
+    const eligibleNikSet = new Set(eligibleEmployees.map(e => String(e.nik)));
+
+    let hasChanges = false;
+    const beforeLen = this.payrollRecords.length;
+    this.payrollRecords = this.payrollRecords.filter(pr => {
+      if (pr.period === this.period && pr.status === 'draft' && !pr.imported) {
+        return eligibleNikSet.has(String(pr.nik));
+      }
+      return true;
+    });
+    if (this.payrollRecords.length !== beforeLen) {
+      hasChanges = true;
+    }
+
     // Load active settings and logs
     const settings = Storage.getOvertimeSettings();
     const prodLogs = Storage.getProductionLogs().filter(log => log.date >= startDateStr && log.date <= endDateStr);
@@ -237,9 +255,7 @@ const Payroll = {
       return (from <= endDateStr && to >= startDateStr);
     });
 
-    const filteredAtd = await this.calculateAttendanceForRange(this.employees, startDateStr, endDateStr);
-
-    let hasChanges = false;
+    const filteredAtd = await this.calculateAttendanceForRange(eligibleEmployees, startDateStr, endDateStr);
 
     this.payrollRecords.forEach((record, idx) => {
       if (record.period === this.period && record.status === 'draft' && !record.imported) {
@@ -1259,26 +1275,13 @@ const Payroll = {
       return (from <= endDateStr && to >= startDateStr);
     });
 
+    // Filter eligible employees: Active in this cut-off period
+    const eligibleEmployees = Storage.getEligibleEmployeesForPeriod 
+      ? Storage.getEligibleEmployeesForPeriod(startDateStr, endDateStr)
+      : this.employees.filter(emp => Storage.isEmployeeActiveInPeriod ? Storage.isEmployeeActiveInPeriod(emp, startDateStr, endDateStr) : true);
+
     // 1. Calculate Attendance dynamically from raw logs for the range
-    const filteredAtd = await this.calculateAttendanceForRange(this.employees, startDateStr, endDateStr);
-
-    // Filter employees: Active (who joined on/before period end) or Inactive (who resigned during period)
-    const eligibleEmployees = this.employees.filter(emp => {
-      const isPastOrCurrentJoin = !emp.start_date || emp.start_date <= endDateStr;
-      if (!isPastOrCurrentJoin) return false;
-
-      const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
-      const resDate = emp.resignation_date || emp.resign_date;
-
-      if (!isInactive) {
-          return true;
-      }
-      // If non-active, include if resignation date falls within or after period start (for pro-rata or post-25th rollover)
-      if (isInactive && resDate && resDate >= startDateStr) {
-          return true;
-      }
-      return false;
-    });
+    const filteredAtd = await this.calculateAttendanceForRange(eligibleEmployees, startDateStr, endDateStr);
 
     const newRecords = eligibleEmployees.map(emp => {
       const existingRecord = this.payrollRecords.find(pr => pr.nik === emp.nik && pr.period === this.period);
@@ -1618,6 +1621,15 @@ const Payroll = {
         status: 'draft',
         paidAt: null
       };
+    });
+
+    // Purge obsolete draft records for this period that belong to employees who are NOT eligible in this period
+    const eligibleNikSet = new Set(eligibleEmployees.map(e => String(e.nik)));
+    this.payrollRecords = this.payrollRecords.filter(pr => {
+      if (pr.period === this.period && pr.status === 'draft' && !pr.imported) {
+        return eligibleNikSet.has(String(pr.nik));
+      }
+      return true;
     });
 
     // Merge or replace

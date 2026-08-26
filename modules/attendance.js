@@ -1578,6 +1578,12 @@ const Attendance = {
     const displayName = employee ? employee.name : `NIK: ${nik}`;
     const period = this.activePeriod;
     const cutoffInfo = this.getPeriodCutoffRange(period);
+    const isSecurity = (Storage.isSecurityEmployee && Storage.isSecurityEmployee(employee)) || (
+        String(employee?.department || '').toLowerCase().includes('security') ||
+        String(employee?.division || employee?.job_level || '').toLowerCase().includes('security') ||
+        String(employee?.position || '').toLowerCase().includes('security') ||
+        String(employee?.position || '').toLowerCase().includes('satpam')
+    );
 
     try {
       let logs = [];

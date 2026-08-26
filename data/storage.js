@@ -4399,22 +4399,31 @@ const Storage = {
             return false;
         }
 
-        const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+        const statusLower = String(emp.status || '').toLowerCase().trim();
+        const isInactive = statusLower === 'non-aktif' || statusLower === 'non_active' || statusLower === 'inactive' || statusLower === 'resigned' || statusLower === 'keluar' || statusLower === 'arsip';
         const resDate = emp.resignation_date || emp.resign_date;
 
-        // 2. Active Employee
-        if (!isInactive) {
+        // 2. If resignation date is before period start date -> ALWAYS EXCLUDE (Already resigned in previous period)
+        if (resDate && startDateStr && resDate < startDateStr) {
+            return false;
+        }
+
+        // 3. Active Employee with no past resignation date
+        if (!isInactive && !resDate) {
             return true;
         }
 
-        // 3. Inactive / Resigned Employee:
-        // Include ONLY if resignation date falls within or after period start date (e.g. resigned mid-period)
-        if (isInactive && resDate && startDateStr && resDate >= startDateStr) {
+        // 4. Inactive without resignation date -> ALWAYS EXCLUDE
+        if (isInactive && !resDate) {
+            return false;
+        }
+
+        // 5. Inactive / Resigned Employee who resigned during or after period start
+        if (resDate && startDateStr && resDate >= startDateStr) {
             return true;
         }
 
-        // If resigned before the start of the period, completely exclude
-        return false;
+        return !isInactive;
     },
 
     getEligibleEmployeesForPeriod(startDateStr, endDateStr) {
