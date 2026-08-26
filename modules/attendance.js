@@ -343,7 +343,7 @@ const Attendance = {
         const isPresent = (clockIn || clockOut || statusField.toUpperCase() === "H");
 
         if (clockIn && isPresent) {
-          const penaltyCalc = Storage.calculateLatePenalty ? Storage.calculateLatePenalty(clockIn, shiftStartStr) : { isLate: false, penalty: 0, tier: 0 };
+          const penaltyCalc = Storage.calculateLatePenalty ? Storage.calculateLatePenalty(clockIn, shiftStartStr, 5000000, dateStr) : { isLate: false, penalty: 0, tier: 0 };
           importedLogs.push({
             batchId,
             nik,
@@ -1307,11 +1307,11 @@ const Attendance = {
               securityNightDays += 1;     // Otomatis berhak atas makan malam untuk setiap kehadiran shift 12 jam
             }
           } else {
-            // Late Calculation for regular staff
-            if (hasIn) {
-              const dateObj = new Date(date + 'T00:00:00');
-              const dow = dateObj.getDay();
+            // Calendar-First Hierarchy: Bypass late penalties on Sundays, Holidays, and Company Dayoffs
+            const calStatus = Storage.getDateCalendarStatus ? Storage.getDateCalendarStatus(date) : { isNonWorkingDay: false };
 
+            if (hasIn && !calStatus.isNonWorkingDay) {
+              const dow = new Date(date + 'T12:00:00').getDay();
               const rawClockIn = String(dayLogs.in || '').replace('T', ' ');
               const clockInTime = rawClockIn.split(' ')[1]?.substring(0, 5) || '00:00';
 
@@ -1330,7 +1330,7 @@ const Attendance = {
               }
 
               const penaltyRes = Storage.calculateLatePenalty 
-                ? Storage.calculateLatePenalty(clockInTime, shiftStartStr, employee.base_salary) 
+                ? Storage.calculateLatePenalty(clockInTime, shiftStartStr, employee.base_salary, date) 
                 : { isLate: false, isHalfDay: false };
 
               if (penaltyRes.isLate) {
@@ -1633,7 +1633,9 @@ const Attendance = {
           
           let isLate = false;
           let penaltyBadge = '';
-          if (inTime !== '-') {
+          const calStatus = Storage.getDateCalendarStatus ? Storage.getDateCalendarStatus(date) : { isNonWorkingDay: false };
+
+          if (inTime !== '-' && !calStatus.isNonWorkingDay && !isSecurity) {
               let shiftStartStr = '08:30';
               const dayStr = date.split('-')[2];
               const shiftId = empSchedule[dayStr] || deptSchedule[dayStr];
@@ -1650,7 +1652,7 @@ const Attendance = {
               }
               
               const penaltyRes = Storage.calculateLatePenalty 
-                ? Storage.calculateLatePenalty(inTime, shiftStartStr, employee ? employee.base_salary : 5000000) 
+                ? Storage.calculateLatePenalty(inTime, shiftStartStr, employee ? employee.base_salary : 5000000, date) 
                 : { isLate: false, penalty: 0 };
 
               isLate = penaltyRes.isLate;
@@ -1661,6 +1663,8 @@ const Attendance = {
                       penaltyBadge = ` <span class="badge badge-danger" style="font-size: 0.65rem; padding: 1px 4px; vertical-align: middle;" title="Denda Keterlambatan: Rp ${penaltyRes.penalty.toLocaleString('id-ID')}">-${penaltyRes.penalty / 1000}k</span>`;
                   }
               }
+          } else if (inTime !== '-' && calStatus.isNonWorkingDay) {
+              penaltyBadge = ` <span class="badge badge-info" style="font-size: 0.65rem; padding: 1px 4px; vertical-align: middle; background: #e0e7ff; color: #4338ca;" title="${calStatus.reason || 'Hari Libur'}">🏖️ ${calStatus.reason || 'Libur'}</span>`;
           }
           
           logsHtml += `

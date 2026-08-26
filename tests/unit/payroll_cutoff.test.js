@@ -29,22 +29,47 @@ global.Storage = {
         const pos = String(emp.position || '').toLowerCase();
         return dept.includes('security') || div.includes('security') || pos.includes('security') || pos.includes('satpam');
     },
-    calculateLatePenalty: (clockInStr, shiftStartStr, baseSalary = 5000000) => {
-        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+    getHolidays: () => [
+        { date: '2026-08-17', name: 'Hari Kemerdekaan RI', type: 'Libur Nasional', isNationalHoliday: true }
+    ],
+    isCompanyDayoff: () => false,
+    getCompanyDayoffRecord: () => null,
+    getDateCalendarStatus: (dateStr) => {
+        if (!dateStr) return { isNonWorkingDay: false, isSunday: false, isHoliday: false, isCompanyDayoff: false, isRedDay: false, reason: '' };
+        const dateOnly = String(dateStr).includes(' ') ? String(dateStr).split(' ')[0] : String(dateStr).substring(0, 10);
+        const dateObj = new Date(dateOnly + 'T12:00:00');
+        const dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
+        const isSunday = dayOfWeek === 0;
+        const holidays = [{ date: '2026-08-17', name: 'Hari Kemerdekaan RI', type: 'Libur Nasional', isNationalHoliday: true }];
+        const holidayRec = holidays.find(h => (typeof h === 'string' ? h : h.date) === dateOnly);
+        const isHoliday = !!holidayRec;
+        const isRedDay = isSunday || isHoliday;
+        const isNonWorkingDay = isSunday || isHoliday;
+        let reason = isSunday ? 'Hari Minggu' : (isHoliday ? 'Libur Nasional' : '');
+        return { isNonWorkingDay, isSunday, isHoliday, isCompanyDayoff: false, isRedDay, reason };
+    },
+    calculateLatePenalty: (clockInStr, shiftStartStr, baseSalary = 5000000, dateStr = null) => {
+        if (dateStr) {
+            const calStatus = Storage.getDateCalendarStatus ? Storage.getDateCalendarStatus(dateStr) : { isNonWorkingDay: false };
+            if (calStatus.isNonWorkingDay) {
+                return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: `Bypass Penalti (${calStatus.reason})` };
+            }
+        }
+        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         const timePart = String(clockInStr).includes(' ') ? String(clockInStr).split(' ')[1] : String(clockInStr);
         const [inH, inM] = timePart.split(':').map(Number);
         const [shiftH, shiftM] = String(shiftStartStr).split(':').map(Number);
-        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         const inMinutes = inH * 60 + inM;
         const shiftMinutes = shiftH * 60 + shiftM;
-        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Tepat Waktu' };
         const lateMinutes = inMinutes - shiftMinutes;
-        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false };
-        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false };
-        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false };
+        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false, description: 'Toleransi Grace Period (≤5 min)' };
+        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false, description: 'Terlambat 6–60 min (Denda Rp 10.000)' };
+        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false, description: 'Terlambat 61–120 min (Denda Rp 20.000)' };
         else {
             const dailySalary = (Number(baseSalary) || 5000000) / 25;
-            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3, isHalfDay: true };
+            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3, isHalfDay: true, description: 'Terlambat >2 Jam (Izin Setengah Hari)' };
         }
     },
     get: jest.fn(() => []),

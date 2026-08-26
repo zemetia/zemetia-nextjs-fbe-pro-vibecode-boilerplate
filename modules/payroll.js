@@ -824,10 +824,12 @@ const Payroll = {
                             }
 
                             let dailyLateDeduction = 0;
-                            if (!isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
+                            const isNonWorkingDay = isSunday || isHoliday || isCompanyDayoff;
+
+                            if (!isNonWorkingDay && !isFirstDay && dayLog && dayLog.in !== null && shift && shift.startTime) {
                                 const inTime = clockInTime;
                                 const penaltyRes = Storage.calculateLatePenalty 
-                                    ? Storage.calculateLatePenalty(inTime, shift.startTime, emp.base_salary) 
+                                    ? Storage.calculateLatePenalty(inTime, shift.startTime, emp.base_salary, dateStr) 
                                     : { isLate: false, penalty: 0, isHalfDay: false };
 
                                 if (penaltyRes.isLate) {
@@ -841,7 +843,7 @@ const Payroll = {
                                 }
                             }
 
-                            if (dayLog && dayLog.out !== null && shift && shift.endTime) {
+                            if (!isNonWorkingDay && dayLog && dayLog.out !== null && shift && shift.endTime) {
                                 const outTime = clockOutTime;
                                 const [oh, om] = outTime.split(':').map(Number);
                                 const [eh, em] = shift.endTime.split(':').map(Number);

@@ -4452,7 +4452,85 @@ const Storage = {
         return true;
     },
 
-    calculateLatePenalty(clockInStr, shiftStartStr, baseSalary = 5000000) {
+    /**
+     * Centralized Calendar Middleware: Evaluates calendar status for any date (Sunday, Official Holiday, Company Dayoff)
+     * @param {string} dateStr - Date formatted as YYYY-MM-DD
+     * @param {object} [emp] - Optional employee object
+     * @returns {{ isNonWorkingDay: boolean, isSunday: boolean, isHoliday: boolean, isCompanyDayoff: boolean, isRedDay: boolean, reason: string }}
+     */
+    getDateCalendarStatus(dateStr, emp = null) {
+        if (!dateStr) {
+            return { isNonWorkingDay: false, isSunday: false, isHoliday: false, isCompanyDayoff: false, isRedDay: false, reason: '' };
+        }
+
+        const dateOnly = String(dateStr).includes(' ') ? String(dateStr).split(' ')[0] : String(dateStr).substring(0, 10);
+        const dateObj = new Date(dateOnly + 'T12:00:00');
+        const dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
+        const isSunday = dayOfWeek === 0;
+
+        // Check Official National Holidays (excluding Cuti Bersama which is regular working day per company policy)
+        const holidays = this.getHolidays ? this.getHolidays() : [];
+        const holidayRec = holidays.find(h => {
+            const hDate = typeof h === 'string' ? h : h.date;
+            return hDate === dateOnly;
+        });
+        
+        let isHoliday = false;
+        let holidayName = '';
+        if (holidayRec) {
+            const name = typeof holidayRec === 'string' ? '' : String(holidayRec.name || holidayRec.description || '').toLowerCase();
+            const type = typeof holidayRec === 'string' ? '' : String(holidayRec.type || '').toLowerCase();
+            const isNational = typeof holidayRec === 'string' ? true : holidayRec.isNationalHoliday !== false;
+            if (type !== 'cuti bersama' && !name.includes('cuti bersama') && isNational) {
+                isHoliday = true;
+                holidayName = typeof holidayRec === 'string' ? 'Libur Nasional' : (holidayRec.name || holidayRec.description || 'Libur Nasional');
+            }
+        }
+
+        // Check Company Dayoffs (e.g. PLN blackout / force majeure)
+        const isCompanyDayoff = this.isCompanyDayoff ? this.isCompanyDayoff(dateOnly) : false;
+        const companyDayoffRec = isCompanyDayoff && this.getCompanyDayoffRecord ? this.getCompanyDayoffRecord(dateOnly) : null;
+        const dayoffName = companyDayoffRec ? (companyDayoffRec.name || 'Libur Khusus Perusahaan') : '';
+
+        const isRedDay = isSunday || isHoliday;
+        const isNonWorkingDay = isSunday || isHoliday || isCompanyDayoff;
+
+        let reason = '';
+        if (isSunday) reason = 'Hari Minggu';
+        else if (isHoliday) reason = holidayName;
+        else if (isCompanyDayoff) reason = dayoffName;
+
+        return {
+            isNonWorkingDay,
+            isSunday,
+            isHoliday,
+            isCompanyDayoff,
+            isRedDay,
+            reason
+        };
+    },
+
+    isHolidayOrSunday(dateStr) {
+        return this.getDateCalendarStatus(dateStr).isNonWorkingDay;
+    },
+
+    calculateLatePenalty(clockInStr, shiftStartStr, baseSalary = 5000000, dateStr = null) {
+        // Hierarchy 1: Calendar Exemption Check
+        // If date is Sunday, Official Holiday, or Company Dayoff -> IMMEDIATELY BYPASS ALL PENALTIES
+        if (dateStr) {
+            const calStatus = this.getDateCalendarStatus(dateStr);
+            if (calStatus.isNonWorkingDay) {
+                return {
+                    isLate: false,
+                    lateMinutes: 0,
+                    penalty: 0,
+                    tier: 0,
+                    isHalfDay: false,
+                    description: `Bypass Penalti (${calStatus.reason})`
+                };
+            }
+        }
+
         if (!clockInStr || !shiftStartStr) {
             return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         }

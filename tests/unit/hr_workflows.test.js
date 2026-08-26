@@ -17,7 +17,11 @@ global.Storage = {
     get: jest.fn(),
     set: jest.fn(),
     getEmployees: jest.fn(),
-    getHolidays: jest.fn(() => []),
+    getHolidays: function() {
+        return [
+            { date: '2026-08-17', name: 'Hari Kemerdekaan RI', type: 'Libur Nasional', isNationalHoliday: true }
+        ];
+    },
     getLeaveBalances: jest.fn(() => []),
     saveLeaveBalances: jest.fn(),
     getCollectiveLeaveDays: function(year = 2026) {
@@ -57,22 +61,63 @@ global.Storage = {
         this.saveLeaveBalances(balances);
         return record;
     },
-    calculateLatePenalty: function(clockInStr, shiftStartStr, baseSalary = 5000000) {
-        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+    getHolidays: function() {
+        return [
+            { date: '2026-08-17', name: 'Hari Kemerdekaan RI', type: 'Libur Nasional', isNationalHoliday: true }
+        ];
+    },
+    isCompanyDayoff: function(dateStr) { return false; },
+    getCompanyDayoffRecord: function(dateStr) { return null; },
+    getDateCalendarStatus: function(dateStr, emp = null) {
+        if (!dateStr) return { isNonWorkingDay: false, isSunday: false, isHoliday: false, isCompanyDayoff: false, isRedDay: false, reason: '' };
+        const dateOnly = String(dateStr).includes(' ') ? String(dateStr).split(' ')[0] : String(dateStr).substring(0, 10);
+        const dateObj = new Date(dateOnly + 'T12:00:00');
+        const dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
+        const isSunday = dayOfWeek === 0;
+        const holidays = this.getHolidays ? this.getHolidays() : [];
+        const holidayRec = holidays.find(h => (typeof h === 'string' ? h : h.date) === dateOnly);
+        let isHoliday = false;
+        let holidayName = '';
+        if (holidayRec) {
+            const name = typeof holidayRec === 'string' ? '' : String(holidayRec.name || holidayRec.description || '').toLowerCase();
+            const type = typeof holidayRec === 'string' ? '' : String(holidayRec.type || '').toLowerCase();
+            const isNational = typeof holidayRec === 'string' ? true : holidayRec.isNationalHoliday !== false;
+            if (type !== 'cuti bersama' && !name.includes('cuti bersama') && isNational) {
+                isHoliday = true;
+                holidayName = typeof holidayRec === 'string' ? 'Libur Nasional' : (holidayRec.name || holidayRec.description || 'Libur Nasional');
+            }
+        }
+        const isCompanyDayoff = this.isCompanyDayoff ? this.isCompanyDayoff(dateOnly) : false;
+        const isRedDay = isSunday || isHoliday;
+        const isNonWorkingDay = isSunday || isHoliday || isCompanyDayoff;
+        let reason = '';
+        if (isSunday) reason = 'Hari Minggu';
+        else if (isHoliday) reason = holidayName;
+        else if (isCompanyDayoff) reason = 'Libur Perusahaan';
+        return { isNonWorkingDay, isSunday, isHoliday, isCompanyDayoff, isRedDay, reason };
+    },
+    calculateLatePenalty: function(clockInStr, shiftStartStr, baseSalary = 5000000, dateStr = null) {
+        if (dateStr) {
+            const calStatus = this.getDateCalendarStatus(dateStr);
+            if (calStatus.isNonWorkingDay) {
+                return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: `Bypass Penalti (${calStatus.reason})` };
+            }
+        }
+        if (!clockInStr || !shiftStartStr) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         const timePart = String(clockInStr).includes(' ') ? String(clockInStr).split(' ')[1] : String(clockInStr);
         const [inH, inM] = timePart.split(':').map(Number);
         const [shiftH, shiftM] = String(shiftStartStr).split(':').map(Number);
-        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        if (isNaN(inH) || isNaN(inM) || isNaN(shiftH) || isNaN(shiftM)) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Normal' };
         const inMinutes = inH * 60 + inM;
         const shiftMinutes = shiftH * 60 + shiftM;
-        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false };
+        if (inMinutes <= shiftMinutes) return { isLate: false, lateMinutes: 0, penalty: 0, tier: 0, isHalfDay: false, description: 'Tepat Waktu' };
         const lateMinutes = inMinutes - shiftMinutes;
-        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false };
-        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false };
-        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false };
+        if (lateMinutes <= 5) return { isLate: false, lateMinutes, penalty: 0, tier: 0, isHalfDay: false, description: 'Toleransi Grace Period (≤5 min)' };
+        else if (lateMinutes <= 60) return { isLate: true, lateMinutes, penalty: 10000, tier: 1, isHalfDay: false, description: 'Terlambat 6–60 min (Denda Rp 10.000)' };
+        else if (lateMinutes <= 120) return { isLate: true, lateMinutes, penalty: 20000, tier: 2, isHalfDay: false, description: 'Terlambat 61–120 min (Denda Rp 20.000)' };
         else {
             const dailySalary = (Number(baseSalary) || 5000000) / 25;
-            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3, isHalfDay: true };
+            return { isLate: true, lateMinutes, penalty: Math.round(0.5 * dailySalary), tier: 3, isHalfDay: true, description: 'Terlambat >2 Jam (Izin Setengah Hari)' };
         }
     },
     mockBatches: [],
@@ -329,6 +374,10 @@ describe('HR Workflow Verification', () => {
     });
 
     test('Universal Late Grace Period & Cross-Module Auto-Deduction Sync', () => {
+        Storage.getHolidays = () => [
+            { date: '2026-08-17', name: 'Hari Kemerdekaan RI', type: 'Libur Nasional', isNationalHoliday: true }
+        ];
+
         const baseSalary = 5000000;
         const shiftStart = '08:30';
 
@@ -359,6 +408,29 @@ describe('HR Workflow Verification', () => {
         expect(t3.tier).toBe(3);
         expect(t3.isHalfDay).toBe(true);
         expect(t3.penalty).toBe(100000); // 0.5 * (5,000,000 / 25) = 100,000
+
+        // 5. Sunday Attendance (23 August 2026): Clock in at 11:30 -> Bypasses all late penalties completely
+        const sundayRes = Storage.calculateLatePenalty('11:30:00', shiftStart, baseSalary, '2026-08-23');
+        expect(sundayRes.isLate).toBe(false);
+        expect(sundayRes.penalty).toBe(0);
+        expect(sundayRes.tier).toBe(0);
+        expect(sundayRes.isHalfDay).toBe(false);
+        expect(sundayRes.description).toContain('Bypass Penalti');
+
+        // 6. National Holiday Attendance (17 August 2026): Clock in at 10:00 -> Bypasses all late penalties completely
+        const holidayRes = Storage.calculateLatePenalty('10:00:00', shiftStart, baseSalary, '2026-08-17');
+        expect(holidayRes.isLate).toBe(false);
+        expect(holidayRes.penalty).toBe(0);
+        expect(holidayRes.tier).toBe(0);
+        expect(holidayRes.isHalfDay).toBe(false);
+        expect(holidayRes.description).toContain('Bypass Penalti');
+
+        // 7. Regular Working Day (24 August 2026, Monday): Clock in at 11:00 -> Tier 3 Half-Day penalty applies
+        const regularRes = Storage.calculateLatePenalty('11:00:00', shiftStart, baseSalary, '2026-08-24');
+        expect(regularRes.isLate).toBe(true);
+        expect(regularRes.tier).toBe(3);
+        expect(regularRes.isHalfDay).toBe(true);
+        expect(regularRes.penalty).toBe(100000);
     });
 
     test('Security Shift Hours & Automated Overtime/Allowance Integration (Lunch + Dinner on 12h Shifts)', () => {
