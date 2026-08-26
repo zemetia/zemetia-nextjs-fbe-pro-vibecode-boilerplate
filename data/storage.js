@@ -4383,6 +4383,45 @@ const Storage = {
         return employees.filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive');
     },
 
+    /**
+     * Employee Lifecycle Helper: Check if an employee is eligible / active for a specific date range or cut-off period
+     * @param {object} emp - Employee object
+     * @param {string} startDateStr - YYYY-MM-DD
+     * @param {string} endDateStr - YYYY-MM-DD
+     * @returns {boolean}
+     */
+    isEmployeeActiveInPeriod(emp, startDateStr, endDateStr) {
+        if (!emp) return false;
+        
+        // 1. Pre-Join Check: Employee must have joined on or before the period end date
+        const joinDate = emp.start_date || emp.join_date;
+        if (joinDate && endDateStr && joinDate > endDateStr) {
+            return false;
+        }
+
+        const isInactive = emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive';
+        const resDate = emp.resignation_date || emp.resign_date;
+
+        // 2. Active Employee
+        if (!isInactive) {
+            return true;
+        }
+
+        // 3. Inactive / Resigned Employee:
+        // Include ONLY if resignation date falls within or after period start date (e.g. resigned mid-period)
+        if (isInactive && resDate && startDateStr && resDate >= startDateStr) {
+            return true;
+        }
+
+        // If resigned before the start of the period, completely exclude
+        return false;
+    },
+
+    getEligibleEmployeesForPeriod(startDateStr, endDateStr) {
+        const employees = this.getEmployees();
+        return employees.filter(emp => this.isEmployeeActiveInPeriod(emp, startDateStr, endDateStr));
+    },
+
     async deleteEmployee(id, resignationDate = null, reason = 'Resign') {
         const employees = this.getEmployees();
         const index = employees.findIndex(e => String(e.id) === String(id));

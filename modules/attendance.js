@@ -119,6 +119,10 @@ const Attendance = {
     const startStr = cutoffStartStr || this.getPeriodCutoffRange(this.activePeriod).startDateStr;
     const endStr = cutoffEndStr || this.getPeriodCutoffRange(this.activePeriod).endDateStr;
 
+    if (Storage.getEligibleEmployeesForPeriod) {
+      return Storage.getEligibleEmployeesForPeriod(startStr, endStr);
+    }
+
     return this.employees.filter(emp => {
       const isPastOrCurrentJoin = !emp.start_date || emp.start_date <= endStr;
       if (!isPastOrCurrentJoin) return false;
@@ -138,7 +142,10 @@ const Attendance = {
   },
 
   getFilteredRecords() {
-    return this.records.filter(r => r.period === this.activePeriod);
+    const cutoff = this.getPeriodCutoffRange(this.activePeriod);
+    const eligible = this.getEligibleEmployees(cutoff.startDateStr, cutoff.endDateStr);
+    const eligibleNiks = new Set(eligible.map(e => String(e.nik)));
+    return this.records.filter(r => r.period === this.activePeriod && eligibleNiks.has(String(r.nik)));
   },
 
   renderTable() {
@@ -1344,17 +1351,45 @@ const Attendance = {
           }
         }
 
-        // Absence & Surplus Calculation: dynamic Mon-Sat target days for Security or scheduledWorkDays for office staff
+        // Absence & Surplus Calculation: dynamic Mon-Sat target days for Security or scheduledWorkDays for office staff (capped to active employment window)
+        const startDate = employee.start_date || employee.join_date;
+        const resDate = employee.resignation_date || employee.resign_date;
+        const isInactive = employee.status === 'NON-AKTIF' || employee.status === 'non_active' || employee.status === 'inactive';
+
         let securityTargetDays = 26;
         if (cutoffInfo && cutoffInfo.dates) {
-            securityTargetDays = cutoffInfo.dates.filter(d => new Date(d + 'T12:00:00').getDay() !== 0).length || 26;
+            securityTargetDays = cutoffInfo.dates.filter(d => {
+                if (new Date(d + 'T12:00:00').getDay() === 0) return false;
+                if (startDate && d < startDate) return false;
+                if (isInactive && resDate && d > resDate) return false;
+                return true;
+            }).length || 26;
         }
 
-        const scheduledWorkDays = isSecurity ? securityTargetDays : (
-          Object.keys(empSchedule).length + Object.keys(deptSchedule).length > 0
-            ? Object.keys({ ...deptSchedule, ...empSchedule }).length
-            : 0
-        );
+        let scheduledWorkDays = 0;
+        if (isSecurity) {
+            scheduledWorkDays = securityTargetDays;
+        } else {
+            const combinedSchedule = { ...deptSchedule, ...empSchedule };
+            const scheduleDates = Object.keys(combinedSchedule);
+            if (scheduleDates.length > 0) {
+                scheduledWorkDays = scheduleDates.filter(dayStr => {
+                    const matchedDate = cutoffInfo.dates ? cutoffInfo.dates.find(d => d.endsWith(`-${dayStr.padStart(2, '0')}`)) : null;
+                    if (matchedDate) {
+                        if (startDate && matchedDate < startDate) return false;
+                        if (isInactive && resDate && matchedDate > resDate) return false;
+                    }
+                    return true;
+                }).length;
+            } else if (cutoffInfo && cutoffInfo.dates) {
+                scheduledWorkDays = cutoffInfo.dates.filter(d => {
+                    if (new Date(d + 'T12:00:00').getDay() === 0) return false;
+                    if (startDate && d < startDate) return false;
+                    if (isInactive && resDate && d > resDate) return false;
+                    return true;
+                }).length;
+            }
+        }
         const absenceDays = Math.max(0, (isSecurity ? securityTargetDays : scheduledWorkDays) - workDays - missingTaps);
 
         if (workDays > 0 || missingTaps > 0 || lateCount > 0 || halfDayIzinCount > 0 || securityOvertimeHours > 0) {

@@ -20,7 +20,7 @@ const ProductionLog = {
     },
 
     async loadData() {
-        this.employees = Storage.getEmployees().filter(e => e.status === 'active');
+        this.employees = Storage.getActiveEmployees ? Storage.getActiveEmployees() : (Storage.getEmployees ? Storage.getEmployees().filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive') : []);
         this.logs = Storage.getProductionLogs();
     },
 

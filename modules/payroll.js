@@ -638,13 +638,27 @@ const Payroll = {
   },
 
   getPeriodPayroll() {
-    let list = this.payrollRecords.filter(p => p.period === this.period);
+    const dates = this.getPeriodDates(this.period);
+    const startDateStr = dates.startDate;
+    const endDateStr = dates.endDate;
+
+    let list = this.payrollRecords.filter(p => {
+      if (p.period !== this.period) return false;
+      const emp = this.employees.find(e => String(e.nik) === String(p.nik));
+      if (emp && Storage.isEmployeeActiveInPeriod) {
+        if (!Storage.isEmployeeActiveInPeriod(emp, startDateStr, endDateStr)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
     if (this.selectedDept) {
       list = list.filter(p => p.department === this.selectedDept);
     }
     if (this.searchQuery) {
       const q = this.searchQuery.toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q) || String(p.nik).includes(q));
+      list = list.filter(p => (p.name || '').toLowerCase().includes(q) || String(p.nik || '').includes(q));
     }
     return list;
   },
@@ -1405,7 +1419,12 @@ const Payroll = {
       }
       
       // Specification 1 & 2: Fixed Monthly Base Salary & Leave Hierarchy / Security Target Benchmark
-      const targetWorkingDays = this.countWorkingDaysMonSat(startDateStr, endDateStr) || 26;
+      let targetWorkingDays = this.countWorkingDaysMonSat(startDateStr, endDateStr) || 26;
+      if (isNewHire) {
+          targetWorkingDays = Math.max(0, targetWorkingDays - daysBeforeJoin);
+      } else if (isLeaver) {
+          targetWorkingDays = daysWorkedBeforeResign;
+      }
 
       let totalAbsenceDays = isSecurity 
         ? Math.max(0, targetWorkingDays - (atd.work_days || 0)) 
@@ -1715,7 +1734,15 @@ const Payroll = {
 
   renderTable() {
     const list = this.getPeriodPayroll();
-    const allPeriodRecords = this.payrollRecords.filter(p => p.period === this.period);
+    const dates = this.getPeriodDates(this.period);
+    const allPeriodRecords = this.payrollRecords.filter(p => {
+      if (p.period !== this.period) return false;
+      const emp = this.employees.find(e => String(e.nik) === String(p.nik));
+      if (emp && Storage.isEmployeeActiveInPeriod && !Storage.isEmployeeActiveInPeriod(emp, dates.startDate, dates.endDate)) {
+        return false;
+      }
+      return true;
+    });
     if (allPeriodRecords.length === 0) {
       return '<p class="text-center text-gray">Klik "Generate Payroll" atau "Import Excel" untuk memuat gaji periode ini.</p>';
     }
@@ -1727,8 +1754,6 @@ const Payroll = {
     const allTotals = this.calculateTotals(allPeriodRecords);
     const filteredTotals = this.calculateTotals(list);
     const isFiltered = list.length !== allPeriodRecords.length;
-
-    const dates = this.getPeriodDates(this.period);
     const workingDays = this.countWorkingDaysMonSat(dates.startDate, dates.endDate);
 
     // Scan for active dynamic components

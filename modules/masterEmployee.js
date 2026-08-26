@@ -184,11 +184,21 @@ const MasterEmployee = {
                  📥 Export e-Dabu BPJS Kes (.xlsx)
                </button>
              ` : ''}
+              <div class="flex align-center gap-2" style="background: var(--bg-secondary); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <select id="emp-export-filter" class="form-input form-input-sm" style="font-size: 0.8rem; padding: 3px 6px; min-width: 180px;" onchange="MasterEmployee.updateExportCounter()">
+                  <option value="active" selected>🟢 Hanya Karyawan Aktif</option>
+                  <option value="inactive">📂 Hanya Non-Aktif / Arsip</option>
+                  <option value="all">👥 Semua (Aktif & Non-Aktif)</option>
+                </select>
+                <span id="emp-export-count" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; font-weight: 600;">
+                  Total: ${this.employees.filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive').length} Karyawan
+                </span>
+                <button class="btn btn-sm btn-success" onclick="MasterEmployee.downloadDatabase()" title="Download Data Excel Sesuai Filter">
+                  📥 Download Data Excel
+                </button>
+              </div>
              <button class="btn btn-info" onclick="MasterEmployee.downloadTemplate()">
                📄 Unduh Template Excel
-             </button>
-             <button class="btn btn-success" onclick="MasterEmployee.downloadDatabase()">
-               📥 Download Data Excel
              </button>
              <button class="btn btn-secondary" onclick="document.getElementById('import-emp-file').click()">
                📥 Import Excel
@@ -1489,16 +1499,52 @@ const MasterEmployee = {
     }
   },
 
-  downloadDatabase() {
+  updateExportCounter() {
+    const filterEl = document.getElementById('emp-export-filter');
+    const countEl = document.getElementById('emp-export-count');
+    if (!filterEl || !countEl) return;
+    
+    const filterVal = filterEl.value;
+    const activeCount = this.employees.filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive').length;
+    const inactiveCount = this.employees.filter(e => e.status === 'NON-AKTIF' || e.status === 'non_active' || e.status === 'inactive').length;
+    const totalCount = this.employees.length;
+
+    if (filterVal === 'active') {
+      countEl.textContent = `Total: ${activeCount} Karyawan Aktif`;
+    } else if (filterVal === 'inactive') {
+      countEl.textContent = `Total: ${inactiveCount} Karyawan Non-Aktif / Arsip`;
+    } else {
+      countEl.textContent = `Total: ${totalCount} Karyawan (Semua)`;
+    }
+  },
+
+  downloadDatabase(overrideFilter = null) {
     try {
       if (typeof XLSX === 'undefined') {
-        alert('SheetJS (XLSX) library not found. Please refresh the page.');
+        alert('Library XLSX belum termuat. Mohon refresh halaman.');
         return;
+      }
+
+      const filterEl = document.getElementById('emp-export-filter');
+      const filterVal = overrideFilter || (filterEl ? filterEl.value : 'active');
+
+      let exportList = this.employees;
+      let filterLabel = 'Semua Karyawan (Aktif & Non-Aktif)';
+      let fileSuffix = 'Semua';
+
+      if (filterVal === 'active') {
+        exportList = this.employees.filter(e => e.status !== 'NON-AKTIF' && e.status !== 'non_active' && e.status !== 'inactive');
+        filterLabel = 'Hanya Karyawan Aktif';
+        fileSuffix = 'Aktif';
+      } else if (filterVal === 'inactive') {
+        exportList = this.employees.filter(e => e.status === 'NON-AKTIF' || e.status === 'non_active' || e.status === 'inactive');
+        filterLabel = 'Hanya Karyawan Non-Aktif / Arsip';
+        fileSuffix = 'NonAktif_Arsip';
       }
 
       const headers = [
         ['Master Karyawan Database - PT. Golden Alura'],
-        ['Data seluruh karyawan yang terdaftar.'],
+        [`Filter: ${filterLabel} | Total Data: ${exportList.length} Karyawan | Tanggal Unduh: ${new Date().toLocaleDateString('id-ID')}`],
         [
           'Employee ID', 'Full Name', 'Organization', 'Job Position', 'Job Level', 'Join Date', 'Resign Date', 
           'Status Employee', 'Email', 'Birth Date', 'Birth Place', 'Residential Address', 'NPWP', 
@@ -1508,7 +1554,7 @@ const MasterEmployee = {
         ]
       ];
 
-      const rows = this.employees.map(emp => {
+      const rows = exportList.map(emp => {
           const dept = this.departments.find(d => d.code === emp.department);
           return [
               emp.nik || '', emp.name || '', dept ? dept.name : (emp.department || ''), emp.position || '',
@@ -1533,7 +1579,7 @@ const MasterEmployee = {
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Database Karyawan");
-      XLSX.writeFile(wb, "Database_Karyawan.xlsx");
+      XLSX.writeFile(wb, `Database_Karyawan_${fileSuffix}.xlsx`);
     } catch (e) {
       console.error(e);
       alert('Gagal mendownload data');

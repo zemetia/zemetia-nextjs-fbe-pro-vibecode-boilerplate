@@ -69,6 +69,21 @@ const WorkCalendar = {
         return type === 'cuti bersama' || name.includes('cuti bersama') || h.isNationalHoliday === false;
     },
 
+    
+    isEmployeeResignedOnDate(target, dateFullStr) {
+        if (typeof target === 'string' && target.startsWith('EMP:')) {
+            const empId = target.replace('EMP:', '');
+            const employees = Storage.getEmployees ? Storage.getEmployees() : [];
+            const emp = employees.find(e => String(e.id) === String(empId) || String(e.nik) === String(empId));
+            if (emp && (emp.status === 'NON-AKTIF' || emp.status === 'non_active' || emp.status === 'inactive')) {
+                if (!emp.resignation_date || dateFullStr > emp.resignation_date) {
+                    return true; // Resigned!
+                }
+            }
+        }
+        return false;
+    },
+
     init() {
         const now = new Date();
         this.currentYearMonth = this.currentYearMonth || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -320,6 +335,11 @@ const WorkCalendar = {
                 else if (dayFilter === 'sunday' && dow === 0) matchesFilter = true;
 
                 if (matchesFilter) {
+                    // Suppress shift generation post resignation date
+                    if (this.isEmployeeResignedOnDate(target, dateFullStr)) {
+                        delete this.calendarData[periodKey]?.[target]?.[dStr];
+                        continue;
+                    }
                     // OFFICIAL NATIONAL HOLIDAY GUARD:
                     // Official National Holidays must not be overwritten with working shifts.
                     // (Note: Cuti Bersama dates are treated as normal working days so shifts CAN be assigned to them)
@@ -407,12 +427,15 @@ const WorkCalendar = {
                                 </optgroup>
                             </select>
                         </div>
-                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0;">
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="WorkCalendar.showBulkModal()" style="white-space: nowrap;" ${isHistorical ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                                 ⚡ Atur Massal (Bulk)
                             </button>
                             <button class="btn btn-secondary" onclick="WorkCalendar.rolloverPreviousMonth(WorkCalendar.currentYearMonth)" title="Salin otomatis jadwal shift rutin dari bulan lalu" style="white-space: nowrap;" ${isHistorical ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                                 📋 Salin Jadwal Bulan Lalu
+                            </button>
+                            <button class="btn" onclick="WorkCalendar.showCompanyDayoffModal()" title="Tetapkan hari kerja yang diliburkan mendadak karena pemadaman/musibah" style="white-space: nowrap; background: #f59e0b; color: #18181b; font-weight: 600;">
+                                ⚡ Libur Khusus (Day-Off Perusahaan)
                             </button>
                         </div>
                     </div>
@@ -430,7 +453,7 @@ const WorkCalendar = {
                 <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <h3>Kalender ${this.currentTarget.startsWith('DEPT:') ? 'Departemen' : 'Karyawan'}: ${this.currentTarget.split(':')[1]}</h3>
                     <div style="font-size: 0.78rem; color: var(--text-secondary);">
-                        ${isHistorical ? '🔒 Data bulan historis ini bersifat Read-Only' : '💡 Libur Nasional otomatis dikunci. Cuti Bersama berlaku sebagai <strong>Hari Kerja Normal</strong> (Pengajuan libur via Entry Ijin).'}
+                        ${isHistorical ? '🔒 Data bulan historis ini bersifat Read-Only' : '💡 Libur Nasional & Libur Khusus Perusahaan (Day-Off) dihitung sebagai <strong>Paid Non-Working Day</strong>.'}
                     </div>
                 </div>
                 <div class="card-body">
@@ -487,12 +510,14 @@ const WorkCalendar = {
 
             const isNationalHoliday = this.isOfficialNationalHoliday(dateFullStr);
             const isCutiBersamaDate = this.isCutiBersama(dateFullStr);
+            const isCompanyDayoffDate = Storage.isCompanyDayoff ? Storage.isCompanyDayoff(dateFullStr) : false;
+            const companyDayoffRec = isCompanyDayoffDate && Storage.getCompanyDayoffRecord ? Storage.getCompanyDayoffRecord(dateFullStr) : null;
             const holidayRec = this.getHolidayRecord(dateFullStr);
             const isRedDay = isWeekend || isNationalHoliday;
 
             const cardBg = isNationalHoliday
                 ? 'background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.5);'
-                : (isWeekend ? 'background: rgba(239, 68, 68, 0.05);' : (isCutiBersamaDate ? 'background: rgba(59, 130, 246, 0.04);' : ''));
+                : (isCompanyDayoffDate ? 'background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5);' : (isWeekend ? 'background: rgba(239, 68, 68, 0.05);' : (isCutiBersamaDate ? 'background: rgba(59, 130, 246, 0.04);' : '')));
 
             const isBlockedCell = isHistorical || isNationalHoliday;
             const cursorStyle = isBlockedCell ? 'cursor: not-allowed; opacity: 0.9;' : 'cursor: pointer;';
@@ -505,19 +530,24 @@ const WorkCalendar = {
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: bold; font-size: 0.85rem; color: ${isRedDay ? '#ef4444' : 'inherit'};">${day}</span>
                         ${isNationalHoliday ? `<span style="font-size: 9px; background: #ef4444; color: white; padding: 1px 5px; border-radius: 3px; font-weight: bold;" title="${holidayRec?.name || 'Libur Nasional'}">🇮🇩 Libur</span>` : ''}
-                        ${isCutiBersamaDate ? `<span style="font-size: 9px; background: #3b82f6; color: white; padding: 1px 4px; border-radius: 3px;" title="${holidayRec?.name || 'Cuti Bersama (Kerja Normal)'}">CB (Kerja)</span>` : ''}
+                        ${isCompanyDayoffDate ? `<span style="font-size: 9px; background: #f59e0b; color: #78350f; font-weight: bold; padding: 1px 4px; border-radius: 3px;" title="${companyDayoffRec?.name}: ${companyDayoffRec?.reason}">⚡ Dayoff</span>` : ''}
+                        ${isCutiBersamaDate && !isCompanyDayoffDate ? `<span style="font-size: 9px; background: #3b82f6; color: white; padding: 1px 4px; border-radius: 3px;" title="${holidayRec?.name || 'Cuti Bersama (Kerja Normal)'}">CB (Kerja)</span>` : ''}
                     </div>
                     ${isNationalHoliday ? `
                         <div style="color: #ef4444; font-weight: bold; border-radius: 4px; padding: 4px 5px; margin-top: 4px; font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(239, 68, 68, 0.18);">
                             🇮🇩 ${holidayRec?.name || 'Libur Nasional'}
                         </div>
+                    ` : (isCompanyDayoffDate ? `
+                        <div style="color: #d97706; font-weight: bold; border-radius: 4px; padding: 3px 4px; margin-top: 4px; font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(245, 158, 11, 0.2);">
+                            ⚡ ${companyDayoffRec?.name || 'Libur Khusus (Paid)'}
+                        </div>
                     ` : (shift ? `
                         <div style="background: var(--color-primary); color: white; border-radius: 4px;
-                                    padding: 3px 4px; margin-top: 4px; font-size: 0.7rem;
-                                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                     padding: 3px 4px; margin-top: 4px; font-size: 0.7rem;
+                                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${shift.name}<br>${shift.startTime}-${shift.endTime}
                         </div>
-                    ` : `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px;">(Libur/Default)</div>`)}
+                    ` : `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px;">(Libur/Default)</div>`))}
                 </div>
             `;
         }
@@ -832,7 +862,125 @@ const WorkCalendar = {
 
         document.getElementById('bulk-assign-modal')?.remove();
         await this.bulkAssignShift(targets, realShiftId, startDate, endDate, mode);
+    },
+
+    // ─── Company Emergency Day-off Management ───
+    showCompanyDayoffModal() {
+        const modalId = 'company-dayoff-modal';
+        let modal = document.getElementById(modalId);
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal-overlay hidden';
+            document.body.appendChild(modal);
+        }
+
+        const currentMonthDayoffs = Storage.getCompanyDayoffs ? Storage.getCompanyDayoffs().filter(d => d.date && d.date.startsWith(this.currentYearMonth)) : [];
+        const today = new Date().toISOString().split('T')[0];
+
+        modal.innerHTML = `
+            <div class="modal" style="max-width: 580px; background: #181B22; border: 1px solid #374151; border-radius: 12px; color: white;">
+                <div class="modal-header" style="background: transparent; border-bottom: 1px solid #374151; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 class="modal-title" style="color: #f59e0b; font-size: 18px; font-weight: 600; margin: 0;">⚡ Libur Khusus Perusahaan (Emergency Day-Off)</h3>
+                    <button class="modal-close" onclick="WorkCalendar.closeCompanyDayoffModal()" style="color: #9ca3af; background: none; border: none; font-size: 24px; cursor: pointer; line-height: 1;">×</button>
+                </div>
+                <div class="modal-body" style="padding: 20px;">
+                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; padding: 10px 14px; border-radius: 8px; font-size: 12px; line-height: 1.5; margin-bottom: 16px;">
+                        <strong>📌 Ketentuan Libur Khusus / Day-Off Perusahaan:</strong><br>
+                        • Digunakan jika perusahaan meliburkan hari kerja secara mendadak/insidental (misal: <strong>Pemadaman Listrik PLN, Bencana/Banjir, Keputusan Direksi</strong>).<br>
+                        • Hari yang diliburkan dihitung sebagai <strong>Hari Libur Berbayar (Paid Non-Working Day)</strong>, tidak memotong jatah cuti tahunan, dan tidak dianggap alpa pada Payroll.
+                    </div>
+
+                    <form id="formCompanyDayoff" onsubmit="event.preventDefault(); WorkCalendar.submitCompanyDayoffForm();">
+                        <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                            <div class="form-group">
+                                <label class="block text-xs font-medium text-gray-400 mb-1" style="display: block; font-size: 12px; color: #9ca3af; margin-bottom: 4px;">TANGGAL LIBUR KHUSUS *</label>
+                                <input type="date" id="cdo-date" class="form-input" style="width: 100%; background: #212631; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; color: white; font-size: 14px;" value="${today}" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="block text-xs font-medium text-gray-400 mb-1" style="display: block; font-size: 12px; color: #9ca3af; margin-bottom: 4px;">STATUS PEMBAYARAN GAJI</label>
+                                <select id="cdo-paid" class="form-select" style="width: 100%; background: #212631; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; color: white; font-size: 14px;">
+                                    <option value="true" selected>Gaji Dibayar Penuh (Paid Day-Off)</option>
+                                    <option value="false">Tidak Dibayar (Unpaid Day-Off)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3" style="margin-bottom: 14px;">
+                            <label class="block text-xs font-medium text-gray-400 mb-1" style="display: block; font-size: 12px; color: #9ca3af; margin-bottom: 4px;">JUDUL / NAMA HARI LIBUR *</label>
+                            <input type="text" id="cdo-name" class="form-input" style="width: 100%; background: #212631; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; color: white; font-size: 14px;" placeholder="Contoh: Pemadaman Listrik PLN Pabrik" required>
+                        </div>
+
+                        <div class="form-group mb-4" style="margin-bottom: 16px;">
+                            <label class="block text-xs font-medium text-gray-400 mb-1" style="display: block; font-size: 12px; color: #9ca3af; margin-bottom: 4px;">ALASAN / CATATAN KHUSUS *</label>
+                            <textarea id="cdo-reason" rows="2" class="form-input" style="width: 100%; background: #212631; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; color: white; font-size: 13px;" placeholder="Tuliskan penyebab atau dasar instruksi libur operasional pabrik..." required></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 20px;">
+                            <button type="submit" class="btn btn-warning" style="padding: 8px 20px; background: #f59e0b; color: #18181b; font-weight: bold; border: none; border-radius: 8px; cursor: pointer;">
+                                ➕ Tetapkan Libur Khusus
+                            </button>
+                        </div>
+                    </form>
+
+                    <div style="border-top: 1px solid #374151; padding-top: 14px;">
+                        <h4 style="font-size: 13px; font-weight: 600; color: #d1d5db; margin-bottom: 8px;">Daftar Libur Khusus Bulan Ini (${this.currentYearMonth}):</h4>
+                        ${currentMonthDayoffs.length === 0 ? '<p style="font-size: 12px; color: #6b7280;">Belum ada hari libur khusus yang ditetapkan pada bulan ini.</p>' : `
+                            <div style="max-height: 140px; overflow-y: auto;">
+                                ${currentMonthDayoffs.map(d => `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: #212631; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 12px;">
+                                        <div>
+                                            <strong style="color: #fbbf24;">${d.date}</strong> - <span>${d.name}</span><br>
+                                            <small style="color: #9ca3af;">${d.reason} (${d.isPaid ? 'Paid' : 'Unpaid'})</small>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="WorkCalendar.deleteCompanyDayoff('${d.id}')" style="padding: 3px 8px; font-size: 11px;">Hapus</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.classList.remove('hidden');
+    },
+
+    closeCompanyDayoffModal() {
+        const modal = document.getElementById('company-dayoff-modal');
+        if (modal) modal.classList.add('hidden');
+    },
+
+    submitCompanyDayoffForm() {
+        const date = document.getElementById('cdo-date')?.value;
+        const name = document.getElementById('cdo-name')?.value;
+        const reason = document.getElementById('cdo-reason')?.value;
+        const isPaid = document.getElementById('cdo-paid')?.value === 'true';
+
+        if (!date || !name || !reason) {
+            alert('Lengkapi seluruh form sebelum menyimpan.');
+            return;
+        }
+
+        if (Storage.addCompanyDayoff) {
+            Storage.addCompanyDayoff({ date, name, reason, isPaid });
+        }
+
+        alert(`Hari libur khusus (${name}) pada tanggal ${date} berhasil ditetapkan.`);
+        this.closeCompanyDayoffModal();
+        this.render();
+    },
+
+    deleteCompanyDayoff(id) {
+        if (!confirm('Hapus penetapan libur khusus perusahaan ini?')) return;
+        if (Storage.deleteCompanyDayoff) {
+            Storage.deleteCompanyDayoff(id);
+        }
+        alert('Hari libur khusus berhasil dihapus.');
+        this.closeCompanyDayoffModal();
+        this.render();
     }
 };
 
 window.WorkCalendar = WorkCalendar;
+

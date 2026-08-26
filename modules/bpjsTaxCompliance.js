@@ -345,6 +345,8 @@ const BPJSTaxCompliance = {
             name: emp.name,
             department: emp.department || 'PROD',
             position: emp.position || '-',
+            status: emp.status || 'AKTIF',
+            resignation_date: emp.resignation_date || emp.resign_date || null,
             ptkp,
             npwp: emp.npwp || '-',
             isBpjsHealthEnabled,
@@ -1063,20 +1065,8 @@ const BPJSTaxCompliance = {
     if (existing) existing.remove();
   },
 
-  exportToExcel() {
-    if (!this.reconciliationData || this.reconciliationData.length === 0) {
-      alert('Tidak ada data rekonsiliasi untuk diexport.');
-      return;
-    }
-
-    if (typeof XLSX === 'undefined') {
-      alert('Library XLSX belum termuat. Mohon refresh halaman.');
-      return;
-    }
-
-    const t = this.summaryTotals || {};
+  _buildSheetData(records, sheetTitle) {
     const isLocked = this.isPeriodLocked();
-
     const headers = [
       'No', 'NIK', 'Nama Pegawai', 'Departemen', 'Jabatan',
       'Upah Dasar Kes', 'BPJS Kes Emp (1%)', 'BPJS Kes Comp (4%)', 'Total BPJS Kes (5%)',
@@ -1086,13 +1076,37 @@ const BPJSTaxCompliance = {
     ];
 
     const aoaData = [
-      ['PT GOLDEN ALURA - LAPORAN REKONSILIASI BPJS & PPH 21 (COMPLIANCE)'],
-      [`Periode: ${this.activePeriod}`, `Status: ${isLocked ? 'TERKUNCI (LOCKED)' : 'DRAFT (OPEN)'}`, `Tanggal Cetak: ${new Date().toLocaleString('id-ID')}`],
+      [`PT GOLDEN ALURA - LAPORAN REKONSILIASI BPJS & PPH 21 (${sheetTitle.toUpperCase()})`],
+      [`Periode: ${this.activePeriod}`, `Status: ${isLocked ? 'TERKUNCI (LOCKED)' : 'DRAFT (OPEN)'}`, `Total Karyawan: ${records.length}`, `Tanggal Cetak: ${new Date().toLocaleString('id-ID')}`],
       [],
       headers
     ];
 
-    this.reconciliationData.forEach((r, idx) => {
+    const totals = {
+      bpjsKesBase: 0, kesEmp: 0, kesComp: 0, kesSubtotal: 0,
+      bpjsTkBase: 0, jhtEmp: 0, jhtComp: 0, jkkComp: 0, jkmComp: 0, tkSubtotal: 0,
+      totalAllowance: 0, taxableGross: 0, pph21: 0,
+      totalEmpDeduction: 0, totalCompContribution: 0, grandTotalRemittance: 0
+    };
+
+    records.forEach((r, idx) => {
+      totals.bpjsKesBase += (r.bpjsKesBase || 0);
+      totals.kesEmp += (r.kesEmp || 0);
+      totals.kesComp += (r.kesComp || 0);
+      totals.kesSubtotal += (r.kesSubtotal || 0);
+      totals.bpjsTkBase += (r.bpjsTkBase || 0);
+      totals.jhtEmp += (r.jhtEmp || 0);
+      totals.jhtComp += (r.jhtComp || 0);
+      totals.jkkComp += (r.jkkComp || 0);
+      totals.jkmComp += (r.jkmComp || 0);
+      totals.tkSubtotal += (r.tkSubtotal || 0);
+      totals.totalAllowance += (r.totalAllowance || 0);
+      totals.taxableGross += (r.taxableGross || 0);
+      totals.pph21 += (r.pph21 || 0);
+      totals.totalEmpDeduction += (r.totalEmpDeduction || 0);
+      totals.totalCompContribution += (r.totalCompContribution || 0);
+      totals.grandTotalRemittance += (r.grandTotalRemittance || 0);
+
       aoaData.push([
         idx + 1,
         r.nik,
@@ -1128,29 +1142,28 @@ const BPJSTaxCompliance = {
       '',
       '',
       '',
-      t.bpjsKesBase || 0,
-      t.kesEmp || 0,
-      t.kesComp || 0,
-      t.kesSubtotal || 0,
-      t.bpjsTkBase || 0,
-      t.jhtEmp || 0,
-      t.jhtComp || 0,
-      t.jkkComp || 0,
-      t.jkmComp || 0,
-      t.tkSubtotal || 0,
+      totals.bpjsKesBase,
+      totals.kesEmp,
+      totals.kesComp,
+      totals.kesSubtotal,
+      totals.bpjsTkBase,
+      totals.jhtEmp,
+      totals.jhtComp,
+      totals.jkkComp,
+      totals.jkmComp,
+      totals.tkSubtotal,
+      totals.totalAllowance,
       '',
-      t.taxableGross || 0,
+      totals.taxableGross,
       '',
       '',
-      t.pph21 || 0,
-      t.totalEmpDeduction || 0,
-      t.totalCompContribution || 0,
-      t.grandTotalRemittance || 0
+      totals.pph21,
+      totals.totalEmpDeduction,
+      totals.totalCompContribution,
+      totals.grandTotalRemittance
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet(aoaData);
-
-    // Auto-fit column widths
     const colWidths = headers.map((h, i) => {
       let maxLen = h.length;
       aoaData.forEach(row => {
@@ -1162,11 +1175,34 @@ const BPJSTaxCompliance = {
       return { wch: Math.min(maxLen + 3, 30) };
     });
     ws['!cols'] = colWidths;
+    return ws;
+  },
+
+  exportToExcel() {
+    if (!this.reconciliationData || this.reconciliationData.length === 0) {
+      alert('Tidak ada data rekonsiliasi untuk diexport.');
+      return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+      alert('Library XLSX belum termuat. Mohon refresh halaman.');
+      return;
+    }
+
+    const activeList = this.reconciliationData.filter(r => r.status !== 'NON-AKTIF' && r.status !== 'non_active' && r.status !== 'inactive' && !r.resignation_date);
+    const inactiveList = this.reconciliationData.filter(r => r.status === 'NON-AKTIF' || r.status === 'non_active' || r.status === 'inactive' || r.resignation_date);
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `BPJS_PPh_${this.activePeriod}`);
 
-    const fileName = `BPJS_PPh21_Reconciliation_${this.activePeriod}.xlsx`;
+    // Sheet 1: Karyawan Aktif
+    const wsActive = this._buildSheetData(activeList, 'Karyawan Aktif');
+    XLSX.utils.book_append_sheet(wb, wsActive, "Karyawan Aktif");
+
+    // Sheet 2: Karyawan Non-Aktif / Arsip
+    const wsInactive = this._buildSheetData(inactiveList, 'Karyawan Non-Aktif & Arsip');
+    XLSX.utils.book_append_sheet(wb, wsInactive, "Karyawan Non-Aktif");
+
+    const fileName = `Rekonsiliasi_BPJS_PPh21_${this.activePeriod}.xlsx`;
     XLSX.writeFile(wb, fileName);
   },
 
