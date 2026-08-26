@@ -805,81 +805,161 @@ const PDFExporter = {
     },
 
     // ==========================================
-    // 1. Export Sales Order
+    // 1. Export Sales Order (SO Ekspor & Domestik)
     // ==========================================
-    async exportSalesOrder(order, config) {
-        if (!window.jspdf || !window.jspdf.jsPDF) {
+    async exportSalesOrder(order, config = {}) {
+        const jsPDF = await this.ensureJsPdfLoaded();
+        if (!jsPDF) {
             console.error('jsPDF not loaded');
-            alert('PDF library not ready. Try refreshing the page.');
-            return;
+            if (typeof window !== 'undefined' && window.alert) alert('Pustaka PDF belum siap.');
+            return null;
         }
 
-        const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
         const pageWidth = doc.internal.pageSize.getWidth();
-        let y = 14;
+        const soNum = order.soNumber || order.id || 'SO-EXP-DRAFT';
 
-        doc.setFontSize(18);
-        doc.setFont(undefined, 'bold');
-        doc.text(config.companyName || 'GOLDEN ALURA', 14, y);
-        y += 6;
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        doc.text('SALES ORDER', 14, y);
-        y += 10;
+        let y = this.addTanOfficialHeader(
+            doc,
+            'EXPORT SALES ORDER & GOLD PRICE FIXING',
+            `No. Dokumen: ${soNum} | Kontrak Pesanan Penjualan Logam Mulia & Perhiasan`,
+            config
+        );
 
-        doc.setFontSize(10);
-        doc.text(`No. SO: ${order.soNumber || '-'}`, 14, y); y += 5;
-        doc.text(`Tanggal: ${new Date(order.soDate || order.orderDate).toLocaleDateString('id-ID')}`, 14, y); y += 5;
-        doc.text(`Customer: ${order.customerName || '-'}`, 14, y); y += 10;
+        const col1X = 14;
+        const col2X = pageWidth / 2 + 5;
+        const dateStr = order.date || order.soDate || order.orderDate || new Date().toISOString().split('T')[0];
 
-        const tableColumn = ["Item", "Kadar", "Qty (g)", "Unit Price (Rp)", "Discount", "Total (Rp)"];
+        doc.setFontSize(8.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('INFORMASI SALES ORDER & KONTRAK', col1X, y);
+        doc.text('BUYER / CUSTOMER & PERSYARATAN', col2X, y);
+        y += 4;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+
+        // Left Column
+        doc.text(`No. Sales Order : ${soNum}`, col1X, y);
+        doc.text(`Tanggal Kontrak : ${dateStr}`, col1X, y + 4.5);
+        doc.text(`No. PO Customer : ${order.customerPONumber || '-'}`, col1X, y + 9);
+        doc.text(`Target Kirim    : ${order.deliveryTargetDate || '-'}`, col1X, y + 13.5);
+        doc.text(`Status Pesanan  : ${order.status || 'FIXED / IN PRODUCTION'}`, col1X, y + 18);
+
+        // Right Column
+        doc.text(`Nama Buyer      : ${order.buyerName || order.customerName || '-'}`, col2X, y);
+        doc.text(`Negara / Wilayah: ${order.country || 'Overseas'}`, col2X, y + 4.5);
+        doc.text(`Syarat Bayar    : ${order.paymentTerms || 'NET 30 / LC at Sight'}`, col2X, y + 9);
+        doc.text(`Incoterms       : ${order.incoterms || 'FOB Jakarta Port'}`, col2X, y + 13.5);
+        const exRate = parseFloat(order.exchangeRate || 16250);
+        doc.text(`Mata Uang / Kurs: ${order.currency || 'USD'} (Kurs Acuan: Rp ${exRate.toLocaleString('id-ID')})`, col2X, y + 18);
+
+        y += 24;
+
+        // Table Rows
+        const isUSD = order.currency === 'USD' || order.pricePerGramUSD || order.totalUSD;
+        const tableColumn = isUSD
+            ? ["No", "Deskripsi Barang / Spesifikasi", "Karat / Kadar", "Berat (g)", "Harga Fixing (USD/g)", "Total (USD)"]
+            : ["No", "Deskripsi Barang / Spesifikasi", "Karat / Kadar", "Berat (g)", "Harga Satuan (Rp)", "Total (Rp)"];
         const tableRows = [];
-        let grandTotal = 0;
+        let grandTotalUSD = 0;
+        let grandTotalIDR = 0;
 
-        (order.items || []).forEach(item => {
-            const row = [
-                item.itemName || '-',
-                item.purity || '-',
-                (item.qty || 0).toLocaleString('id-ID'),
-                (item.unitPrice || 0).toLocaleString('id-ID'),
-                (item.discount || 0).toLocaleString('id-ID'),
-                (item.totalPrice || 0).toLocaleString('id-ID')
-            ];
-            tableRows.push(row);
-            grandTotal += (item.totalPrice || 0);
-        });
+        if (Array.isArray(order.items) && order.items.length > 0) {
+            order.items.forEach((item, idx) => {
+                const w = parseFloat(item.weightGrams || item.weight || item.qty || 0);
+                const p = parseFloat(item.pricePerGramUSD || item.unitPriceUSD || item.unitPrice || 0);
+                const t = parseFloat(item.totalUSD || item.totalPrice || (w * p));
+                tableRows.push([
+                    idx + 1,
+                    item.itemDescription || item.itemName || item.name || '-',
+                    item.karat ? `${item.karat} (${item.purity || '75'}%)` : (item.purity ? `${item.purity}%` : '-'),
+                    `${w.toFixed(2)} g`,
+                    isUSD ? `$ ${p.toFixed(2)}` : `Rp ${p.toLocaleString('id-ID')}`,
+                    isUSD ? `$ ${t.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `Rp ${t.toLocaleString('id-ID')}`
+                ]);
+                if (isUSD) grandTotalUSD += t;
+                else grandTotalIDR += t;
+            });
+        } else {
+            const w = parseFloat(order.weightGrams || order.weight || 0);
+            const pUSD = parseFloat(order.pricePerGramUSD || 0);
+            const pIDR = parseFloat(order.pricePerGramIDR || order.unitPrice || 0);
+            const tUSD = parseFloat(order.totalUSD || (w * pUSD));
+            const tIDR = parseFloat(order.totalIDR || order.totalAmount || (w * pIDR));
+            grandTotalUSD = tUSD;
+            grandTotalIDR = tIDR;
+
+            tableRows.push([
+                1,
+                order.itemDescription || order.itemName || 'Perhiasan Emas Ekspor / Logam Mulia',
+                order.karat ? `Karat ${order.karat}` : (order.purity ? `${order.purity}%` : '750 (18K)'),
+                `${w.toFixed(2)} g`,
+                isUSD ? `$ ${pUSD.toFixed(2)}` : `Rp ${pIDR.toLocaleString('id-ID')}`,
+                isUSD ? `$ ${tUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `Rp ${tIDR.toLocaleString('id-ID')}`
+            ]);
+        }
 
         doc.autoTable({
             startY: y,
             head: [tableColumn],
             body: tableRows,
             theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            styles: { fontSize: 9 },
+            headStyles: { fillColor: [212, 175, 55], textColor: 255, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 3 },
             columnStyles: {
-                2: { halign: 'right' },
-                3: { halign: 'right' },
+                0: { halign: 'center', cellWidth: 10 },
+                2: { halign: 'center' },
+                3: { halign: 'right', fontStyle: 'bold' },
                 4: { halign: 'right' },
-                5: { halign: 'right' }
+                5: { halign: 'right', fontStyle: 'bold' }
             }
         });
 
-        y = doc.lastAutoTable.finalY + 10;
-        
-        doc.setFont(undefined, 'bold');
-        doc.text(`Subtotal: Rp ${grandTotal.toLocaleString('id-ID')}`, pageWidth - 14, y, { align: 'right' }); y += 5;
-        doc.text(`PPN: Rp ${(order.ppnAmount || 0).toLocaleString('id-ID')}`, pageWidth - 14, y, { align: 'right' }); y += 5;
-        doc.text(`Grand Total: Rp ${(order.total || order.grandTotal || grandTotal + (order.ppnAmount||0)).toLocaleString('id-ID')}`, pageWidth - 14, y, { align: 'right' }); y += 15;
+        y = doc.lastAutoTable.finalY + 6;
 
-        doc.setFont(undefined, 'normal');
-        doc.text('Disetujui Oleh,', 14, y);
-        doc.text('Pelanggan,', pageWidth - 60, y);
-        y += 20;
-        doc.text('(____________________)', 14, y);
-        doc.text('(____________________)', pageWidth - 60, y);
+        // Summary Card
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(14, y, pageWidth - 28, 16, 1.5, 1.5, 'FD');
 
-        return this.finishAndOpenPdf(doc, `${order.soNumber || 'SO'}.pdf`);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8.5);
+        if (isUSD) {
+            doc.setTextColor(2, 132, 199);
+            doc.text(`TOTAL CONTRACT VALUE (USD): $ ${grandTotalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 18, y + 6);
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(100, 116, 139);
+            const equivIDR = grandTotalIDR > 0 ? grandTotalIDR : (grandTotalUSD * exRate);
+            doc.text(`Nilai Kesetaraan IDR: Rp ${equivIDR.toLocaleString('id-ID')} (Kurs Acuan: Rp ${exRate.toLocaleString('id-ID')}/USD) | Gold Price Fixed`, 18, y + 11.5);
+        } else {
+            doc.setTextColor(16, 185, 129);
+            doc.text(`TOTAL NILAI KONTRAK: Rp ${grandTotalIDR.toLocaleString('id-ID')}`, 18, y + 6);
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text('Status: Pesanan telah dikonfirmasi dan harga disepakati.', 18, y + 11.5);
+        }
+
+        y += 24;
+
+        // Signature
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(20, 20, 20);
+        doc.text('Customer / Buyer Overseas:', 40, y, { align: 'center' });
+        doc.text('PT. Triliun Anugrah Nusantara:', pageWidth - 45, y, { align: 'center' });
+
+        y += 18;
+        doc.setFont('Helvetica', 'bold');
+        doc.text(`( ${order.buyerName || order.customerName || 'Authorized Buyer'} )`, 40, y, { align: 'center' });
+        doc.text('( Direktur Utama / Marketing Ekspor )', pageWidth - 45, y, { align: 'center' });
+
+        this.addFooter(doc);
+        return this.finishAndOpenPdf(doc, `Sales-Order-${soNum}.pdf`);
     },
 
     // ==========================================
@@ -2369,9 +2449,18 @@ const PDFExporter = {
         doc.setFontSize(8);
         doc.setTextColor(50, 50, 50);
 
+        const bCode = voucher.bankAccountCode || voucher.accountCode || '1111-IDR';
+        const bName = voucher.bankAccountName || (
+            bCode === '1111-USD' ? 'Bank BCA Devisa USD' :
+            bCode === '1111-SGD' ? 'Bank BCA Devisa SGD' :
+            bCode === '1110' ? 'Kas Kecil / Tunai' :
+            bCode === '1125' ? 'Bank BCA USD (Ekspor)' :
+            'Bank BCA IDR Operasional'
+        );
+
         doc.text(`No. Voucher    : ${vNum}`, col1X, y);
         doc.text(`Tanggal Cair   : ${dateStr}`, col1X, y + 4.5);
-        doc.text(`Akun Sumber    : ${voucher.bankAccountCode || voucher.accountCode || '1111-IDR'} (${voucher.bankAccountName || 'Bank BCA IDR'})`, col1X, y + 9);
+        doc.text(`Akun Sumber    : ${bCode} (${bName})`, col1X, y + 9);
         doc.text(`No. Cek / Giro : ${voucher.chequeNumber || voucher.chequeNo || '- (Transfer Online)'}`, col1X, y + 13.5);
 
         doc.text(`Dibayar Kepada : ${voucher.payee || voucher.supplierName || '-'}`, col2X, y);
@@ -2393,23 +2482,47 @@ const PDFExporter = {
                 tableRows.push([
                     line.accountCode || '-',
                     line.accountName || '-',
-                    line.description || voucher.notes || 'Pembayaran Supplier',
+                    line.description || voucher.notes || voucher.description || 'Pembayaran Supplier',
                     d > 0 ? `Rp ${d.toLocaleString('id-ID')}` : '-',
                     c > 0 ? `Rp ${c.toLocaleString('id-ID')}` : '-'
                 ]);
             });
         } else {
+            const isImport = Boolean(
+                bCode === '1111-USD' ||
+                bCode === '1111-SGD' ||
+                String(voucher.selectedPONumber || '').toUpperCase().startsWith('PO-IMP') ||
+                String(voucher.payee || '').toLowerCase().includes('ylg') ||
+                voucher.accountCode === '1135' ||
+                voucher.debitAccountCode === '1135'
+            );
+
+            const debitCode = voucher.debitAccountCode || voucher.accountCode || (
+                voucher.paymentCategory === 'CUSTOMS_DUTY_PPH22' ? '11903' :
+                isImport ? '1135' :
+                '2111'
+            );
+
+            const debitName = voucher.debitAccountName || voucher.accountName || (
+                debitCode === '1135' ? 'Uang Muka Impor / Pembelian Valas' :
+                debitCode === '11903' ? 'Pajak Dibayar dimuka-PPh 22' :
+                debitCode === '5150' ? 'Biaya Freight & Insurance Impor / Ekspor' :
+                debitCode === '1159' ? 'Persediaan Emas Transit' :
+                debitCode === '1121-1' ? 'Uang Muka Pembelian Emas Lokal' :
+                'Hutang Usaha'
+            );
+
             // Standard 2-Leg Jurnal SAK EMKM
             tableRows.push([
-                voucher.debitAccountCode || '2111',
-                voucher.debitAccountName || 'Hutang Usaha',
+                debitCode,
+                debitName,
                 voucher.notes || voucher.description || `Pembayaran PO ${voucher.selectedPONumber || ''}`,
                 `Rp ${totAmt.toLocaleString('id-ID')}`,
                 '-'
             ]);
             tableRows.push([
-                voucher.bankAccountCode || '1111-IDR',
-                voucher.bankAccountName || 'Bank BCA IDR',
+                bCode,
+                bName,
                 'Pengeluaran Kas/Bank',
                 '-',
                 `Rp ${totAmt.toLocaleString('id-ID')}`
@@ -2626,8 +2739,765 @@ const PDFExporter = {
         });
 
         doc.save('SETTLEMENT-' + (settlement.jobOrderNumber || 'REPORT') + '.pdf');
+    },
+
+    // ==========================================
+    // Export Commercial Invoice Ekspor USD (PPN 0% & PEB)
+    // ==========================================
+    async exportCommercialInvoice(invoice, config = {}) {
+        const jsPDF = await this.ensureJsPdfLoaded();
+        if (!jsPDF) {
+            console.error('jsPDF not loaded');
+            if (typeof window !== 'undefined' && window.alert) alert('Pustaka PDF belum siap.');
+            return null;
+        }
+
+        const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const invNo = invoice.invoiceNo || invoice.id || 'INV-EXP-DRAFT';
+
+        let y = this.addTanOfficialHeader(
+            doc,
+            'COMMERCIAL EXPORT INVOICE',
+            `No. Invoice: ${invNo} | PPN 0% (Fasilitas Ekspor Pasal 4B UU PPN)`,
+            config
+        );
+
+        const col1X = 14;
+        const col2X = pageWidth / 2 + 5;
+        const dateStr = invoice.date || new Date().toISOString().split('T')[0];
+
+        doc.setFontSize(8.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('INFORMASI FAKTUR & KONTRAK', col1X, y);
+        doc.text('CONSIGNEE (BUYER EKSPOR) & KEPABEANAN', col2X, y);
+        y += 4;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+
+        // Left Column
+        doc.text(`No. Invoice     : ${invNo}`, col1X, y);
+        doc.text(`Tanggal Faktur  : ${dateStr}`, col1X, y + 4.5);
+        doc.text(`Ref Sales Order : ${invoice.soNumber || invoice.selectedSOId || '-'}`, col1X, y + 9);
+        doc.text(`No. PO Buyer    : ${invoice.customerPONumber || '-'}`, col1X, y + 13.5);
+        doc.text(`Incoterms / Term: ${invoice.incoterms || 'FOB Jakarta Port (Soekarno-Hatta Int. Airport)'}`, col1X, y + 18);
+        doc.text(`Mata Uang       : ${invoice.currency || 'USD'} (United States Dollar)`, col1X, y + 22.5);
+
+        // Right Column
+        doc.text(`Nama Consignee  : ${invoice.buyerName || 'Overseas Buyer DMCC'}`, col2X, y);
+        doc.text(`Negara Tujuan   : ${invoice.country || 'United Arab Emirates (UAE)'}`, col2X, y + 4.5);
+        doc.text(`No. Dokumen PEB : ${invoice.pebNumber || '-'}`, col2X, y + 9);
+        doc.text(`No. AWB/Tracking: ${invoice.awbNumber || '-'}`, col2X, y + 13.5);
+        doc.text(`Fasilitas Pajak : PPN 0% (Bebas PPN Ekspor Perhiasan)`, col2X, y + 18);
+        const exRate = parseFloat(invoice.exchangeRate || 16250);
+        doc.text(`Kurs Acuan BI/BC: Rp ${exRate.toLocaleString('id-ID')} / USD`, col2X, y + 22.5);
+
+        y += 29;
+
+        // Table of Items
+        const tableColumn = ["No", "Deskripsi Barang Ekspor", "HS Code", "Karat / Kadar", "Berat Bersih (g)", "Harga (USD/g)", "Total (USD)"];
+        const tableRows = [];
+
+        const weight = parseFloat(invoice.weightGrams || invoice.netWeightGram || invoice.weight || 0);
+        const pricePerGram = parseFloat(invoice.pricePerGramUSD || invoice.unitPriceUSD || (weight > 0 ? (invoice.totalUSD || 0) / weight : 0));
+        const totalUSD = parseFloat(invoice.totalUSD || (weight * pricePerGram));
+        const totalIDR = parseFloat(invoice.totalIDR || (totalUSD * exRate));
+
+        if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+            invoice.items.forEach((item, idx) => {
+                const w = parseFloat(item.weightGrams || item.weight || item.qty || 0);
+                const p = parseFloat(item.pricePerGramUSD || item.unitPrice || 0);
+                const t = parseFloat(item.totalUSD || (w * p));
+                tableRows.push([
+                    idx + 1,
+                    item.itemDescription || item.itemName || item.name || 'Fine Gold Jewelry 750 (18K)',
+                    item.hsCode || invoice.hsCode || '7113.19.90',
+                    item.karat ? `${item.karat} (${item.purity || '75'}%)` : (invoice.karat || '750 (18K)'),
+                    `${w.toFixed(2)} g`,
+                    `$ ${p.toFixed(2)}`,
+                    `$ ${t.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                ]);
+            });
+        } else {
+            tableRows.push([
+                1,
+                invoice.itemDescription || invoice.itemName || 'Fine Gold Jewelry 750 (18K) Export Quality',
+                invoice.hsCode || '7113.19.90',
+                invoice.karat ? `Karat ${invoice.karat}` : '750 (18K / 75.0%)',
+                `${weight.toFixed(2)} g`,
+                `$ ${pricePerGram.toFixed(2)}`,
+                `$ ${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ]);
+        }
+
+        doc.autoTable({
+            startY: y,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                2: { halign: 'center' },
+                3: { halign: 'center' },
+                4: { halign: 'right', fontStyle: 'bold' },
+                5: { halign: 'right' },
+                6: { halign: 'right', fontStyle: 'bold' }
+            }
+        });
+
+        y = doc.lastAutoTable.finalY + 6;
+
+        // Valuation Summary Card & Remittance Bank Details
+        const boxW = (pageWidth - 28) / 2;
+
+        // Left Box: Remittance Bank
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(203, 213, 225);
+        doc.roundedRect(14, y, boxW - 2, 24, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text('BANK PAYMENT REMITTANCE INSTRUCTION:', 18, y + 4.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Beneficiary  : PT. TRILIUN ANUGRAH NUSANTARA', 18, y + 9);
+        doc.text('Bank Name    : PT Bank Central Asia Tbk (BCA)', 18, y + 13);
+        doc.text('Account No.  : 889-012-USD-001 (BCA Devisa USD)', 18, y + 17);
+        doc.text('Swift Code   : CENAIDJA (Ref: Devisa Hasil Ekspor - DHE)', 18, y + 21);
+
+        // Right Box: Financial Totals
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(14 + boxW + 2, y, boxW - 2, 24, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text('TOTAL COMMERCIAL INVOICE VALUE:', 14 + boxW + 6, y + 4.5);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(`Subtotal Ex-Works   : $ ${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 14 + boxW + 6, y + 9);
+        doc.text(`PPN Ekspor (VAT 0%) : $ 0.00 USD (Bebas PPN)`, 14 + boxW + 6, y + 13);
+        
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(16, 185, 129); // Emerald
+        doc.text(`TOTAL AMOUNT (USD)  : $ ${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 14 + boxW + 6, y + 18);
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Equiv. IDR : Rp ${totalIDR.toLocaleString('id-ID')} (Kurs Rp ${exRate.toLocaleString('id-ID')})`, 14 + boxW + 6, y + 22);
+
+        y += 30;
+
+        // Signatures
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(20, 20, 20);
+        doc.text('Consignee / Buyer Acknowledgment:', 40, y, { align: 'center' });
+        doc.text('PT. Triliun Anugrah Nusantara (Exporter):', pageWidth - 45, y, { align: 'center' });
+
+        y += 18;
+        doc.setFont('Helvetica', 'bold');
+        doc.text(`( ${invoice.buyerName || 'Authorized Signatory'} )`, 40, y, { align: 'center' });
+        doc.text('( Direktur Utama / Finance Controller )', pageWidth - 45, y, { align: 'center' });
+
+        this.addFooter(doc);
+        return this.finishAndOpenPdf(doc, `Commercial-Invoice-${invNo}.pdf`);
+    },
+
+    // ==========================================
+    // Export Surat Jalan Ekspor & Packing List (Delivery Order)
+    // ==========================================
+    async exportExportDeliveryOrder(deliveryOrder, config = {}) {
+        const jsPDF = await this.ensureJsPdfLoaded();
+        if (!jsPDF) {
+            console.error('jsPDF not loaded');
+            if (typeof window !== 'undefined' && window.alert) alert('Pustaka PDF belum siap.');
+            return null;
+        }
+
+        const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const doNum = deliveryOrder.doNumber || deliveryOrder.id || 'DO-EXP-DRAFT';
+
+        let y = this.addTanOfficialHeader(
+            doc,
+            'SURAT JALAN EKSPOR & PACKING LIST (DELIVERY ORDER)',
+            `No. DO: ${doNum} | Dokumen Pengeluaran Brankas Siap Ekspor (Akun 1160)`,
+            config
+        );
+
+        const col1X = 14;
+        const col2X = pageWidth / 2 + 5;
+        const dateStr = deliveryOrder.date || new Date().toISOString().split('T')[0];
+
+        doc.setFontSize(8.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('INFORMASI PENGIRIMAN EKSPOR', col1X, y);
+        doc.text('PENERIMA (BUYER) & EKSPEDISI KARGO', col2X, y);
+        y += 4;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+
+        // Left Column
+        doc.text(`No. Surat Jalan  : ${doNum}`, col1X, y);
+        doc.text(`Tanggal Kirim    : ${dateStr}`, col1X, y + 4.5);
+        doc.text(`Ref Sales Order  : ${deliveryOrder.soNumber || '-'}`, col1X, y + 9);
+        doc.text(`Ref Inv Ekspor   : ${deliveryOrder.invoiceNo || deliveryOrder.selectedInvoiceNo || '-'}`, col1X, y + 13.5);
+        doc.text(`No. PO Customer  : ${deliveryOrder.customerPONumber || '-'}`, col1X, y + 18);
+        doc.text(`Asal Pengeluaran : Vault Perhiasan Siap Ekspor (Akun 1160)`, col1X, y + 22.5);
+
+        // Right Column
+        doc.text(`Nama Consignee   : ${deliveryOrder.buyerName || 'Overseas Buyer DMCC'}`, col2X, y);
+        doc.text(`Negara Tujuan    : ${deliveryOrder.country || 'United Arab Emirates (UAE)'}`, col2X, y + 4.5);
+        doc.text(`Kargo Pengawal   : ${deliveryOrder.courierName || 'Brinks Global Secured Transport / Malca-Amit'}`, col2X, y + 9);
+        doc.text(`No. AWB / Resi   : ${deliveryOrder.awbNumber || '-'}`, col2X, y + 13.5);
+        doc.text(`No. Dokumen PEB  : ${deliveryOrder.pebNumber || '-'}`, col2X, y + 18);
+        doc.text(`Segel Keamanan   : ${deliveryOrder.securitySealNo || 'SEAL-GOLD-001'} (${deliveryOrder.boxCount || 1} Box/Koli)`, col2X, y + 22.5);
+
+        y += 29;
+
+        // Table of Items & Certifications
+        const tableColumn = ["No", "Deskripsi Barang Ekspor", "Karat", "No. Cert Emas Murni", "No. Cert Assay Kadar", "Net Weight (g)", "Gross Box (g)"];
+        const netWeight = parseFloat(deliveryOrder.netWeightGram || deliveryOrder.netWeight || 0);
+        const grossWeight = parseFloat(deliveryOrder.grossWeightGram || deliveryOrder.grossWeight || (netWeight * 1.25));
+
+        const tableRows = [[
+            1,
+            deliveryOrder.itemDescription || deliveryOrder.itemName || 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
+            deliveryOrder.karat ? `Karat ${deliveryOrder.karat}` : '750 (18K)',
+            deliveryOrder.goldCertificateNo || 'CERT-FINEGOLD-998812',
+            deliveryOrder.purityCertificateNo || 'ASSAY-KARAT-750-0012',
+            `${netWeight.toFixed(2)} g`,
+            `${grossWeight.toFixed(2)} g`
+        ]];
+
+        doc.autoTable({
+            startY: y,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [56, 189, 248], textColor: 255, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                2: { halign: 'center' },
+                3: { halign: 'center' },
+                4: { halign: 'center' },
+                5: { halign: 'right', fontStyle: 'bold' },
+                6: { halign: 'right', fontStyle: 'bold' }
+            }
+        });
+
+        y = doc.lastAutoTable.finalY + 6;
+
+        // Security & Custody Notice Box
+        doc.setFillColor(240, 249, 255);
+        doc.setDrawColor(56, 189, 248);
+        doc.roundedRect(14, y, pageWidth - 28, 14, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(3, 105, 161);
+        doc.text('KLAUSUL KEAMANAN PENGANGKUTAN LOGAM MULIA & SERTIFIKASI ASSAY:', 18, y + 4.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(51, 65, 85);
+        doc.text(`1. Barang dikemas dalam ${deliveryOrder.boxCount || 1} Box Brankas Khusus berpelindung dengan Nomor Segel: ${deliveryOrder.securitySealNo || 'SEAL-GOLD-998812'}.`, 18, y + 8.5);
+        doc.text('2. Keaslian kadar dan berat telah diuji laboratorium resmi dan dinyatakan sesuai dengan sertifikat assay terlampir.', 18, y + 12);
+
+        y += 20;
+
+        // 4 Handover Signature Columns
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text('BERITA ACARA SERAH TERIMA & PENGELUARAN FISIK EKSPOR (4 PIHAK OTORISASI):', 14, y);
+        y += 5;
+
+        const sigColW = (pageWidth - 28) / 4;
+        const sigY = y;
+
+        doc.setFontSize(7);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('1. Petugas Vault (Packing):', 14 + (sigColW * 0.5), sigY, { align: 'center' });
+        doc.text('2. Kargo Pengawal (Brinks):', 14 + (sigColW * 1.5), sigY, { align: 'center' });
+        doc.text('3. Petugas Customs / PEB:', 14 + (sigColW * 2.5), sigY, { align: 'center' });
+        doc.text('4. Direktur Utama PT TAN:', 14 + (sigColW * 3.5), sigY, { align: 'center' });
+
+        y += 18;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('( Petugas Brankas 1160 )', 14 + (sigColW * 0.5), y, { align: 'center' });
+        doc.text(`( ${deliveryOrder.courierName ? deliveryOrder.courierName.split('/')[0].trim() : 'Brinks Officer'} )`, 14 + (sigColW * 1.5), y, { align: 'center' });
+        doc.text('( Bea Cukai KPU Soetta )', 14 + (sigColW * 2.5), y, { align: 'center' });
+        doc.text('( Direktur Utama PT TAN )', 14 + (sigColW * 3.5), y, { align: 'center' });
+
+        this.addFooter(doc);
+        return this.finishAndOpenPdf(doc, `Surat-Jalan-Ekspor-${doNum}.pdf`);
+    },
+
+    // ==========================================
+    // Export SPK Produksi Perhiasan (Surat Perintah Kerja)
+    // ==========================================
+    async exportProductionSPK(spk, config = {}) {
+        const jsPDF = await this.ensureJsPdfLoaded();
+        if (!jsPDF) {
+            console.error('jsPDF not loaded');
+            if (typeof window !== 'undefined' && window.alert) alert('Pustaka PDF belum siap.');
+            return null;
+        }
+
+        const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const spkNo = spk.spkNo || spk.id || 'SPK-PROD-DRAFT';
+        const dateStr = spk.date || new Date().toISOString().split('T')[0];
+
+        let y = this.addTanOfficialHeader(
+            doc,
+            'SURAT PERINTAH KERJA (SPK) PRODUKSI PERHIASAN',
+            `No. Dokumen: ${spkNo}`,
+            config
+        );
+
+        const col1X = 14;
+        const col2X = pageWidth / 2 + 5;
+
+        doc.setFontSize(8.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('INFORMASI PESANAN & PRODUKSI', col1X, y);
+        doc.text('TARGET KADAR & PENERIMA PRODUKSI', col2X, y);
+        y += 4;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+
+        doc.text(`No. SPK Produksi : ${spkNo}`, col1X, y);
+        doc.text(`Tanggal Terbit   : ${dateStr}`, col1X, y + 4.5);
+        doc.text(`Jenis Perhiasan  : ${spk.jewelryType || 'Perhiasan Emas 18K'}`, col1X, y + 9);
+        doc.text(`Target Karat BOM : Karat ${spk.targetKarat || '750'}`, col1X, y + 13.5);
+
+        doc.text(`Buyer / Client   : ${spk.buyerName || 'Dubai Gold & Jewelry DMCC'}`, col2X, y);
+        doc.text(`Gross Weight     : ${(spk.grossWeight || 0).toLocaleString('id-ID')} Gram`, col2X, y + 4.5);
+        doc.text(`Toleransi Susut  : ${spk.lossTolerancePct || 1.5}% (Loss Lebur/Poles)`, col2X, y + 9);
+        doc.text(`Status Dokumen   : ${spk.status === 'COMPLETED' ? 'COMPLETED (SELESAI)' : 'IN_WIP (PROSES WORKSHOP)'}`, col2X, y + 13.5);
+
+        y += 20;
+
+        // Table Rows: Rincian Kebutuhan Bahan Baku (Formula BOM)
+        const tableColumn = ["No", "Deskripsi Bahan Baku", "Spesifikasi Formula", "Qty Dibutuhkan", "Satuan", "Alokasi Vault"];
+        const fineWeight = Number(spk.fineGoldNeeded || 0);
+        const alloyWeight = Number(spk.masterAlloyNeeded || 0);
+        const grossWeight = Number(spk.grossWeight || 0);
+
+        const tableRows = [
+            [
+                "1",
+                "Emas Batangan Murni 999.9 (Fine Gold)",
+                "Kadar 99.99% Fine Au (LBMA / Lokal)",
+                fineWeight.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                "Gram",
+                "Keluar dari Vault Utama (1157)"
+            ],
+            [
+                "2",
+                "Master Alloy Campuran (Ag / Cu)",
+                `Formula Alloy Karat ${spk.targetKarat || '750'}`,
+                alloyWeight.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                "Gram",
+                "Workshop Casting / Mixing"
+            ],
+            [
+                "3",
+                `Target Output Perhiasan Jadi (${spk.jewelryType || 'Perhiasan'})`,
+                `Target Kadar Karat ${spk.targetKarat || '750'}`,
+                grossWeight.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                "Gram",
+                "Masuk ke Vault WIP (11502)"
+            ]
+        ];
+
+        doc.autoTable({
+            startY: y,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [249, 115, 22], textColor: 255, fontStyle: 'bold' }, // Orange Produksi
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                3: { halign: 'right', fontStyle: 'bold' },
+                4: { halign: 'center', cellWidth: 16 }
+            }
+        });
+
+        y = doc.lastAutoTable.finalY + 6;
+
+        // Accounting Jurnal Info Box
+        doc.setFillColor(255, 247, 237); // orange-50
+        doc.setDrawColor(249, 115, 22);
+        doc.roundedRect(14, y, pageWidth - 28, 14, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(194, 65, 12);
+        doc.text('POSTING OTOMATIS JURNAL MUTASI PERSEDIAAN SAK EMKM:', 18, y + 4.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(67, 20, 7);
+        doc.text(`• DEBET  : Akun 11502 (Persediaan Emas WIP Produksi) sebesar ${fineWeight.toFixed(2)}g Fine Gold`, 18, y + 8.5);
+        doc.text(`• KREDIT : Akun 1157 (Persediaan Emas Murni 999.9) sebesar ${fineWeight.toFixed(2)}g Fine Gold`, 18, y + 12);
+
+        y += 20;
+
+        // 4 Signature Columns
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text('LEMBAR OTORISASI & SERAH TERIMA PENGELUARAN BAHAN BAKU (4 PIHAK):', 14, y);
+        y += 5;
+
+        const sigColW = (pageWidth - 28) / 4;
+        const sigY = y;
+
+        doc.setFontSize(7);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('1. Dibuat Oleh (Admin):', 14 + (sigColW * 0.5), sigY, { align: 'center' });
+        doc.text('2. Diserahkan (Vault LM):', 14 + (sigColW * 1.5), sigY, { align: 'center' });
+        doc.text('3. Diterima (Workshop):', 14 + (sigColW * 2.5), sigY, { align: 'center' });
+        doc.text('4. Disetujui (Direktur):', 14 + (sigColW * 3.5), sigY, { align: 'center' });
+
+        y += 18;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('( Admin Produksi )', 14 + (sigColW * 0.5), y, { align: 'center' });
+        doc.text('( Petugas Vault 1157 )', 14 + (sigColW * 1.5), y, { align: 'center' });
+        doc.text('( Kepala Pengrajin )', 14 + (sigColW * 2.5), y, { align: 'center' });
+        doc.text('( Direktur Operasional )', 14 + (sigColW * 3.5), y, { align: 'center' });
+
+        this.addFooter(doc);
+        return this.finishAndOpenPdf(doc, `SPK-Produksi-${spkNo}.pdf`);
+    },
+
+    // ==========================================
+    // FAKTUR PENJUALAN EMAS LOKAL IDR (LOCAL SALES INVOICE)
+    // ==========================================
+    async exportLocalSalesInvoice(sale, config = {}) {
+        const jsPDF = await this.ensureJsPdfLoaded();
+        if (!jsPDF) {
+            console.error('jsPDF not loaded');
+            if (typeof window !== 'undefined' && window.alert) alert('Pustaka PDF belum siap.');
+            return null;
+        }
+
+        const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const invNo = sale.invoiceNo || sale.id || 'INV-LOKAL-DRAFT';
+
+        let y = this.addTanOfficialHeader(
+            doc,
+            'FAKTUR PENJUALAN LOGAM MULIA',
+            `No. Faktur: ${invNo} | Penjualan Domestik IDR (PMK 48/2023)`,
+            config
+        );
+
+        const col1X = 14;
+        const col2X = pageWidth / 2 + 5;
+        const dateStr = sale.date || new Date().toISOString().split('T')[0];
+
+        doc.setFontSize(8.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('DATA PEMBELI / CUSTOMER', col1X, y);
+        doc.text('INFORMASI TRANSAKSI & PEMBAYARAN', col2X, y);
+        y += 4;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+
+        // Left Column
+        doc.text(`Nama Customer   : ${sale.customerName || 'Toko Emas / Customer Lokal'}`, col1X, y);
+        doc.text(`No. Telepon / WA: ${sale.customerPhone || '-'}`, col1X, y + 4.5);
+        doc.text(`Alamat Pengirim : ${sale.customerAddress || 'Indonesia'}`, col1X, y + 9);
+        doc.text(`No. PO Customer : ${sale.customerPONumber || '-'}`, col1X, y + 13.5);
+
+        // Right Column
+        doc.text(`No. Faktur      : ${invNo}`, col2X, y);
+        doc.text(`Tanggal Faktur  : ${dateStr}`, col2X, y + 4.5);
+        doc.text(`Metode Bayar    : ${sale.paymentTerms || (sale.paymentMode === 'cash' ? 'TUNAI LUNAS' : 'TEMPO / KREDIT')}`, col2X, y + 9);
+        doc.text(`Rekening Sumber : ${sale.paymentSourceAccountName || 'Bank BCA IDR'}`, col2X, y + 13.5);
+
+        y += 21;
+
+        // Table of Items
+        const tableColumn = ["No", "Deskripsi Logam Mulia", "No. Seri / Sertifikat", "Berat (g)", "Harga Satuan (Rp/g)", "Total Nilai (IDR)"];
+        const tableRows = [];
+
+        const weight = parseFloat(sale.quantityGrams || 0);
+        const price = parseFloat(sale.unitPriceIDR || 0);
+        const total = parseFloat(sale.totalAmountIDR || (weight * price));
+
+        tableRows.push([
+            1,
+            sale.itemName || 'Emas Batangan Antam 1kg (999.9)',
+            sale.barSerialNumbers || '-',
+            `${weight.toLocaleString('id-ID', { minimumFractionDigits: 2 })} g`,
+            `Rp ${price.toLocaleString('id-ID')}`,
+            `Rp ${total.toLocaleString('id-ID')}`
+        ]);
+
+        doc.autoTable({
+            startY: y,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [217, 119, 6], textColor: 255, fontStyle: 'bold' }, // Amber / Gold
+            styles: { fontSize: 8, cellPadding: 3.5 },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                2: { halign: 'center' },
+                3: { halign: 'right', fontStyle: 'bold' },
+                4: { halign: 'right' },
+                5: { halign: 'right', fontStyle: 'bold' }
+            }
+        });
+
+        y = doc.lastAutoTable.finalY + 6;
+
+        // Valuation Summary Card & Remittance Bank Details
+        const boxW = (pageWidth - 28) / 2;
+
+        // Left Box: Remittance Bank
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(203, 213, 225);
+        doc.roundedRect(14, y, boxW - 2, 26, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text('REKENING RESMI PEMBAYARAN PT TAN:', 18, y + 4.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Nama Penerima: PT. TRILIUN ANUGRAH NUSANTARA', 18, y + 9);
+        doc.text('Bank         : PT Bank Central Asia Tbk (BCA)', 18, y + 13);
+        doc.text('No. Rekening : 889-012-3456 (BCA KCU Thamrin IDR)', 18, y + 17);
+        doc.text('Status Pajak : Bebas PPN (Emas Batangan Non-BKP)', 18, y + 21);
+
+        // Right Box: Financial Totals
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(14 + boxW + 2, y, boxW - 2, 26, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 41, 59);
+        doc.text('RINGKASAN NILAI TRANSAKSI:', 14 + boxW + 6, y + 4.5);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(`Subtotal Penjualan : Rp ${total.toLocaleString('id-ID')}`, 14 + boxW + 6, y + 9);
+        doc.text(`PPN (PMK 48/2023)  : Rp 0 (Dibebaskan / Non-BKP)`, 14 + boxW + 6, y + 13);
+        
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(217, 119, 6); // Amber Gold
+        doc.text(`TOTAL FAKTUR (IDR) : Rp ${total.toLocaleString('id-ID')}`, 14 + boxW + 6, y + 18.5);
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Status: ${sale.paymentStatus === 'PAID' ? 'LUNAS (TERVERIFIKASI)' : 'TERUTANG (TEMPO)'}`, 14 + boxW + 6, y + 23);
+
+        y += 32;
+
+        // Auto-Journal Box
+        doc.setFillColor(254, 252, 232); // Amber 50
+        doc.setDrawColor(245, 158, 11);
+        doc.roundedRect(14, y, pageWidth - 28, 14, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(180, 83, 9);
+        doc.text('POSTING OTOMATIS JURNAL SAK EMKM:', 18, y + 4.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(67, 20, 7);
+        doc.text(`• DEBET  : ${sale.paymentSourceAccount || '1111-IDR'} (${sale.paymentSourceAccountName || 'Bank BCA IDR'}) Rp ${total.toLocaleString('id-ID')}`, 18, y + 8.5);
+        doc.text(`• KREDIT : 4111 (Penjualan Gold Bar) Rp ${total.toLocaleString('id-ID')} & HPP 5110 vs Vault 1157`, 18, y + 12);
+
+        y += 20;
+
+        // 4 Signature Columns
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text('LEMBAR PENGESAHAN & OTORISASI TRANSAKSI:', 14, y);
+        y += 5;
+
+        const sigColW = (pageWidth - 28) / 4;
+        const sigY = y;
+
+        doc.setFontSize(7);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('1. Dibuat (Sales):', 14 + (sigColW * 0.5), sigY, { align: 'center' });
+        doc.text('2. Petugas Vault:', 14 + (sigColW * 1.5), sigY, { align: 'center' });
+        doc.text('3. Diterima Customer:', 14 + (sigColW * 2.5), sigY, { align: 'center' });
+        doc.text('4. Disetujui Direktur:', 14 + (sigColW * 3.5), sigY, { align: 'center' });
+
+        y += 18;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('( Admin Penjualan )', 14 + (sigColW * 0.5), y, { align: 'center' });
+        doc.text('( Petugas Vault 1157 )', 14 + (sigColW * 1.5), y, { align: 'center' });
+        doc.text(`( ${sale.recipientName || sale.customerName || 'Customer'} )`, 14 + (sigColW * 2.5), y, { align: 'center' });
+        doc.text('( Direktur Utama )', 14 + (sigColW * 3.5), y, { align: 'center' });
+
+        this.addFooter(doc);
+        return this.finishAndOpenPdf(doc, `Faktur-Penjualan-Lokal-${invNo}.pdf`);
+    },
+
+    // ==========================================
+    // SURAT JALAN & SERAH TERIMA EMAS LOKAL (DELIVERY ORDER LOKAL)
+    // ==========================================
+    async exportLocalDeliveryOrder(sale, config = {}) {
+        const jsPDF = await this.ensureJsPdfLoaded();
+        if (!jsPDF) {
+            console.error('jsPDF not loaded');
+            if (typeof window !== 'undefined' && window.alert) alert('Pustaka PDF belum siap.');
+            return null;
+        }
+
+        const doc = new jsPDF({ format: 'a4', orientation: 'portrait' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const doNo = sale.doNumber || `SJ-LOKAL-${Date.now().toString().slice(-6)}`;
+
+        let y = this.addTanOfficialHeader(
+            doc,
+            'SURAT JALAN & SERAH TERIMA LOGAM MULIA',
+            `No. Dokumen: ${doNo} | Bukti Fisik Serah Terima Brankas Vault`,
+            config
+        );
+
+        const col1X = 14;
+        const col2X = pageWidth / 2 + 5;
+        const dateStr = sale.date || new Date().toISOString().split('T')[0];
+
+        doc.setFontSize(8.5);
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('TUJUAN PENYERAHAN / PENERIMA', col1X, y);
+        doc.text('INFORMASI LOGISTIK & PENGELUARAN VAULT', col2X, y);
+        y += 4;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+
+        // Left Column
+        doc.text(`Penerima / Toko : ${sale.customerName || 'Toko Emas Gadjah Berlian'}`, col1X, y);
+        doc.text(`Nama Kontak / PJ: ${sale.recipientName || sale.customerName || 'Bpk. Hendra'}`, col1X, y + 4.5);
+        doc.text(`No. Telepon     : ${sale.customerPhone || '-'}`, col1X, y + 9);
+        doc.text(`Alamat Tujuan   : ${sale.customerAddress || 'Surabaya'}`, col1X, y + 13.5);
+
+        // Right Column
+        doc.text(`No. Surat Jalan : ${doNo}`, col2X, y);
+        doc.text(`Ref No. Faktur  : ${sale.invoiceNo || '-'}`, col2X, y + 4.5);
+        doc.text(`Tanggal Keluar  : ${dateStr}`, col2X, y + 9);
+        doc.text(`Metode Kirim    : ${sale.deliveryMethod === 'KURIR_INTERNAL' ? 'Kurir Internal PT TAN' : sale.deliveryMethod === 'EXPEDITION' ? 'Ekspedisi Pengawalan' : 'Pengambilan Langsung di Vault'}`, col2X, y + 13.5);
+
+        y += 21;
+
+        // Table
+        const tableColumn = ["No", "Deskripsi Logam Mulia", "Nomor Seri / Bar ID", "Brankas Asal", "Berat Bersih (g)", "Kondisi Segel"];
+        const weight = parseFloat(sale.quantityGrams || 0);
+
+        const tableRows = [
+            [
+                1,
+                sale.itemName || 'Emas Batangan Antam 1kg (999.9)',
+                sale.barSerialNumbers || 'ANTAM-998812',
+                sale.sourceVaultName || 'Vault Utama (1157)',
+                `${weight.toLocaleString('id-ID', { minimumFractionDigits: 2 })} g`,
+                'SEAL UTUH / BAIK'
+            ]
+        ];
+
+        doc.autoTable({
+            startY: y,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [14, 165, 233], textColor: 255, fontStyle: 'bold' }, // Sky Blue
+            styles: { fontSize: 8, cellPadding: 4 },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 },
+                2: { halign: 'center' },
+                3: { halign: 'center' },
+                4: { halign: 'right', fontStyle: 'bold' },
+                5: { halign: 'center', fontStyle: 'bold' }
+            }
+        });
+
+        y = doc.lastAutoTable.finalY + 8;
+
+        // Security Notice Box
+        doc.setFillColor(240, 249, 255);
+        doc.setDrawColor(56, 189, 248);
+        doc.roundedRect(14, y, pageWidth - 28, 16, 1.5, 1.5, 'FD');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(3, 105, 161);
+        doc.text('CATATAN SERAH TERIMA & KESELAMATAN FISIK EMAS:', 18, y + 4.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(12, 74, 110);
+        doc.text('1. Fisik emas telah ditimbang dengan timbangan analitik terkalibrasi dan diverifikasi nomor sertifikatnya.', 18, y + 8.5);
+        doc.text('2. Setelah ditandatangani, tanggung jawab fisik dan keamanan sepenuhnya beralih kepada pihak penerima.', 18, y + 12.5);
+
+        y += 24;
+
+        // 4 Signature Columns
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text('LEMBAR TANDA TANGAN SERAH TERIMA (4 PIHAK BERWENANG):', 14, y);
+        y += 5;
+
+        const sigColW = (pageWidth - 28) / 4;
+        const sigY = y;
+
+        doc.setFontSize(7);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('1. Petugas Vault (Keluar):', 14 + (sigColW * 0.5), sigY, { align: 'center' });
+        doc.text('2. Kurir / Pengantar:', 14 + (sigColW * 1.5), sigY, { align: 'center' });
+        doc.text('3. Customer Penerima:', 14 + (sigColW * 2.5), sigY, { align: 'center' });
+        doc.text('4. Otorisasi Direktur:', 14 + (sigColW * 3.5), sigY, { align: 'center' });
+
+        y += 18;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('( Petugas Vault 1157 )', 14 + (sigColW * 0.5), y, { align: 'center' });
+        doc.text(`( ${sale.courierName || 'Kurir Internal'} )`, 14 + (sigColW * 1.5), y, { align: 'center' });
+        doc.text(`( ${sale.recipientName || sale.customerName || 'Customer'} )`, 14 + (sigColW * 2.5), y, { align: 'center' });
+        doc.text('( Direktur Utama )', 14 + (sigColW * 3.5), y, { align: 'center' });
+
+        this.addFooter(doc);
+        return this.finishAndOpenPdf(doc, `Surat-Jalan-Lokal-${doNo}.pdf`);
     }
 
 };
 if (typeof window !== "undefined") window.PDFExporter = PDFExporter;
 if (typeof module !== "undefined" && module.exports) module.exports = PDFExporter;
+

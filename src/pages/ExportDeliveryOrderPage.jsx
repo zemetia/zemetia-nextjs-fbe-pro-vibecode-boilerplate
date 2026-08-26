@@ -8,6 +8,7 @@ import {
   saveJournalEntries,
   getNextReferenceNumber
 } from '../services/storageService';
+import { exportExportDeliveryOrderPdf } from '../services/pdfService';
 import {
   Modal,
   useModal,
@@ -236,11 +237,14 @@ export default function ExportDeliveryOrderPage() {
                     <TableCell>
                       <button
                         className="btn-primary py-1.5 px-2.5 text-xs"
-                        onClick={() => showModal({
-                          variant: 'info',
-                          title: `🖨️ Cetak Surat Jalan Ekspor ${d.doNumber}`,
-                          message: `• SO: ${d.soNumber}\n• No. PO Customer: ${d.customerPONumber || '-'}\n• Cert Emas: ${d.goldCertificateNo}\n• Cert Kadar: ${d.purityCertificateNo}`
-                        })}
+                        onClick={async () => {
+                          await exportExportDeliveryOrderPdf(d);
+                          showModal({
+                            variant: 'success',
+                            title: `🖨️ Cetak Surat Jalan Ekspor ${d.doNumber}`,
+                            message: `Dokumen Surat Jalan Ekspor & Packing List (${d.doNumber}) berhasil dicetak / dibuka.\n\n• Buyer: ${d.buyerName}\n• Ref SO: ${d.soNumber}\n• Ref PO Cust: ${d.customerPONumber || '-'}\n• Cert Emas: ${d.goldCertificateNo}\n• Cert Kadar: ${d.purityCertificateNo}\n• Net Weight: ${d.netWeightGram}g | Gross Weight: ${d.grossWeightGram || d.netWeightGram}g`
+                          });
+                        }}
                       >
                         <Printer size={14} /> Cetak Surat Jalan
                       </button>

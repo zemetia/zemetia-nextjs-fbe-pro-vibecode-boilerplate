@@ -6,6 +6,7 @@ import {
   getExportSalesOrders,
   saveExportSalesOrders
 } from '../services/storageService';
+import { exportSalesOrderPdf } from '../services/pdfService';
 import { getStoredUsdRate } from '../services/currencyService';
 import {
   Modal,
@@ -230,11 +231,14 @@ export default function ExportSalesOrderPage() {
                     <TableCell>
                       <button
                         className="btn-primary py-1.5 px-2.5 text-xs"
-                        onClick={() => showModal({
-                          variant: 'info',
-                          title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
-                          message: `• Buyer: ${so.buyerName}\n• No. PO Customer: ${so.customerPONumber || '-'}\n• Berat: ${so.weightGrams}g\n• Total Nilai: $ ${(so.totalUSD || 0).toLocaleString()} USD`
-                        })}
+                        onClick={async () => {
+                          await exportSalesOrderPdf(so);
+                          showModal({
+                            variant: 'success',
+                            title: `🖨️ Cetak Export Sales Order ${so.soNumber}`,
+                            message: `Dokumen Export Sales Order & Price Fixing (${so.soNumber}) berhasil dicetak / dibuka.\n\n• Buyer: ${so.buyerName}\n• Ref PO Cust: ${so.customerPONumber || '-'}\n• Berat: ${so.weightGrams}g\n• Total Nilai: $ ${(so.totalUSD || 0).toLocaleString()} USD`
+                          });
+                        }}
                       >
                         <Printer size={14} /> Cetak SO
                       </button>

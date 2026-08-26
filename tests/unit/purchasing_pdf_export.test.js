@@ -155,4 +155,86 @@ describe('Purchasing PDF Export Functions', () => {
         expect(res.filename).toBe('PRF-PR-2026-0033.pdf');
         expect(res.blobUrl).toBe('blob:http://localhost/test-uuid');
     });
+
+    test('exportSalesOrder creates Export Sales Order PDF with price fixing', async () => {
+        const sampleSO = {
+            soNumber: 'SO-EXP-2026-001',
+            customerPONumber: 'PO-DMCC-2026-8899',
+            buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
+            country: 'United Arab Emirates (UAE)',
+            weightGrams: 1000,
+            pricePerGramUSD: 85.00,
+            totalUSD: 85000,
+            currency: 'USD',
+            exchangeRate: 16250
+        };
+
+        const res = await PDFExporter.exportSalesOrder(sampleSO);
+        expect(res.filename).toBe('Sales-Order-SO-EXP-2026-001.pdf');
+        expect(res.blobUrl).toBe('blob:http://localhost/test-uuid');
+    });
+
+    test('exportCommercialInvoice creates Commercial Export Invoice PDF (PPN 0%)', async () => {
+        const sampleInvoice = {
+            invoiceNo: 'INV-EXP-2026-001',
+            customerPONumber: 'PO-DMCC-2026-8899',
+            soNumber: 'SO-EXP-2026-001',
+            buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
+            country: 'United Arab Emirates (UAE)',
+            pebNumber: 'PEB-2026-088912',
+            awbNumber: 'AWB-FEDEX-99881122',
+            weightGrams: 1000,
+            pricePerGramUSD: 85.00,
+            totalUSD: 85000,
+            currency: 'USD',
+            exchangeRate: 16250
+        };
+
+        const res = await PDFExporter.exportCommercialInvoice(sampleInvoice);
+        expect(res.filename).toBe('Commercial-Invoice-INV-EXP-2026-001.pdf');
+        expect(res.blobUrl).toBe('blob:http://localhost/test-uuid');
+    });
+
+    test('exportExportDeliveryOrder creates Surat Jalan Ekspor PDF', async () => {
+        const sampleDO = {
+            doNumber: 'DO-EXP-2026-001',
+            customerPONumber: 'PO-DMCC-2026-8899',
+            invoiceNo: 'INV-EXP-2026-001',
+            soNumber: 'SO-EXP-2026-001',
+            goldCertificateNo: 'CERT-FINEGOLD-998812',
+            purityCertificateNo: 'ASSAY-KARAT-750-0012',
+            buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
+            country: 'United Arab Emirates (UAE)',
+            courierName: 'Brinks Global Secured Transport',
+            netWeightGram: 1000,
+            grossWeightGram: 1250,
+            securitySealNo: 'SEAL-GOLD-998812',
+            boxCount: 2
+        };
+
+        const res = await PDFExporter.exportExportDeliveryOrder(sampleDO);
+        expect(res.filename).toBe('Surat-Jalan-Ekspor-DO-EXP-2026-001.pdf');
+        expect(res.blobUrl).toBe('blob:http://localhost/test-uuid');
+    });
+
+    test('exportProductionSPK creates Surat Perintah Kerja Produksi PDF', async () => {
+        const sampleSPK = {
+            id: 'SPK-2026-001',
+            spkNo: 'SPK-PROD-2026-001',
+            date: '2026-08-26',
+            buyerName: 'Dubai Gold & Jewelry DMCC',
+            jewelryType: 'Cincin & Kalung Emas 18K',
+            targetKarat: '750',
+            grossWeight: 500,
+            lossTolerancePct: 1.5,
+            fineGoldNeeded: 381.65,
+            masterAlloyNeeded: 124.00,
+            status: 'IN_WIP'
+        };
+
+        const res = await PDFExporter.exportProductionSPK(sampleSPK);
+        expect(res.filename).toBe('SPK-Produksi-SPK-PROD-2026-001.pdf');
+        expect(res.blobUrl).toBe('blob:http://localhost/test-uuid');
+    });
 });
+

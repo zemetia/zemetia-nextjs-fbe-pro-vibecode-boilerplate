@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Download, Upload, Image, Building2, ShieldCheck, Database, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Settings, Download, Upload, Image, Building2, ShieldCheck, Database, RefreshCw, CheckCircle2, AlertTriangle, Trash2 } from 'lucide-react';
 import {
   getCompanyProfile,
   saveCompanyProfile,
   getAllSystemData,
-  restoreSystemData
+  restoreSystemData,
+  clearAllSystemTransactions
 } from '../services/storageService';
 import Modal, { useModal } from '../components/ui/Modal';
 
@@ -111,6 +112,25 @@ export default function SystemSettingsPage() {
     });
   };
 
+  const handleClearTransactions = () => {
+    showModal({
+      variant: 'confirm',
+      title: '⚠️ Konfirmasi Kosongkan Data Transaksi',
+      message: 'Apakah Anda yakin ingin menghapus SELURUH data transaksi di LocalStorage?\n\nSemua data Jurnal Umum, PO Impor & Lokal, TTB, Voucher BBK/BBM, Faktur Ekspor, SPK Produksi, dan Kartu Stok Vault akan dikosongkan (Master COA & Profil Perusahaan tetap aman).',
+      confirmLabel: 'Ya, Kosongkan Semua Transaksi',
+      onConfirm: async () => {
+        await clearAllSystemTransactions();
+        showModal({
+          variant: 'success',
+          title: '✅ Data Transaksi Berhasil Dikosongkan',
+          message: 'Seluruh data transaksi di LocalStorage telah dibersihkan. Halaman akan dimuat ulang.',
+          confirmLabel: 'Muat Ulang Sekarang',
+          onDismiss: () => window.location.reload()
+        });
+      }
+    });
+  };
+
   return (
     <div>
       {/* Header */}
@@ -173,41 +193,56 @@ export default function SystemSettingsPage() {
         </div>
 
         {/* Backup & Restore Data Management */}
-        <div className="glass-panel p-6">
-          <h3 className="font-heading text-[1.1rem] mb-4 flex items-center gap-2.5 text-sky-light">
-            <Database size={20} /> Backup & Restore Database Sistem
-          </h3>
+        <div className="glass-panel p-6 flex flex-col justify-between">
+          <div>
+            <h3 className="font-heading text-[1.1rem] mb-4 flex items-center gap-2.5 text-sky-light">
+              <Database size={20} /> Backup & Restore Database Sistem
+            </h3>
 
-          {/* Backup Section */}
-          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] mb-5 border border-[rgba(56,189,248,0.2)]">
-            <h4 className="text-sky-light text-[0.95rem] mb-2 flex items-center gap-1.5">
-              <Download size={16} /> Export Backup Data (.json)
-            </h4>
-            <p className="text-[0.78rem] text-fg-soft mb-3.5">
-              Unduh seluruh database sistem (COA, PO Impor/Lokal, Faktur Ekspor, Voucher, Kartu Stok Vault, & Master Data) ke file backup `.json`.
-            </p>
-            <button className="btn-primary w-full bg-[linear-gradient(135deg,_#0284c7,_#0369a1)]" onClick={handleBackupExport}>
-              <Download size={16} /> Unduh Backup Database JSON
-            </button>
+            {/* Backup Section */}
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] mb-5 border border-[rgba(56,189,248,0.2)]">
+              <h4 className="text-sky-light text-[0.95rem] mb-2 flex items-center gap-1.5">
+                <Download size={16} /> Export Backup Data (.json)
+              </h4>
+              <p className="text-[0.78rem] text-fg-soft mb-3.5">
+                Unduh seluruh database sistem (COA, PO Impor/Lokal, Faktur Ekspor, Voucher, Kartu Stok Vault, & Master Data) ke file backup `.json`.
+              </p>
+              <button className="btn-primary w-full bg-[linear-gradient(135deg,_#0284c7,_#0369a1)]" onClick={handleBackupExport}>
+                <Download size={16} /> Unduh Backup Database JSON
+              </button>
+            </div>
+
+            {/* Restore Section */}
+            <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] mb-5 border border-[rgba(245,158,11,0.2)]">
+              <h4 className="text-gold-light text-[0.95rem] mb-2 flex items-center gap-1.5">
+                <Upload size={16} /> Import Restore Data (.json)
+              </h4>
+              <p className="text-[0.78rem] text-fg-soft mb-3.5">
+                Pulihkan database sistem dari file cadangan `.json` sebelumnya.
+              </p>
+              
+              <input className="w-full mb-3 text-[0.8rem] text-fg-soft"
+                type="file"
+                accept=".json"
+                onChange={e => setRestoreFile(e.target.files[0])}
+              />
+
+              <button className="btn-primary w-full bg-[linear-gradient(135deg,_#d97706,_#b45309)]" onClick={handleRestoreImport}>
+                <Upload size={16} /> Restore Data System Now
+              </button>
+            </div>
           </div>
 
-          {/* Restore Section */}
-          <div className="bg-[rgba(15,23,42,0.6)] p-5 rounded-[12px] border border-[rgba(245,158,11,0.2)]">
-            <h4 className="text-gold-light text-[0.95rem] mb-2 flex items-center gap-1.5">
-              <Upload size={16} /> Import Restore Data (.json)
+          {/* Reset / Danger Zone */}
+          <div className="bg-[rgba(244,63,94,0.08)] p-5 rounded-[12px] border border-danger/30">
+            <h4 className="text-danger text-[0.95rem] mb-2 flex items-center gap-1.5">
+              <Trash2 size={16} /> Kosongkan Data Transaksi (LocalStorage)
             </h4>
             <p className="text-[0.78rem] text-fg-soft mb-3.5">
-              Pulihkan database sistem dari file cadangan `.json` sebelumnya.
+              Hapus seluruh data riwayat transaksi (PO, Jurnal, Voucher, TTB, Ekspor, SPK) di peramban lokal agar bersih kembali ke titik nol.
             </p>
-            
-            <input className="w-full mb-3 text-[0.8rem] text-fg-soft"
-              type="file"
-              accept=".json"
-              onChange={e => setRestoreFile(e.target.files[0])}
-            />
-
-            <button className="btn-primary w-full bg-[linear-gradient(135deg,_#d97706,_#b45309)]" onClick={handleRestoreImport}>
-              <Upload size={16} /> Restore Data System Now
+            <button className="btn-primary w-full bg-danger hover:bg-danger/80 text-white" onClick={handleClearTransactions}>
+              <Trash2 size={16} /> Kosongkan Semua Data Transaksi Sekarang
             </button>
           </div>
         </div>

@@ -101,6 +101,21 @@ export default function VoucherManagement() {
     setChequeBooks(getChequeBooks());
   };
 
+  // Helper untuk mendeteksi apakah suatu PO adalah PO Impor Valas
+  const isImportPO = (po) => {
+    if (!po) return false;
+    return Boolean(
+      po.isImport ||
+      po.currency === 'USD' ||
+      po.currency === 'SGD' ||
+      po.poType === 'IMPORT' ||
+      po.type === 'import' ||
+      String(po.poNumber || po.id || '').toUpperCase().startsWith('PO-IMP') ||
+      String(po.supplierName || po.supplier || '').toLowerCase().includes('ylg') ||
+      (po.items && po.items.some(i => String(i.itemCode || i.itemId || '').toUpperCase().includes('IMPORT')))
+    );
+  };
+
   const loadVouchers = () => {
     const pmt = getStorage(KEYS.PAYMENT_VOUCHERS, [
       {
@@ -111,13 +126,21 @@ export default function VoucherManagement() {
         date: new Date().toISOString().split('T')[0],
         selectedPONumber: 'PO-IMP-2026-001',
         paymentCategory: 'PO_PRINCIPAL',
+        categoryLabel: '💰 Uang Muka Impor (DP)',
         payee: 'YLG Bullion Singapore Pte Ltd',
         payer: 'PT TAN',
         bankAccountCode: '1111-USD',
         bankAccountName: 'Bank BCA Devisa USD',
-        accountCode: '2111',
+        accountCode: '1135',
+        accountName: 'Uang Muka Impor / Pembelian Valas',
+        debitAccountCode: '1135',
+        debitAccountName: 'Uang Muka Impor / Pembelian Valas',
         amount: 21645000000,
-        description: 'Pelunasan Pembayaran Impor 16,000 oz Gold Bullion YLG Singapore (Ref: PO-IMP-2026-001)',
+        description: 'Pembayaran Uang Muka Impor 16,000 oz Gold Bullion YLG Singapore (Ref: PO-IMP-2026-001)',
+        journalLines: [
+          { accountCode: '1135', accountName: 'Uang Muka Impor / Pembelian Valas', debit: 21645000000, credit: 0, description: 'Pembayaran Uang Muka Impor 16,000 oz Gold Bullion YLG Singapore' },
+          { accountCode: '1111-USD', accountName: 'Bank BCA Devisa USD', debit: 0, credit: 21645000000, description: 'Pengeluaran Bank Devisa USD' }
+        ],
         status: 'APPROVED & PAID',
         isCleared: true,
         createdAt: new Date().toISOString()
@@ -139,13 +162,15 @@ export default function VoucherManagement() {
 
   // Helper untuk menentukan konfigurasi default per kategori pengeluaran PO
   const getCategoryDefaults = (category, selectedPO) => {
+    const isImport = isImportPO(selectedPO);
+
     if (!selectedPO) {
       if (category === 'CUSTOMS_DUTY_PPH22') {
         return {
           paymentCategory: category,
           payeePayer: 'Kas Negara / DJBC (ID Billing PPh 22 Impor 0.25%)',
           bankAccountCode: '1111-IDR',
-          accountCode: '1135',
+          accountCode: '11903',
           amount: 0,
           description: 'Pembayaran ID Billing DJBC - PPh 22 Impor (0,25%)'
         };
@@ -190,7 +215,7 @@ export default function VoucherManagement() {
         paymentCategory: category,
         payeePayer: 'Kas Negara / DJBC (ID Billing PPh 22 Impor 0.25%)',
         bankAccountCode: '1111-IDR', // Selalu IDR via MPN G2 / Bank Persepsi
-        accountCode: '1135', // PPh 22 Dibayar Di Muka (Impor Emas)
+        accountCode: '11903', // Pajak Dibayar dimuka-PPh 22 (Impor Emas)
         amount: pph22Est,
         description: `Pembayaran ID Billing DJBC - PPh 22 Impor (0,25%) Ref PO: ${selectedPO.poNumber || selectedPO.id} (${selectedPO.supplierName || selectedPO.supplier})`
       };
@@ -213,15 +238,17 @@ export default function VoucherManagement() {
         description: `Biaya Tambahan Pengadaan Ref PO: ${selectedPO.poNumber || selectedPO.id}`
       };
     } else {
-      // PO_PRINCIPAL
+      // PO_PRINCIPAL: Bila PO Impor, alokasikan ke Uang Muka Impor (Akun 1135); Bila Lokal, Hutang Usaha (Akun 2111)
       const defaultBank = selectedPO.currency === 'USD' ? '1111-USD' : selectedPO.currency === 'SGD' ? '1111-SGD' : '1111-IDR';
+      const principalAccountCode = isImport ? '1135' : '2111';
+      const descPrefix = isImport ? 'Pembayaran Uang Muka Impor (DP) PO' : 'Pembayaran Tagihan Pokok PO';
       return {
         paymentCategory: 'PO_PRINCIPAL',
         payeePayer: selectedPO.supplierName || selectedPO.supplier || 'Supplier Emas',
         bankAccountCode: defaultBank,
-        accountCode: '2111', // Hutang Usaha Logam Mulia
+        accountCode: principalAccountCode,
         amount: remaining > 0 ? remaining : totalIDR,
-        description: `Pembayaran Tagihan Pokok PO ${selectedPO.poNumber || selectedPO.id} - ${selectedPO.supplierName || selectedPO.supplier}${selectedPO.paymentTerms ? ` [Termin: ${selectedPO.paymentTerms}]` : ''}`
+        description: `${descPrefix} ${selectedPO.poNumber || selectedPO.id} - ${selectedPO.supplierName || selectedPO.supplier}${selectedPO.paymentTerms ? ` [Termin: ${selectedPO.paymentTerms}]` : ''}`
       };
     }
   };
@@ -310,44 +337,14 @@ export default function VoucherManagement() {
       }
     }
 
+    const isSelectedPOImport = isImportPO(purchaseOrders.find(p => p.poNumber === form.selectedPONumber || p.id === form.selectedPONumber));
+
     const categoryLabels = {
-      'PO_PRINCIPAL': '💰 Pelunasan Pokok Supplier',
+      'PO_PRINCIPAL': isSelectedPOImport || form.accountCode === '1135' ? '💰 Uang Muka Impor (DP)' : '💰 Pelunasan Pokok Supplier',
       'CUSTOMS_DUTY_PPH22': '🏛️ Pajak PPh 22 Impor (0,25%)',
       'LOGISTICS_HANDLING': '🚚 Logistik & Handling',
       'OTHER_EXPENSE': '📑 Biaya Tambahan'
     };
-
-    const newVoucher = {
-      id: Date.now(),
-      voucherNumber: `${currentType}-${Date.now().toString().slice(-6)}`,
-      voucherType: currentType,
-      type: currentType,
-      date: form.date,
-      selectedPONumber: form.selectedPONumber,
-      paymentCategory: form.paymentCategory || 'PO_PRINCIPAL',
-      categoryLabel: categoryLabels[form.paymentCategory] || '💰 Pelunasan Pokok Supplier',
-      payee: form.payeePayer,
-      payer: form.payeePayer,
-      bankAccountCode: form.bankAccountCode,
-      paymentMethod: isCheque ? 'cheque' : 'transfer',
-      checkNumber: isCheque ? form.checkNumber : '',
-      checkBankName: isCheque ? form.checkBankName : '',
-      checkDueDate: isCheque ? form.checkDueDate : '',
-      accountCode: form.accountCode,
-      amount: Number(form.amount),
-      description: form.description,
-      status: isCheque ? 'BEREDAR (OUTSTANDING)' : 'APPROVED & PAID',
-      isCleared: !isCheque,
-      createdAt: new Date().toISOString()
-    };
-
-    const key = currentType.startsWith('B') && (currentType.includes('K') || currentType === 'BCK')
-      ? KEYS.PAYMENT_VOUCHERS 
-      : KEYS.RECEIPT_VOUCHERS;
-    
-    const list = getStorage(key, []);
-    list.unshift(newVoucher);
-    await setStorage(key, list);
 
     // JURNAL SAK EMKM OTOMATIS:
     const isReceipt = currentType === 'BBM' || currentType === 'BKM';
@@ -360,14 +357,64 @@ export default function VoucherManagement() {
       ? 'Bank BCA Devisa SGD'
       : form.bankAccountCode === '1110'
       ? 'Kas Kecil (Petty Cash)'
+      : form.bankAccountCode === '1125'
+      ? 'Bank BCA USD (Ekspor)'
       : 'Bank BCA IDR Operasional';
 
     const lawanAccountName = coaAccounts.find(a => a.code === form.accountCode)?.name || (
-      form.accountCode === '1135' ? 'PPh 22 Dibayar Di Muka (Impor Emas)' :
+      form.accountCode === '1135' ? 'Uang Muka Impor / Pembelian Valas' :
+      form.accountCode === '11903' ? 'Pajak Dibayar dimuka-PPh 22' :
       form.accountCode === '5150' ? 'Biaya Freight & Insurance Impor / Ekspor' :
-      form.accountCode === '1159' ? 'Persediaan Emas Transit' :
+      form.accountCode === '1159' ? 'Persediaan Emas Dalam Perjalanan Kurir (Transit)' :
+      form.accountCode === '1121-1' ? 'Uang Muka Pembelian Emas Lokal' :
+      form.accountCode === '1121-2' ? 'Uang Muka Pembelian Emas Impor' :
       isReceipt ? 'Piutang Usaha' : 'Hutang Usaha'
     );
+
+    const newVoucher = {
+      id: Date.now(),
+      voucherNumber: `${currentType}-${Date.now().toString().slice(-6)}`,
+      voucherType: currentType,
+      type: currentType,
+      date: form.date,
+      selectedPONumber: form.selectedPONumber,
+      paymentCategory: form.paymentCategory || 'PO_PRINCIPAL',
+      categoryLabel: categoryLabels[form.paymentCategory] || (form.accountCode === '1135' ? '💰 Uang Muka Impor (DP)' : '💰 Pelunasan Pokok Supplier'),
+      payee: form.payeePayer,
+      payer: form.payeePayer,
+      bankAccountCode: form.bankAccountCode,
+      bankAccountName: bankName,
+      paymentMethod: isCheque ? 'cheque' : 'transfer',
+      checkNumber: isCheque ? form.checkNumber : '',
+      checkBankName: isCheque ? form.checkBankName : '',
+      checkDueDate: isCheque ? form.checkDueDate : '',
+      accountCode: form.accountCode,
+      accountName: lawanAccountName,
+      debitAccountCode: form.accountCode,
+      debitAccountName: lawanAccountName,
+      amount: Number(form.amount),
+      description: form.description,
+      status: isCheque ? 'BEREDAR (OUTSTANDING)' : 'APPROVED & PAID',
+      isCleared: !isCheque,
+      journalLines: isReceipt
+        ? [
+            { accountCode: bankGl, accountName: bankName, debit: Number(form.amount), credit: 0, description: 'Penerimaan Kas/Bank' },
+            { accountCode: form.accountCode, accountName: lawanAccountName, debit: 0, credit: Number(form.amount), description: form.description }
+          ]
+        : [
+            { accountCode: form.accountCode, accountName: lawanAccountName, debit: Number(form.amount), credit: 0, description: form.description },
+            { accountCode: bankGl, accountName: bankName, debit: 0, credit: Number(form.amount), description: 'Pengeluaran Kas/Bank' }
+          ],
+      createdAt: new Date().toISOString()
+    };
+
+    const key = currentType.startsWith('B') && (currentType.includes('K') || currentType === 'BCK')
+      ? KEYS.PAYMENT_VOUCHERS 
+      : KEYS.RECEIPT_VOUCHERS;
+    
+    const list = getStorage(key, []);
+    list.unshift(newVoucher);
+    await setStorage(key, list);
 
     const journals = getJournalEntries();
     const entryNum = await getNextReferenceNumber('journal');
@@ -632,8 +679,12 @@ export default function VoucherManagement() {
                               : 'bg-canvas/60 border-line text-fg-soft hover:border-gold/50'
                           }`}
                         >
-                          <div className="font-bold text-[0.85rem] mb-0.5">💰 Pokok Supplier</div>
-                          <div className="text-[0.7rem] text-fg-muted">Hutang Usaha (Akun 2111)</div>
+                          <div className="font-bold text-[0.85rem] mb-0.5">
+                            {isImportPO(purchaseOrders.find(p => (p.poNumber === form.selectedPONumber || p.id === form.selectedPONumber))) || form.accountCode === '1135' ? '💰 Uang Muka Impor (DP)' : '💰 Pokok Supplier'}
+                          </div>
+                          <div className="text-[0.7rem] text-fg-muted">
+                            {isImportPO(purchaseOrders.find(p => (p.poNumber === form.selectedPONumber || p.id === form.selectedPONumber))) || form.accountCode === '1135' ? 'Uang Muka Impor (Akun 1135)' : 'Hutang Usaha (Akun 2111)'}
+                          </div>
                         </button>
 
                         <button
@@ -646,7 +697,7 @@ export default function VoucherManagement() {
                           }`}
                         >
                           <div className="font-bold text-[0.85rem] mb-0.5">🏛️ Bea Cukai / PPh 22 (0,25%)</div>
-                          <div className="text-[0.7rem] text-fg-muted">Uang Muka Pajak (Akun 1135)</div>
+                          <div className="text-[0.7rem] text-fg-muted">Pajak Dibayar Di Muka (Akun 11903)</div>
                         </button>
 
                         <button
@@ -676,12 +727,22 @@ export default function VoucherManagement() {
                         </button>
                       </div>
 
+                      {/* Notifikasi Informative Akuntansi untuk Uang Muka Impor */}
+                      {form.paymentCategory === 'PO_PRINCIPAL' && (isImportPO(purchaseOrders.find(p => (p.poNumber === form.selectedPONumber || p.id === form.selectedPONumber))) || form.accountCode === '1135') && (
+                        <div className="mt-2.5 p-2.5 bg-gold-950/40 border border-gold-600/40 rounded text-xs text-gold-200 flex items-start gap-2">
+                          <AlertCircle size={16} className="text-gold-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>Kaidah SAK EMKM Pengadaan Impor:</strong> Pembayaran ke supplier valas luar negeri (seperti YLG Bullion Singapore) didebet ke <strong>Akun 1135 (Uang Muka Impor / Pembelian Valas)</strong> dengan kredit <strong>Bank BCA Devisa USD (1111-USD) / SGD (1111-SGD)</strong>. Saldo UM Impor ini akan dikonversi ke Persediaan Emas Impor (Akun 1158) saat fisik emas tiba dan diterbitkan TTB Vault.
+                          </div>
+                        </div>
+                      )}
+
                       {/* Notifikasi Informative Akuntansi untuk Bea Cukai */}
                       {form.paymentCategory === 'CUSTOMS_DUTY_PPH22' && (
                         <div className="mt-2.5 p-2.5 bg-sky-950/40 border border-sky-600/40 rounded text-xs text-sky-200 flex items-start gap-2">
                           <AlertCircle size={16} className="text-sky-400 shrink-0 mt-0.5" />
                           <div>
-                            <strong>Pemisahan Rekening & Pajak (SAK EMKM):</strong> Pembayaran PPh 22 Impor (0,25%) ditransfer ke Kas Negara / DJBC (via ID Billing MPN G2) dan didebet ke <strong>Akun 1135 (PPh 22 Dibayar Di Muka - Aset Lancar / Creditable)</strong>. Nominal ini tercatat terkait ke PO ini tanpa memotong sisa hutang komersial supplier.
+                            <strong>Pemisahan Rekening & Pajak (SAK EMKM):</strong> Pembayaran PPh 22 Impor (0,25%) ditransfer ke Kas Negara / DJBC (via ID Billing MPN G2) dan didebet ke <strong>Akun 11903 (Pajak Dibayar dimuka-PPh 22)</strong>. Nominal ini tercatat terkait ke PO ini tanpa memotong sisa tagihan komersial supplier.
                           </div>
                         </div>
                       )}

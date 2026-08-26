@@ -10,6 +10,7 @@ import {
   saveJournalEntries,
   getNextReferenceNumber
 } from '../services/storageService';
+import { exportCommercialInvoicePdf } from '../services/pdfService';
 import { getStoredUsdRate } from '../services/currencyService';
 import {
   Modal,
@@ -253,11 +254,14 @@ export default function ExportInvoicing() {
                     <TableCell>
                       <button
                         className="btn-primary py-1.5 px-2.5 text-xs"
-                        onClick={() => showModal({
-                          variant: 'info',
-                          title: `🖨️ Cetak Commercial Export Invoice ${inv.invoiceNo}`,
-                          message: `• Buyer: ${inv.buyerName}\n• No. PO Customer: ${inv.customerPONumber || '-'}\n• Ref SO: ${inv.soNumber || '-'}\n• Total: $ ${(inv.totalUSD || 0).toLocaleString()} USD`
-                        })}
+                        onClick={async () => {
+                          await exportCommercialInvoicePdf(inv);
+                          showModal({
+                            variant: 'success',
+                            title: `🖨️ Cetak Commercial Export Invoice ${inv.invoiceNo}`,
+                            message: `Dokumen Commercial Export Invoice (${inv.invoiceNo}) berhasil dicetak / dibuka.\n\n• Buyer: ${inv.buyerName}\n• Ref PO Cust: ${inv.customerPONumber || '-'}\n• Ref SO: ${inv.soNumber || '-'}\n• Fasilitas: PPN 0% (PEB: ${inv.pebNumber || '-'})\n• Total Nilai: $ ${(inv.totalUSD || 0).toLocaleString()} USD`
+                          });
+                        }}
                       >
                         <Printer size={14} /> Cetak Invoice
                       </button>

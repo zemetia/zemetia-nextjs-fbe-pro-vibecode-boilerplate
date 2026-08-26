@@ -313,7 +313,7 @@ const PurchaseOrder = {
             payee: paymentData.payee || order.supplierName || 'Supplier',
             bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
             bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
-            accountCode: paymentData.accountCode || (category === 'CUSTOMS_DUTY_PPH22' ? '1135' : '2111'),
+            accountCode: paymentData.accountCode || (category === 'CUSTOMS_DUTY_PPH22' ? '11903' : (order.currency === 'USD' || order.currency === 'SGD' ? '1135' : '2111')),
             amount: paymentAmount,
             notes: paymentData.notes || paymentData.description || '',
             recordedAt: new Date().toISOString()

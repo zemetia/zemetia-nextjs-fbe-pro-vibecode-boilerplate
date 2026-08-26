@@ -115,10 +115,33 @@ export const exportSalesOrderPdf = async (salesOrder, config) => {
 };
 
 /**
+ * Export SPK Produksi Perhiasan to PDF
+ */
+export const exportProductionSPKPdf = async (spk, config) => {
+  const exporter = getExporter();
+  if (exporter && typeof exporter.exportProductionSPK === 'function') {
+    return await exporter.exportProductionSPK(spk, config);
+  }
+  if (exporter && typeof exporter.exportJobOrder === 'function') {
+    return await exporter.exportJobOrder(spk, config);
+  }
+  console.warn('PDFExporter.exportProductionSPK not available');
+  return false;
+};
+
+/**
+ * Alias for SPK PDF export
+ */
+export const exportSPKPdf = exportProductionSPKPdf;
+
+/**
  * Export Job Order / Production SPK to PDF
  */
 export const exportJobOrderPdf = async (jo, config) => {
   const exporter = getExporter();
+  if (exporter && typeof exporter.exportProductionSPK === 'function') {
+    return await exporter.exportProductionSPK(jo, config);
+  }
   if (exporter && typeof exporter.exportJobOrder === 'function') {
     return await exporter.exportJobOrder(jo, config);
   }
@@ -185,3 +208,62 @@ export const exportCashFlowPdf = async (data, period, config) => {
   console.warn('PDFExporter.exportCashFlow not available');
   return false;
 };
+
+/**
+ * Export Commercial Export Invoice to PDF (PPN 0%)
+ */
+export const exportCommercialInvoicePdf = async (invoice, config) => {
+  const exporter = getExporter();
+  if (exporter && typeof exporter.exportCommercialInvoice === 'function') {
+    return await exporter.exportCommercialInvoice(invoice, config);
+  }
+  console.warn('PDFExporter.exportCommercialInvoice not available');
+  return false;
+};
+
+/**
+ * Alias for Commercial Invoice PDF export
+ */
+export const exportInvoicePdf = exportCommercialInvoicePdf;
+
+/**
+ * Export Surat Jalan Ekspor & Packing List (Delivery Order) to PDF
+ */
+export const exportExportDeliveryOrderPdf = async (deliveryOrder, config) => {
+  const exporter = getExporter();
+  if (exporter && typeof exporter.exportExportDeliveryOrder === 'function') {
+    return await exporter.exportExportDeliveryOrder(deliveryOrder, config);
+  }
+  console.warn('PDFExporter.exportExportDeliveryOrder not available');
+  return false;
+};
+
+/**
+ * Alias for Export Delivery Order PDF export
+ */
+export const exportDeliveryOrderPdf = exportExportDeliveryOrderPdf;
+
+/**
+ * Export Faktur Penjualan Emas Lokal IDR to PDF
+ */
+export const exportLocalSalesInvoicePdf = async (sale, config) => {
+  const exporter = getExporter();
+  if (exporter && typeof exporter.exportLocalSalesInvoice === 'function') {
+    return await exporter.exportLocalSalesInvoice(sale, config);
+  }
+  console.warn('PDFExporter.exportLocalSalesInvoice not available');
+  return false;
+};
+
+/**
+ * Export Surat Jalan & Serah Terima Emas Lokal to PDF
+ */
+export const exportLocalDeliveryOrderPdf = async (sale, config) => {
+  const exporter = getExporter();
+  if (exporter && typeof exporter.exportLocalDeliveryOrder === 'function') {
+    return await exporter.exportLocalDeliveryOrder(sale, config);
+  }
+  console.warn('PDFExporter.exportLocalDeliveryOrder not available');
+  return false;
+};
+

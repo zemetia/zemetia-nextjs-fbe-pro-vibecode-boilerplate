@@ -4,7 +4,8 @@
 import {
   LayoutDashboard, ShoppingCart, PlaneTakeoff, Flame,
   FileText, CreditCard, Warehouse, BookOpen, Package,
-  Users, Truck, Hammer, BarChart3, Settings, Sparkles, ShoppingBag, PackageCheck, ClipboardList
+  Users, Truck, Hammer, BarChart3, Settings, Sparkles, ShoppingBag, PackageCheck, ClipboardList,
+  Coins
 } from 'lucide-react';
 
 import Dashboard from '../pages/Dashboard';
@@ -15,9 +16,13 @@ import BuyingScrapMelting from '../pages/BuyingScrapMelting';
 import GoodsReceiptPage from '../pages/GoodsReceiptPage';
 import JewelryProduction from '../pages/JewelryProduction';
 import ExportSalesOrderPage from '../pages/ExportSalesOrderPage';
+import LocalSalesTrading from '../pages/LocalSalesTrading';
+import LocalDeliveryOrderPage from '../pages/LocalDeliveryOrderPage';
+import LocalInvoicing from '../pages/LocalInvoicing';
 import ExportInvoicing from '../pages/ExportInvoicing';
 import ExportDeliveryOrderPage from '../pages/ExportDeliveryOrderPage';
 import WarehouseManagement from '../pages/WarehouseManagement';
+import SilverAlloyPage from '../pages/SilverAlloyPage';
 import VoucherManagement from '../pages/VoucherManagement';
 import MasterChequePage from '../pages/MasterChequePage';
 import MasterFinishedGoods from '../pages/MasterFinishedGoods';
@@ -84,11 +89,39 @@ export const PAGES = [
     component: WarehouseManagement
   },
   {
+    id: 'silver-alloy',
+    title: 'Penambahan Perak ke Emas Batangan (Alloy & Campuran)',
+    label: 'Tambah Perak (Alloy)',
+    icon: Coins,
+    component: SilverAlloyPage
+  },
+  {
     id: 'jewelry-production',
     title: 'Produksi Perhiasan & Alloy Karat Calculator',
     label: 'Produksi Perhiasan',
     icon: Hammer,
     component: JewelryProduction
+  },
+  {
+    id: 'local-sales',
+    title: 'Penjualan & Trading Logam Mulia Lokal IDR',
+    label: 'Penjualan Emas Lokal',
+    icon: ShoppingBag,
+    component: LocalSalesTrading
+  },
+  {
+    id: 'local-do',
+    title: 'Surat Jalan Pengeluaran Emas Lokal (Local Delivery Order & Serah Terima)',
+    label: 'Surat Jalan Lokal',
+    icon: Truck,
+    component: LocalDeliveryOrderPage
+  },
+  {
+    id: 'local-invoicing',
+    title: 'Faktur Penjualan Emas Lokal IDR (Commercial Invoicing - PMK 48/2023)',
+    label: 'Faktur Penjualan Lokal',
+    icon: FileText,
+    component: LocalInvoicing
   },
   {
     id: 'export-so',
@@ -198,7 +231,10 @@ export const PAGE_GROUPS = [
     title: '🏛️ GUDANG & VAULT',
     items: [
       { id: 'goods-receipt', label: 'Penerimaan Barang (TTB)' },
+      { id: 'local-do', label: 'Surat Jalan Pengeluaran (Lokal)' },
+      { id: 'export-do', label: 'Surat Jalan Pengeluaran (Ekspor)' },
       'warehouse-mgmt',
+      'silver-alloy',
       'jewelry-production',
       'master-items',
       'master-finished-goods'
@@ -208,6 +244,9 @@ export const PAGE_GROUPS = [
     id: 'sales',
     title: '🏷️ PENJUALAN',
     items: [
+      'local-sales',
+      'local-do',
+      'local-invoicing',
       'export-so',
       'export-invoicing',
       'export-do',
