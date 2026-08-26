@@ -1279,6 +1279,7 @@ const Attendance = {
         let workDays = 0;
         let missingTaps = 0;
         let lateCount = 0;
+        let halfDayIzinCount = 0;
         let securityOvertimeHours = 0;
         let securityNightDays = 0;
         
