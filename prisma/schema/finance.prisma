@@ -1,0 +1,293 @@
+/// Finance segment — voucher kas & bank (BKK / BKM / BBK / BBM) dan bukti
+/// memorial (BM). Identifiers stay in English; the Indonesian labels shown in the
+/// UI are mapped at the presentation layer (`*_LABELS` in `src/lib/cash-voucher.ts`).
+
+/// Sumbu pertama: **dari mana uangnya**.
+///
+/// CASH     — kas di tangan          → BKM / BKK
+/// BANK     — rekening bank          → BBM / BBK
+/// MEMORIAL — bukan kas maupun bank  → BM
+///
+/// `MEMORIAL` ada karena dua metode pembayaran yang benar-benar dipakai — emas
+/// fisik dan kompensasi utang-piutang — tidak menyentuh kas maupun bank sama
+/// sekali. Memaksanya masuk voucher kas akan membuat saldo kas melaporkan uang
+/// yang tidak pernah bergerak, dan tidak ada apa pun di layar yang akan
+/// menunjukkannya. Bentuk dokumennya sama persis, jadi yang dibutuhkan hanya
+/// nilai ketiga di sumbu ini — bukan tabel keempat.
+enum VoucherFund {
+  CASH
+  BANK
+  MEMORIAL
+}
+
+/// Sumbu kedua: **ke arah mana**. Menentukan sisi debit/kredit jurnalnya, jadi
+/// petugas tidak pernah memilih debit/kredit per baris.
+///
+/// IN  — uang/nilai masuk  → akun dana didebit, akun detail dikredit
+/// OUT — uang/nilai keluar → akun detail didebit, akun dana dikredit
+enum VoucherDirection {
+  IN
+  OUT
+}
+
+/// DRAFT             — masih bisa diubah dan dihapus, belum diajukan
+/// PENDING_APPROVAL  — diajukan, menunggu verifikasi; terkunci dari perubahan
+/// APPROVED          — disetujui, siap diposting (atau sudah lewat kalau auto-post)
+/// POSTED            — jurnalnya sudah masuk buku besar
+/// VOID              — dibatalkan; barisnya tetap disimpan
+///
+/// Penolakan tidak punya status sendiri: verifikator mengembalikannya ke DRAFT
+/// dengan `reviewNote` wajib, sehingga voucher yang ditolak kembali bisa
+/// diperbaiki di tempat alih-alih menjadi dokumen mati yang harus diketik ulang.
+enum VoucherStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  POSTED
+  VOID
+}
+
+/// Untuk siapa uangnya. Menentukan sumber pilihan "Pay to / Receive from" di
+/// layar dan akun default baris pertama — bukan sekadar label pelaporan.
+enum VoucherCategory {
+  GENERAL_EXPENSE
+  EMPLOYEE
+  SUPPLIER
+}
+
+/// Cara uangnya berpindah. Tidak semua metode sah untuk setiap `fund` — aturannya
+/// hidup di `PAYMENT_METHOD_FUNDS` (`src/lib/cash-voucher.ts`) dan ditegakkan Zod,
+/// bukan di sini: Postgres tidak bisa menyatakan "GIRO hanya untuk BANK" tanpa
+/// CHECK constraint yang harus ditulis ulang setiap kali daftarnya bertambah.
+///
+/// CASH            — tunai
+/// BANK_TRANSFER   — transfer antar rekening (lihat `transferChannel`)
+/// CHEQUE          — cek
+/// GIRO            — bilyet giro
+/// CARD            — kartu debit/kredit
+/// VIRTUAL_ACCOUNT — VA bank
+/// LETTER_OF_CREDIT— L/C atau SKBDN
+/// ESCROW          — rekening penampungan pihak ketiga
+/// GOLD            — diselesaikan dengan emas fisik (fund `MEMORIAL`)
+/// NETTING         — kompensasi utang-piutang (fund `MEMORIAL`)
+enum VoucherPaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  GIRO
+  CARD
+  VIRTUAL_ACCOUNT
+  LETTER_OF_CREDIT
+  ESCROW
+  GOLD
+  NETTING
+}
+
+/// Jalur kliring transfer rupiah. Dipisah dari `BANK_TRANSFER` karena di atas
+/// satu miliar RTGS adalah satu-satunya jalur yang mungkin, biayanya berbeda, dan
+/// bagian keuangan perlu melihatnya di daftar tanpa membuka dokumennya.
+enum VoucherTransferChannel {
+  BI_FAST
+  SKN
+  RTGS
+}
+
+/// Satu voucher keuangan.
+///
+/// **Empat singkatan lapangan adalah satu dokumen dengan dua sumbu.** BKK/BKM/
+/// BBK/BBM berbeda hanya pada `fund` × `direction`; field, siklus hidup, dan
+/// daftarnya sama persis. Memecahnya jadi empat tabel akan melipatempatkan setiap
+/// query, setiap permission, dan setiap perbaikan bug tanpa satu pun imbalan.
+/// Singkatannya diturunkan dari kedua kolom itu (`voucherKind()`), tidak disimpan.
+///
+/// **Nomor tidak pernah diketik** — `BKK-202608-0042`, direset tiap bulan, dengan
+/// prefiks yang mengikuti jenisnya. Periodenya diambil dari **tanggal voucher**,
+/// bukan dari hari ini: dokumen bertanggal mundur masuk ke deret bulan itu.
+///
+/// **`totalAmount` dihitung server-side** dari barisnya (`sumVoucherLines()`),
+/// tidak pernah dikirim client — total yang dikirim terpisah dari barisnya adalah
+/// cara dokumen dan jurnalnya berselisih tanpa ada yang terlihat salah di layar.
+///
+/// **Jurnalnya tidak dipegang lewat FK.** Entry-nya ditemukan lewat
+/// `referenceType = 'cash_voucher'` + `referenceId`, pola yang sama dengan
+/// `MetalMovement` — jurnal adalah buku yang berdiri sendiri, dan dokumen sumber
+/// tidak boleh bisa menariknya ikut terhapus.
+model CashVoucher {
+  id     String        @id @default(cuid())
+  /// `BKK-202608-0042` / `BKM-` / `BBK-` / `BBM-` / `BM-`, direset tiap bulan.
+  number String        @unique
+  status VoucherStatus @default(DRAFT)
+
+  fund      VoucherFund
+  direction VoucherDirection
+  /// Calendar day of the voucher — a day, not an instant.
+  date      DateTime         @db.Date
+
+  category VoucherCategory
+
+  /// Pihak lawan, ditulis apa adanya: "Pay to" saat OUT, "Receive from" saat IN.
+  /// Selalu terisi meski `partnerId` ada — voucher yang dicetak dan ditandatangani
+  /// harus tetap terbaca sama meski mitranya kelak berganti nama.
+  counterpartyName String
+  /// Mitra terdaftar, bila pihak lawannya memang ada di master data. Nullable
+  /// karena banyak pengeluaran sah tidak punya mitra (reimburse, kas kecil).
+  partnerId        String?
+
+  /// Keperluannya, dalam satu kalimat. Wajib — voucher tanpa alasan tidak bisa
+  /// diperiksa siapa pun setelah bulannya lewat.
+  purpose String
+
+  /// Dokumen yang dibayar oleh voucher ini: `METAL_PURCHASE` + id-nya, dst.
+  /// Sengaja lepas tanpa FK, pola yang sama dengan `MetalMovement` dan
+  /// `JournalEntry` — modul baru bisa menumpang tanpa mengubah tabel ini, dan
+  /// dokumen sumber tidak bisa menarik vouchernya ikut terhapus.
+  ///
+  /// Inilah yang membuat progres pembayaran tidak perlu kolom sendiri: yang sudah
+  /// dibayar adalah Σ voucher POSTED yang menunjuk dokumen itu, bukan angka kedua
+  /// yang harus dijaga tetap sama dengan kas.
+  referenceType String?
+  referenceId   String?
+
+  /// Mata uang dokumen yang dibayar, bila bukan rupiah, beserta kurs yang
+  /// benar-benar dipakai saat uangnya keluar.
+  ///
+  /// **Kursnya milik pembayaran, bukan milik dokumen.** PO import bernilai valas
+  /// sementara vouchernya rupiah, jadi tanpa angka ini tidak ada satu pun besaran
+  /// yang bisa dibandingkan untuk menjawab "sudah lunas atau belum". Menaruhnya
+  /// di header PO akan membuat satu kurs mewakili semua cicilan — padahal tiap
+  /// transfer punya kurs banknya sendiri, dan itulah yang harus lolos audit.
+  ///
+  /// Nilai dalam mata uang dokumen = `totalAmount / referenceExchangeRate`.
+  referenceCurrencyCode String?
+  referenceExchangeRate Decimal? @db.Decimal(18, 6)
+
+  paymentMethod   VoucherPaymentMethod
+  /// Hanya untuk `BANK_TRANSFER`.
+  transferChannel VoucherTransferChannel?
+  bankName        String?
+  bankAccountNo   String?
+  /// Nomor cek / BG / VA / L/C / referensi transaksi.
+  referenceNumber String?
+  /// Tanggal jatuh tempo cek atau bilyet giro — wajib untuk kedua metode itu.
+  /// Instrumen bertanggal mundur tanpa tanggal cair tidak bisa ditagih maupun
+  /// direkonsiliasi.
+  dueDate         DateTime?               @db.Date
+
+  /// Posting jurnal otomatis begitu voucher disetujui. Terkunci begitu voucher
+  /// meninggalkan DRAFT — kalau tidak, perilaku posting bisa diubah setelah
+  /// persetujuannya keluar.
+  autoPostOnApproval Boolean @default(true)
+
+  /// Σ `lines.amount`. Computed.
+  totalAmount Decimal @db.Decimal(18, 2)
+
+  notes String?
+
+  createdById  String
+  /// Verifikator. Terisi baik saat menyetujui maupun saat mengembalikan ke draft.
+  reviewedById String?
+  reviewedAt   DateTime?
+  /// Catatan verifikasi — wajib saat voucher dikembalikan ke DRAFT.
+  reviewNote   String?
+  postedById   String?
+  postedAt     DateTime?
+  voidedById   String?
+  voidedAt     DateTime?
+  /// Alasan pembatalan — wajib diisi saat status menjadi VOID.
+  voidReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partner    Partner? @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  createdBy  User     @relation("CashVoucherCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedBy User?    @relation("CashVoucherReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+  postedBy   User?    @relation("CashVoucherPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  voidedBy   User?    @relation("CashVoucherVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  /// Dari rekening mana uangnya keluar (atau ke mana ia masuk).
+  funds CashVoucherFundLine[]
+  lines CashVoucherLine[]
+
+  @@index([status])
+  @@index([date])
+  @@index([fund, direction])
+  @@index([category])
+  @@index([paymentMethod])
+  @@index([partnerId])
+  @@index([referenceType, referenceId])
+  /// Cek/giro yang belum cair dicari lewat kolom ini.
+  @@index([dueDate])
+  @@map("cash_vouchers")
+}
+
+/// Satu rekening yang ikut membayar (atau ikut menerima) — sisi kas/bank
+/// vouchernya.
+///
+/// **Dulu ini satu kolom (`contraAccountId`), dan itu hanya benar selama satu
+/// pembayaran berarti satu rekening.** Kenyataannya satu tagihan supplier sering
+/// ditutup dari dua rekening dalam satu hari; memaksanya jadi dua voucher berarti
+/// satu pembayaran yang disepakati sekali punya dua nomor dokumen, dua tanggal
+/// jatuh tempo yang bisa berbeda, dan dua baris di setiap laporan yang harus
+/// dijumlahkan sendiri oleh pembacanya. Yang berbeda antar rekening cuma akunnya
+/// dan angkanya, jadi keduanya data — alasan yang sama yang membuat biaya
+/// pembelian jadi baris, bukan kolom.
+///
+/// **Selalu ada minimal satu baris**, termasuk untuk pembayaran satu rekening:
+/// menyimpan kolom lama "kalau cuma satu" akan menyediakan dua tempat untuk satu
+/// jawaban, dan suatu hari keduanya berselisih.
+///
+/// Untuk cek dan bilyet giro, akun yang benar di sini adalah akun "cek/giro yang
+/// belum cair" — bukan rekening bank. Uangnya belum keluar dari rekening saat
+/// voucher diposting, dan mengkreditkan bank sekarang membuat rekonsiliasi bank
+/// tidak akan pernah cocok. Pencairannya dicatat sebagai voucher kedua (BBK dari
+/// akun giro beredar ke bank) pada tanggal cair.
+///
+/// Σ `amount` seluruh baris ini wajib sama dengan Σ baris rincian — itulah yang
+/// membuat jurnalnya seimbang, dan ditegakkan Zod (`cash-voucher.ts`), bukan oleh
+/// database, supaya kegagalannya bisa membawa pesan yang terbaca.
+model CashVoucherFundLine {
+  id        String @id @default(cuid())
+  voucherId String
+  /// 1-based, menjaga urutan seperti yang diketik petugas.
+  lineNo    Int
+  accountId String
+
+  amount Decimal @db.Decimal(18, 2)
+  /// Nomor rekening / referensi transfer khusus rekening ini, bila berbeda antar
+  /// rekening. Yang berlaku untuk seluruh voucher tetap di header.
+  note   String?
+
+  voucher CashVoucher   @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  account LedgerAccount @relation("CashVoucherFundAccount", fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([voucherId, lineNo])
+  @@index([accountId])
+  @@map("cash_voucher_fund_lines")
+}
+
+/// Satu baris rincian. Nilainya selalu positif dan arahnya ditentukan
+/// `direction` di header — tidak ada pilihan debit/kredit per baris, karena jenis
+/// vouchernya sudah menjawabnya dan dua jawaban untuk satu hal pasti akan
+/// berselisih suatu hari.
+///
+/// Barisnya cascade bersama headernya (header adalah satu-satunya jalan mencapai
+/// baris ini) tapi memegang akunnya dengan `Restrict` — akun yang sudah dipakai
+/// tidak boleh hilang dari bawah dokumen yang merujuknya.
+model CashVoucherLine {
+  id        String @id @default(cuid())
+  voucherId String
+  /// 1-based position — menjaga urutan baris seperti yang diketik petugas.
+  lineNo    Int
+  accountId String
+
+  description String?
+  amount      Decimal @db.Decimal(18, 2)
+
+  voucher CashVoucher   @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  account LedgerAccount @relation("CashVoucherLineAccount", fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([voucherId, lineNo])
+  @@index([accountId])
+  @@map("cash_voucher_lines")
+}

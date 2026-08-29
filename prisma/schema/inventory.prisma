@@ -1,0 +1,65 @@
+/// Inventory segment — penyimpanan emas. Identifiers stay in English; the
+/// Indonesian labels shown in the UI are mapped at the presentation layer
+/// (`src/lib/metal-lot.ts`).
+
+/// Bentuk fisik satu lot.
+enum MetalLotForm {
+  BAR
+  GRANULE
+  JEWELRY
+  SCRAP
+  BAL
+}
+
+enum BalStage {
+  OPEN
+  SEALED
+}
+
+model MetalLot {
+  id    String       @id @default(cuid())
+  /// `BAR-0001` / `PHS-0001` / `SCR-0001` / `BAL-0001` — satu urutan per bentuk.
+  code  String       @unique
+  form  MetalLotForm
+  metal Metal
+
+  productId String?
+
+  // ── BAR ────────────────────────────────────────────────────────────────────
+  serialNumber      String? @unique
+  certificateNumber String?
+  refinerName       String?
+
+  // ── JEWELRY ────────────────────────────────────────────────────────────────
+  karat           Int?
+  pieceCount      Int?
+  stoneWeightGram Decimal? @db.Decimal(14, 4)
+
+  // ── BAL ────────────────────────────────────────────────────────────────────
+  balStage             BalStage?
+  assayedPurityPercent Decimal?  @db.Decimal(7, 4)
+
+  // ── Umum ───────────────────────────────────────────────────────────────────
+  purityPercent   Decimal @db.Decimal(7, 4)
+  grossWeightGram Decimal @db.Decimal(14, 4)
+  fineWeightGram  Decimal @db.Decimal(14, 4)
+
+  sourceProductionOrderId String?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdById String
+
+  product               Product?         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sourceProductionOrder ProductionOrder? @relation("MetalLotProductionOrder", fields: [sourceProductionOrderId], references: [id], onDelete: Restrict)
+  createdBy             User             @relation("MetalLotCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([form])
+  @@index([metal])
+  @@index([productId])
+  @@index([sourceProductionOrderId])
+  @@index([balStage])
+  @@map("metal_lots")
+}

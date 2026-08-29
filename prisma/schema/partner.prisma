@@ -1,0 +1,207 @@
+/// Mitra usaha — satu tabel untuk lawan transaksi, apa pun perannya.
+///
+/// **Dua sumbu yang tidak saling menurunkan.** Sebuah baris punya *bentuk badan*
+/// (`type`) dan *peran* (`isSupplier` / `isCustomer`), dan keduanya bebas
+/// berkombinasi: toko emas perorangan menyetor scrap (supplier) sekaligus
+/// membeli perhiasan jadi (customer), sementara wholesaler DMCC adalah badan
+/// yang hanya membeli. Memecahnya per peran akan melahirkan dua baris untuk satu
+/// badan hukum — dua NPWP yang sama, dua alamat yang harus diperbarui bersamaan,
+/// dan tidak ada satu pun query yang bisa menjawab posisi total dengan mereka.
+///
+/// **Peran menentukan kolom mana yang wajib, dan itu ditegakkan Zod, bukan
+/// skema** (`src/lib/validations/partner.ts`) — sama seperti `MetalPurchase` yang
+/// satu tabel untuk tiga bentuk dokumen. Postgres hanya menjamin minimal satu
+/// peran menyala lewat check constraint; sisanya di boundary API.
+///
+/// **Asal mitra (Overseas/Lokal) tidak punya kolom**: ia diturunkan dari
+/// `country` — Indonesia berarti lokal, negara lain berarti overseas
+/// (`partnerOriginFromCountry()` di `src/lib/partner.ts`). Menyimpannya
+/// terpisah berarti dua jawaban untuk satu fakta yang sudah dijawab negaranya,
+/// dan yang salah satunya akan meloloskan mitra ke dokumen yang keliru.
+///
+/// `code` (`MTR-0001`) adalah identitas manusiawi yang dicetak di PO dan invoice;
+/// dibuat server-side dan tidak pernah diedit. Country/currency memakai
+/// `Restrict` agar baris referensi yang ditunjuk mitra tidak bisa dihapus.
+///
+/// Mitra dinonaktifkan (`isActive`), tidak pernah dihapus — dokumen lama harus
+/// tetap bisa me-resolve lawan transaksinya.
+
+/// BADAN hukum (PT, CV, Ltd, DMCC) vs orang perseorangan. Menentukan identitas
+/// mana yang wajib: badan membawa NIB + NPWP badan dan punya PIC terpisah,
+/// perorangan cukup NIK/NPWP pribadi dan dia sendiri kontaknya.
+enum PartnerType {
+  COMPANY
+  INDIVIDUAL
+}
+
+/// Rail pembayaran yang disepakati. Sengaja kasar — detailnya ada di kolom bank.
+enum PartnerPaymentMethod {
+  TRANSFER
+  CASH
+  LETTER_OF_CREDIT
+  CONSIGNMENT
+}
+
+/// Identitas orang yang jadi kontak — **bukan** identitas badannya.
+///
+/// Kewarganegaraan kontak berdiri sendiri dari negara mitra: wholesaler DMCC
+/// bisa menaruh orang Indonesia sebagai PIC, dan pabrik lokal bisa dipegang
+/// ekspatriat. Karena itu jenis identitasnya ditanyakan, bukan diturunkan dari
+/// `Partner.countryId` — satu-satunya yang menentukan NIK atau paspor adalah
+/// orangnya sendiri.
+enum PartnerContactIdType {
+  /// NIK KTP — 16 digit, WNI.
+  NIK
+  PASSPORT
+  OTHER
+}
+
+/// Status verifikasi mitra (KYP — Know Your Partner).
+///
+/// **`EXPIRED` sengaja tidak ada di sini.** Kedaluwarsa bukan keputusan yang
+/// pernah diambil siapa pun, ia cuma tanggal yang lewat: ia diturunkan dari
+/// `verifiedUntil` saat dibaca (`partnerVerificationState()` di
+/// `src/lib/partner-verification.ts`). Menyimpannya berarti butuh cron yang
+/// membalik kolom tiap malam, dan sehari saja cron itu tidak jalan layar akan
+/// memasang centang untuk mitra yang sudah harus memperbarui datanya.
+enum PartnerVerificationStatus {
+  /// Belum pernah diajukan, atau datanya sempat tidak lengkap lagi.
+  UNVERIFIED
+  /// Sudah diajukan, menunggu keputusan pemegang `partners:review-verification`.
+  PENDING
+  VERIFIED
+  /// Ditolak berikut alasannya (`verificationNote`) — bisa diajukan ulang.
+  REJECTED
+}
+
+model Partner {
+  id        String      @id @default(cuid())
+  code      String      @unique
+  name      String
+  /// Nama legal lengkap bila berbeda dari nama dagang — badan usaha saja.
+  legalName String?
+  type      PartnerType @default(COMPANY)
+
+  /// Minimal satu peran wajib menyala — dijaga check constraint `partners_role_check`.
+  isSupplier Boolean @default(false)
+  isCustomer Boolean @default(false)
+  /// Mengantar barang, tanpa harus berdagang dengannya. Peran ketiga dan bukan
+  /// tabel tersendiri karena satu badan bisa memasok sekaligus mengantar — dan
+  /// dua baris untuk satu badan hukum adalah persis yang diberantas saat
+  /// `suppliers` dilebur jadi `partners`.
+  isCourier  Boolean @default(false)
+
+  /// Menjawab sekaligus asal mitra: Indonesia = lokal, selain itu = overseas.
+  countryId    String
+  currencyCode String
+
+  email   String?
+  phone   String?
+  website String?
+
+  contactName      String?
+  contactRole      String?
+  contactPhone     String?
+  contactEmail     String?
+  /// Kewarganegaraan kontak — FK sendiri, bukan `countryId` mitra. Yang
+  /// menentukan NIK atau paspor adalah orangnya, bukan badan yang diwakilinya.
+  contactCountryId String?
+  contactIdType    PartnerContactIdType?
+  contactIdNumber  String?
+
+  /// Alamat **perusahaan/mitra**, bukan alamat kontaknya — ia bagian dari
+  /// identitas badan (dipakai di PO, invoice, dan dokumen bea cukai), jadi
+  /// tempatnya di blok identitas, bukan menumpang di blok kontak.
+  addressLine String?
+  city        String?
+  province    String?
+  postalCode  String?
+
+  /// NPWP badan untuk COMPANY, NPWP pribadi/NIK untuk INDIVIDUAL; VAT/TIN bila luar negeri.
+  taxNumber                 String?
+  /// Nomor Induk Berusaha — 13 digit, **badan usaha Indonesia saja**. Menggantikan
+  /// `registrationNumber` yang dulu satu kolom untuk dua hal berbeda: NIB terbit
+  /// dari OSS dengan format yang bisa diperiksa, sedangkan nomor registrasi luar
+  /// negeri bentuknya berbeda di tiap yurisdiksi. Satu kolom untuk keduanya
+  /// berarti tidak ada satu pun aturan yang bisa ditegakkan atas isinya.
+  nib                       String?
+  /// Company registration number mitra luar negeri (CR No. DMCC, UEN, dst.).
+  foreignRegistrationNumber String?
+  /// Pengusaha Kena Pajak. Menentukan boleh tidaknya faktur pajaknya dikreditkan,
+  /// jadi ia jawaban ya/tidak yang harus ada — bukan disimpulkan dari ada/tidaknya
+  /// nomor SPPKP.
+  isPkp                     Boolean @default(false)
+  sppkpNumber               String?
+
+  /// Akta pendirian + pengesahannya — badan usaha, dan opsional bahkan untuk KYP:
+  /// dokumennya sering baru menyusul, sementara NIB dan NPWP sudah cukup untuk
+  /// memastikan lawan transaksinya nyata.
+  deedNumber           String?
+  deedDate             DateTime? @db.Date
+  ministryDecreeNumber String?
+
+  /// --- Verifikasi (KYP) ---
+  ///
+  /// Centang "Terverifikasi" adalah **klaim yang dipertanggungjawabkan seseorang**,
+  /// bukan status turunan dari kelengkapan form: kelengkapan cuma syarat untuk
+  /// boleh *mengajukan* (`partnerKypChecklist()`), keputusannya tetap di tangan
+  /// pemegang `partners:review-verification`. Karena itu pengaju dan penyetujunya
+  /// disimpan terpisah — satu orang tidak boleh jadi keduanya sekaligus.
+  ///
+  /// Masa berlakunya dua tahun (`verifiedUntil`), lalu datanya wajib diperbarui
+  /// dan diajukan lagi. Dan bila suntingan berikutnya membuat data KYP tidak
+  /// lengkap lagi, statusnya balik ke `UNVERIFIED` di route `PATCH` — centang
+  /// yang bertahan di atas data yang sudah bolong adalah kebohongan diam-diam.
+  verificationStatus        PartnerVerificationStatus @default(UNVERIFIED)
+  verificationRequestedAt   DateTime?
+  verificationRequestedById String?
+  verificationReviewedAt    DateTime?
+  verificationReviewedById  String?
+  verifiedAt                DateTime?
+  /// `verifiedAt` + 2 tahun. Sesudah tanggal ini statusnya terbaca kedaluwarsa.
+  verifiedUntil             DateTime?
+  /// Alasan penolakan, atau catatan penyetuju.
+  verificationNote          String?
+
+  /// Termin saat *kita* membayar mereka (sisi supplier).
+  purchaseTermDays      Int?
+  purchasePaymentMethod PartnerPaymentMethod?
+  /// Termin saat *mereka* membayar kita (sisi customer). Dipisah karena satu
+  /// mitra berperan ganda bisa punya kesepakatan berbeda di tiap arah.
+  salesTermDays         Int?
+  salesPaymentMethod    PartnerPaymentMethod?
+
+  bankName        String?
+  bankAccountName String?
+  bankAccountNo   String?
+  /// SWIFT/BIC — remitansi luar negeri saja.
+  bankSwiftCode   String?
+
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country                 Country           @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  contactCountry          Country?          @relation("PartnerContactNationality", fields: [contactCountryId], references: [id], onDelete: Restrict)
+  currency                Currency          @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  verificationRequestedBy User?             @relation("PartnerVerificationRequestedBy", fields: [verificationRequestedById], references: [id], onDelete: Restrict)
+  verificationReviewedBy  User?             @relation("PartnerVerificationReviewedBy", fields: [verificationReviewedById], references: [id], onDelete: Restrict)
+  suggestedInRequests     PurchaseRequest[] @relation("PurchaseRequestSuggestedPartner")
+  cashVouchers            CashVoucher[]
+
+  @@index([type])
+  @@index([isSupplier])
+  @@index([isCustomer])
+  @@index([isCourier])
+  /// Asal mitra difilter lewat negaranya, jadi indeksnya di kolom ini.
+  @@index([countryId])
+  @@index([contactCountryId])
+  @@index([name])
+  @@index([isActive])
+  /// Dua kolom, satu pertanyaan: daftar "perlu ditinjau" membaca statusnya, daftar
+  /// "perlu pembaruan" membaca tanggal berlakunya.
+  @@index([verificationStatus])
+  @@index([verifiedUntil])
+  @@map("partners")
+}

@@ -1,0 +1,44 @@
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  roleId        String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  role     Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  accounts Account[]
+  sessions Session[]
+
+  partnerVerificationsRequested Partner[] @relation("PartnerVerificationRequestedBy")
+  partnerVerificationsReviewed  Partner[] @relation("PartnerVerificationReviewedBy")
+
+  journalEntriesCreated JournalEntry[] @relation("JournalCreatedBy")
+  journalEntriesPosted  JournalEntry[] @relation("JournalPostedBy")
+  journalEntriesVoided  JournalEntry[] @relation("JournalVoidedBy")
+
+  metalLotsCreated MetalLot[] @relation("MetalLotCreatedBy")
+
+  cashVouchersCreated  CashVoucher[] @relation("CashVoucherCreatedBy")
+  cashVouchersReviewed CashVoucher[] @relation("CashVoucherReviewedBy")
+  cashVouchersPosted   CashVoucher[] @relation("CashVoucherPostedBy")
+  cashVouchersVoided   CashVoucher[] @relation("CashVoucherVoidedBy")
+
+  approvalRequestsRequested ApprovalRequest[] @relation("ApprovalRequestedBy")
+  approvalRequestsDecided   ApprovalRequest[] @relation("ApprovalDecidedBy")
+
+  productionOrdersCreated  ProductionOrder[] @relation("ProductionOrderCreatedBy")
+  productionOrdersReleased ProductionOrder[] @relation("ProductionOrderReleasedBy")
+  productionOrdersClosed   ProductionOrder[] @relation("ProductionOrderClosedBy")
+  productionOrdersVoided   ProductionOrder[] @relation("ProductionOrderVoidedBy")
+
+  purchaseRequestsCreated  PurchaseRequest[] @relation("PurchaseRequestCreatedBy")
+  purchaseRequestsApproved PurchaseRequest[] @relation("PurchaseRequestApprovedBy")
+  purchaseRequestsVoided   PurchaseRequest[] @relation("PurchaseRequestVoidedBy")
+
+  @@map("users")
+}

@@ -1,0 +1,159 @@
+/// Accounting segment — chart of accounts + the global journal every ERP module
+/// posts into. Identifiers stay in English; Indonesian labels are mapped at the
+/// presentation layer (`ACCOUNT_TYPE_LABELS` in `src/lib/account.ts`).
+///
+/// The model is `LedgerAccount`, not `Account`: NextAuth already owns the
+/// `Account` model and the `accounts` table (`auth.prisma`).
+
+/// Account class, taken from the first digit of the code (1..6). Stored rather
+/// than derived on every read so the column can be filtered and indexed, but it
+/// is always written from `accountTypeFromCode()` — never by hand.
+///
+/// ASSET(1) · LIABILITY(2) · EQUITY(3) · REVENUE(4) · COST_EXPENSE(5) · NON_OPERATING(6)
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  COST_EXPENSE
+  NON_OPERATING
+}
+
+/// One node of the chart of accounts.
+///
+/// `code` carries the whole tree position: one digit per level, right-padded
+/// with `0` up to four characters (`1000` → `1100` → `1110` → `1121`), and a
+/// fifth character for the deepest level (`11213`). `0` is reserved as padding,
+/// so a node holds at most 9 children and the tree is at most 5 levels deep.
+/// Lexicographic ordering on that scheme is already tree pre-order, so
+/// `orderBy: { code: 'asc' }` needs no extra sort key.
+///
+/// **Leaf-only posting**: an account may carry journal lines only while it has
+/// no children. Creating a child under an account that already has mutations is
+/// rejected (`src/lib/journal.ts`), so a parent's balance is always exactly the
+/// sum of its subtree.
+///
+/// `isTan` marks the accounts that belong specifically to PT TAN Export.
+///
+/// Accounts are deactivated (`isActive`), never deleted, once they carry
+/// mutations — `DELETE` is allowed only while a node is childless and unused.
+model LedgerAccount {
+  id       String      @id @default(cuid())
+  code     String      @unique
+  name     String
+  type     AccountType
+  /// 1..5 — number of significant digits in `code`. Derived, stored for filtering.
+  level    Int
+  parentId String?
+
+  description String?
+  /// Milik PT TAN Export.
+  isTan       Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   LedgerAccount?  @relation("LedgerAccountTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children LedgerAccount[] @relation("LedgerAccountTree")
+  lines    JournalLine[]
+
+  voucherFundLines CashVoucherFundLine[] @relation("CashVoucherFundAccount")
+  voucherLines     CashVoucherLine[]     @relation("CashVoucherLineAccount")
+
+  /// Barang yang menjadikan akun ini tujuan persediaan / tempat singgahnya.
+  inventoryOfProducts Product[] @relation("ProductInventoryAccount")
+  transitOfProducts   Product[] @relation("ProductTransitAccount")
+
+  @@index([parentId])
+  @@index([type])
+  @@index([level])
+  @@index([isActive])
+  @@index([isTan])
+  @@map("ledger_accounts")
+}
+
+/// DRAFT  — masih bisa diubah, tidak masuk saldo
+/// POSTED — masuk buku besar, tidak bisa diubah lagi
+/// VOID   — dibatalkan setelah posting, tidak masuk saldo, barisnya tetap disimpan
+enum JournalStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+/// Which module wrote the entry. `MANUAL` is a human-entered journal voucher;
+/// the rest are written by their module and carry `referenceType`/`referenceId`
+/// back to the document that caused them.
+enum JournalSource {
+  MANUAL
+  PURCHASE
+  SALES
+  INVENTORY
+  PRODUCTION
+  BUYBACK
+  PAYMENT
+  ADJUSTMENT
+}
+
+/// Journal voucher header — the single entry point for every mutation in the
+/// system. Balance (`Σ debit = Σ credit`) is enforced in `src/lib/journal.ts`,
+/// not by the database, so the failure can carry a readable message.
+model JournalEntry {
+  id            String        @id @default(cuid())
+  number        String        @unique
+  date          DateTime      @db.Date
+  description   String
+  source        JournalSource @default(MANUAL)
+  /// Document that produced this entry, e.g. `purchase_order` + its id.
+  referenceType String?
+  referenceId   String?
+
+  status     JournalStatus @default(DRAFT)
+  postedAt   DateTime?
+  voidedAt   DateTime?
+  /// Alasan pembatalan — wajib diisi saat status menjadi VOID.
+  voidReason String?
+
+  createdById String
+  postedById  String?
+  voidedById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User          @relation("JournalCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  postedBy  User?         @relation("JournalPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  voidedBy  User?         @relation("JournalVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+  lines     JournalLine[]
+
+  @@index([date])
+  @@index([status])
+  @@index([source])
+  @@index([referenceType, referenceId])
+  @@map("journal_entries")
+}
+
+/// One debit-or-credit line. Exactly one of `debit`/`credit` is non-zero; the
+/// other stays `0` rather than being nullable, so aggregation never coalesces.
+///
+/// Lines cascade with their header (a header is the only way to reach them) but
+/// hold their account with `Restrict` — an account with mutations can never be
+/// deleted out from under the ledger.
+model JournalLine {
+  id        String @id @default(cuid())
+  entryId   String
+  /// 1-based position inside the voucher — keeps the entry's own row order.
+  lineNo    Int
+  accountId String
+
+  debit  Decimal @default(0) @db.Decimal(18, 2)
+  credit Decimal @default(0) @db.Decimal(18, 2)
+  memo   String?
+
+  entry   JournalEntry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account LedgerAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, lineNo])
+  @@index([accountId])
+  @@map("journal_lines")
+}

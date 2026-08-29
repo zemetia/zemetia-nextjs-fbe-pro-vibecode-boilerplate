@@ -1,0 +1,79 @@
+/// Production segment — bal (bahan baku) diolah menjadi perhiasan.
+///
+/// **SPK adalah payungnya, bukan mutasinya.** Bahan keluar hari Senin dan kalung
+/// jadi hari Jumat, jadi invarian emas tidak bisa berdiri di satu dokumen mutasi
+/// seperti pada SORT atau REFINE — ia berdiri di satu `ProductionOrder` yang
+/// hidup berhari-hari. Yang dilakukan SPK cuma mengikat mutasi-mutasi itu
+/// (`referenceType = 'PRODUCTION_ORDER'`) dan menolak ditutup selama masih ada
+/// bahan yang belum jadi apa-apa.
+///
+/// **Emas tidak pernah menghilang selama dikerjakan.** Pengeluaran bahan bukan
+/// pengurangan stok melainkan perpindahan ke lokasi produksi (`PRODUCTION_ISSUE`,
+/// balance dan tanpa susut), sehingga posisi emas perusahaan tetap utuh selagi
+/// barang dikerjakan; yang berubah cuma di mana ia berada. Emas baru betul-betul
+/// berubah bentuk saat hasil dicatat (`PRODUCTION_RECEIPT`), dan di situlah susut
+/// serta alloy disebut angkanya.
+///
+/// **Sisa bahan di tangan produksi tidak dikolomkan** — sama seperti saldo COA dan
+/// sisa lot, ia diagregasi dari mutasi POSTED milik SPK ini
+/// (`productionBalance()` di `src/lib/production-write.ts`).
+
+/// DRAFT    — baru rencana; boleh diubah dan dihapus, belum boleh menyentuh emas
+/// RELEASED — sudah dirilis ke lantai produksi; bahan boleh keluar dan hasil masuk
+/// CLOSED   — selesai; sisa bahan sudah nol, susut final terkunci
+/// VOID     — dibatalkan; barisnya tetap disimpan
+enum ProductionOrderStatus {
+  DRAFT
+  RELEASED
+  CLOSED
+  VOID
+}
+
+model ProductionOrder {
+  id     String                @id @default(cuid())
+  /// `SPK-202608-0001`, restarting each month — milik kita, tidak pernah diketik.
+  number String                @unique
+  status ProductionOrderStatus @default(DRAFT)
+
+  /// Calendar day of the order — a day, not an instant.
+  date       DateTime  @db.Date
+  /// Target selesai, kalau memang dijanjikan.
+  targetDate DateTime? @db.Date
+
+  // ── Rencana ────────────────────────────────────────────────────────────────
+  modelName     String?
+  karat         Int
+  purityPercent Decimal @db.Decimal(7, 4)
+
+  targetGrossWeightGram Decimal @db.Decimal(14, 4)
+  targetPieceCount      Int?
+
+  locationName String?
+
+  lossTolerancePercent Decimal @default(0) @db.Decimal(7, 4)
+
+  notes     String?
+  closeNote String?
+
+  createdById  String
+  releasedById String?
+  releasedAt   DateTime?
+  closedById   String?
+  closedAt     DateTime?
+  voidedById   String?
+  voidedAt     DateTime?
+  voidReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy  User       @relation("ProductionOrderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  releasedBy User?      @relation("ProductionOrderReleasedBy", fields: [releasedById], references: [id], onDelete: Restrict)
+  closedBy   User?      @relation("ProductionOrderClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  voidedBy   User?      @relation("ProductionOrderVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+  outputLots MetalLot[] @relation("MetalLotProductionOrder")
+
+  @@index([status])
+  @@index([date])
+  @@map("production_orders")
+}

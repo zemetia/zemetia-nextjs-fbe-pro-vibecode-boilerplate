@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev", "--", "--port", "3100"],
       "port": 3100,
       "autoPort": false
+    },
+    {
+      "name": "erp-dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "3101"],
+      "port": 3101,
+      "autoPort": true
     }
   ]
 }

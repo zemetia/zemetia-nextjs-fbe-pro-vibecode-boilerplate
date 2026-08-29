@@ -1,0 +1,61 @@
+/// Barang **non-logam** yang dibeli untuk dipakai sendiri — asam nitrat, kowi,
+/// boraks, sarung tangan, kertas nota.
+///
+/// **Kenapa master tersendiri, bukan ikut `Product`.** `Product` berdiri di atas
+/// dua sumbu yang tidak punya arti di sini: `metal` (emas / perak) dan
+/// `priceBasis` (berat kotor vs berat murni). Satu jerigen HNO₃ tidak punya
+/// kadar, tidak pernah jadi lot, dan tidak pernah masuk neraca emas — menaruhnya
+/// di `Product` berarti setiap agregasi posisi logam harus mengingat untuk
+/// menyaringnya keluar, dan yang lupa menyaring akan melaporkan asam sebagai
+/// emas.
+///
+/// **Ia berhenti di permintaan pembelian.** Barang di sini boleh diminta lewat
+/// PR, tapi tidak bisa dikonversi jadi `MetalPurchase`: dokumen itu melahirkan
+/// lot dan jurnal persediaan logam. Pengadaannya diselesaikan lewat voucher kas,
+/// dan PR-nya berhenti di status disetujui — bukan karena lupa, tapi karena
+/// belum ada dokumen pembelian non-logam di sistem ini.
+enum SupplyCategory {
+  /// Bahan kimia proses & lab — asam, reagen, larutan uji.
+  CHEMICAL
+  /// Alat pakai habis produksi & lab — kowi, kuas, sarung tangan.
+  CONSUMABLE
+  /// Peralatan yang dipakai berulang — timbangan, tang, cetakan.
+  EQUIPMENT
+  /// Keperluan kantor & lain-lain.
+  OTHER
+}
+
+model Supply {
+  id String @id @default(cuid())
+
+  /// Kode diketik petugas, bukan dibuat sistem — `HNO3-68` adalah nama barang
+  /// itu di rak dan di surat pesanan, dan menerbitkan nomor sendiri di
+  /// sebelahnya memberi satu barang dua identitas (alasan yang sama dengan
+  /// `JewelryModel.code`).
+  code     String         @unique
+  name     String
+  category SupplyCategory @default(OTHER)
+
+  /// Satuan beli, **teks bebas**: "Jerigen 30 kg", "Botol 1 L", "Pcs", "Rim".
+  /// Belum ada satu aturan pun yang bergantung pada satuan apa ini — master
+  /// satuan yang tidak menggerbangi apa pun cuma memaksa petugas memilih hal
+  /// tanpa konsekuensi (pelajaran kategori mitra, 2026-08-10).
+  unit String
+
+  /// Harga terakhir yang diketahui, dipakai sebagai nilai awal perkiraan di PR.
+  /// **Perkiraan, bukan kesepakatan** — yang mengikat adalah angka di dokumen
+  /// pembeliannya sendiri.
+  lastPriceIdr Decimal? @db.Decimal(18, 2)
+
+  notes     String?
+  /// Dinonaktifkan, tidak pernah dihapus: PR lama tetap harus bisa dibaca.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requestItems PurchaseRequestItem[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("supplies")
+}

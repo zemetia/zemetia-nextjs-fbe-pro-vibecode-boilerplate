@@ -1,49 +1,42 @@
 # Knowledge System
 
-← [Blueprint INDEX](./INDEX.md)
+Two files in `docs/knowledge/` capture learned context that is not derivable from the code or git history.
 
-Dua file di `docs/knowledge/` menyimpan konteks yang **tidak** bisa disimpulkan dari kode atau riwayat git.
-
-| File | Isi | Kapan ditulis |
+| File | Purpose | When to write |
 |---|---|---|
-| [THIS.md](../knowledge/THIS.md) | Identitas proyek, realita lapangan PT TAN, gaya developer, do's & don'ts, insight berjalan | Setiap kali ada preferensi, pola, atau fakta bisnis baru yang terungkap |
-| [LEARN.md](../knowledge/LEARN.md) | Log koreksi & kesalahan | Setiap kali user mengoreksi AI, **atau** AI sendiri menyadari menyimpang dari yang diminta |
+| [THIS.md](../knowledge/THIS.md) | Project identity, developer style, do's & don'ts, ongoing insights | Whenever a new preference, pattern, or insight is discovered about the project or developer |
+| [LEARN.md](../knowledge/LEARN.md) | Correction & mistake log | Whenever the user corrects the AI **or** the AI self-identifies a deviation from what was asked / from best practice |
 
 ---
 
-## THIS.md — cara pakai
+## THIS.md — How to Use
 
-- Baca sebelum merencanakan pekerjaan, bersama seksi blueprint yang relevan.
-- Entri baru masuk ke bagian **Insights** dengan awalan tanggal.
-- Entri yang sudah tidak berlaku ditandai `~~coret~~` — **jangan dihapus**. Riwayat keputusan itu sendiri adalah informasi.
-- Fakta bisnis dari lapangan (nama supplier, cara bayar, jalur kurir, struktur harga) masuk ke sini, bukan ke komentar kode.
+- Read before planning work, alongside the relevant blueprint section
+- Write new entries to the **Insights** section with a date prefix
+- Mark outdated entries with `~~strikethrough~~` — never delete
 
-## LEARN.md — format entri
+---
+
+## LEARN.md — Entry Format
 
 ```
-[YYYY-MM-DD] - [apa yang salah] - [pendekatan yang benar] - [pelajaran yang bisa dipindahkan]
+[YYYY-MM-DD] - [what went wrong] - [what the correct approach is] - [the transferable lesson]
 ```
 
-Satu baris per entri. Bagian terpenting adalah pelajarannya — bagian yang mencegah kesalahan yang sama terulang.
+Keep each entry to one line. Prioritize the lesson — the part that prevents the same mistake next time.
 
-**Pemicu menulis:**
-
-- User bilang AI salah, melakukan yang tidak diminta, atau meleset dari maksudnya.
-- AI melanggar hard constraint di [INDEX.md](./INDEX.md) atau non-negotiable di [CLAUDE.md](../../CLAUDE.md).
-- AI menambah sesuatu yang tidak diminta (file, abstraksi, dependensi, komentar).
-- AI menyatakan sesuatu selesai/teruji tanpa menjalankan verifikasinya.
-- AI memakai kode akun, kunci storage, atau nomor dokumen yang ternyata tidak ada.
+**Triggers for writing:**
+- User says the AI was wrong, did something unwanted, or missed the intent
+- AI produced output that violated a blueprint rule or non-negotiable
+- AI added something not asked for (extra files, comments, abstraction, emojis)
+- AI used a forbidden pattern (raw color, wrong navigation import, `useState` for API data, etc.)
 
 ---
 
-## Prioritas
+## Priority
 
-Sistem ini adalah lapisan konteks **paling penting** setelah `CLAUDE.md` sendiri. Urutannya:
+This system is **the most important** context layer after CLAUDE.md itself. AI agents must:
 
-1. Cek `THIS.md` untuk konteks proyek & developer sebelum setiap tugas.
-2. Cek `LEARN.md` untuk kesalahan lampau sebelum menulis kode.
-3. Tulis ke keduanya begitu ada pengetahuan baru — jangan menunggu akhir sesi.
-
----
-
-← [Blueprint INDEX](./INDEX.md)
+1. Check `THIS.md` for developer/project context before every task
+2. Check `LEARN.md` for past mistakes before writing any code
+3. Append to both files whenever new knowledge is generated

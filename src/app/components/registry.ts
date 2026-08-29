@@ -1,0 +1,178 @@
+export interface ComponentRegistryEntry {
+  name: string;
+  category: 'Forms' | 'Data Display' | 'Layout' | 'Overlay' | 'Feedback';
+  description: string;
+  importPath: string;
+  status: 'Stable' | 'New';
+}
+
+export const COMPONENT_REGISTRY: ComponentRegistryEntry[] = [
+  {
+    name: 'Button',
+    category: 'Forms',
+    description: 'Primary action trigger with 6 variants and 8 sizes.',
+    importPath: '@/components/ui/Button',
+    status: 'Stable',
+  },
+  {
+    name: 'Input',
+    category: 'Forms',
+    description: 'Text field with label, hint, error and addon slots.',
+    importPath: '@/components/ui/Input',
+    status: 'Stable',
+  },
+  {
+    name: 'Textarea',
+    category: 'Forms',
+    description: 'Multi-line text field that grows with its content.',
+    importPath: '@/components/ui/textarea',
+    status: 'Stable',
+  },
+  {
+    name: 'Select',
+    category: 'Forms',
+    description: 'Native-style dropdown for a short, fixed option list.',
+    importPath: '@/components/ui/select',
+    status: 'Stable',
+  },
+  {
+    name: 'Combobox',
+    category: 'Forms',
+    description: 'Searchable text + dropdown combo for long or async option lists.',
+    importPath: '@/components/ui/Combobox',
+    status: 'New',
+  },
+  {
+    name: 'Checkbox',
+    category: 'Forms',
+    description: 'Boolean toggle for a single option.',
+    importPath: '@/components/ui/checkbox',
+    status: 'Stable',
+  },
+  {
+    name: 'Radio Group',
+    category: 'Forms',
+    description: 'Single choice from a small set of mutually exclusive options.',
+    importPath: '@/components/ui/radio-group',
+    status: 'Stable',
+  },
+  {
+    name: 'Switch',
+    category: 'Forms',
+    description: 'On/off toggle for settings and preferences.',
+    importPath: '@/components/ui/switch',
+    status: 'Stable',
+  },
+  {
+    name: 'Label',
+    category: 'Forms',
+    description: 'Accessible form field label, pairs with any control.',
+    importPath: '@/components/ui/label',
+    status: 'Stable',
+  },
+  {
+    name: 'Badge',
+    category: 'Data Display',
+    description: 'Compact status or category indicator.',
+    importPath: '@/components/ui/Badge',
+    status: 'Stable',
+  },
+  {
+    name: 'Avatar',
+    category: 'Data Display',
+    description: 'User image with initials fallback and status badge.',
+    importPath: '@/components/ui/avatar',
+    status: 'Stable',
+  },
+  {
+    name: 'Table',
+    category: 'Data Display',
+    description: 'Structured tabular data — the registry above is a live example.',
+    importPath: '@/components/ui/table',
+    status: 'Stable',
+  },
+  {
+    name: 'Typography',
+    category: 'Data Display',
+    description: 'Typed heading and text variants sharing one type scale.',
+    importPath: '@/components/ui/Typography',
+    status: 'Stable',
+  },
+  {
+    name: 'Card',
+    category: 'Layout',
+    description: 'Grouped content container with header, content and footer.',
+    importPath: '@/components/ui/Card',
+    status: 'Stable',
+  },
+  {
+    name: 'Separator',
+    category: 'Layout',
+    description: 'Horizontal or vertical divider between sections.',
+    importPath: '@/components/ui/separator',
+    status: 'Stable',
+  },
+  {
+    name: 'Accordion',
+    category: 'Layout',
+    description: 'Collapsible sections for progressive disclosure.',
+    importPath: '@/components/ui/accordion',
+    status: 'Stable',
+  },
+  {
+    name: 'Tabs',
+    category: 'Layout',
+    description: 'Switch between related views without leaving the page.',
+    importPath: '@/components/ui/tabs',
+    status: 'Stable',
+  },
+  {
+    name: 'Dialog',
+    category: 'Overlay',
+    description: 'Modal window that interrupts flow for a focused task.',
+    importPath: '@/components/ui/dialog',
+    status: 'Stable',
+  },
+  {
+    name: 'Popover',
+    category: 'Overlay',
+    description: 'Floating panel anchored to a trigger element.',
+    importPath: '@/components/ui/popover',
+    status: 'Stable',
+  },
+  {
+    name: 'Tooltip',
+    category: 'Overlay',
+    description: 'Short contextual hint shown on hover or focus.',
+    importPath: '@/components/ui/tooltip',
+    status: 'Stable',
+  },
+  {
+    name: 'Dropdown Menu',
+    category: 'Overlay',
+    description: 'Contextual list of actions anchored to a trigger.',
+    importPath: '@/components/ui/dropdown-menu',
+    status: 'Stable',
+  },
+  {
+    name: 'Alert',
+    category: 'Feedback',
+    description: 'Inline banner for important, non-blocking messages.',
+    importPath: '@/components/ui/alert',
+    status: 'Stable',
+  },
+  {
+    name: 'Skeleton',
+    category: 'Feedback',
+    description: 'Loading placeholder that mirrors the shape of real content.',
+    importPath: '@/components/ui/skeleton',
+    status: 'Stable',
+  },
+  {
+    name: 'Toaster (Sonner)',
+    category: 'Feedback',
+    description: 'Toast notifications for the result of async operations.',
+    importPath: '@/components/ui/Sonner',
+    status: 'Stable',
+  },
+];

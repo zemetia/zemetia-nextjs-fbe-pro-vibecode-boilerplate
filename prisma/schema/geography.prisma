@@ -1,0 +1,60 @@
+/// Continent grouping (UN M49). Identifiers stay in English; the Indonesian
+/// labels shown in the UI are mapped at the presentation layer.
+enum ContinentRegion {
+  AFRICA
+  AMERICAS
+  ASIA
+  EUROPE
+  OCEANIA
+  ANTARCTICA
+}
+
+/// ISO 4217 currency. Keyed by the alpha-3 code rather than a cuid: the code is
+/// the identifier every trade document, invoice and rate feed already uses, and
+/// it is stable across reseeds.
+model Currency {
+  code          String   @id
+  numericCode   String   @unique
+  name          String
+  symbol        String
+  decimalDigits Int      @default(2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  countries        Country[]
+  partners         Partner[]
+  purchaseRequests PurchaseRequest[]
+
+  @@map("currencies")
+}
+
+/// ISO 3166-1 country / territory. All three ISO code forms are kept because
+/// customs and shipping documents each ask for a different one (alpha-2 for
+/// addresses, alpha-3 for certificates of origin, numeric for HS declarations).
+///
+/// `currencyCode` is nullable for the single entry with no official currency
+/// (Antarctica), and `Restrict` so a currency in use can never be deleted.
+model Country {
+  id           String          @id @default(cuid())
+  iso2         String          @unique
+  iso3         String          @unique
+  numericCode  String          @unique
+  name         String
+  nameEn       String
+  dialCode     String
+  region       ContinentRegion
+  currencyCode String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  currency        Currency? @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  partners        Partner[]
+  /// Kewarganegaraan kontak person — sumbu terpisah dari negara mitranya.
+  partnerContacts Partner[] @relation("PartnerContactNationality")
+
+  @@index([region])
+  @@index([name])
+  @@map("countries")
+}

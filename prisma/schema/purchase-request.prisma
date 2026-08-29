@@ -1,0 +1,156 @@
+/// Kategori permintaan — **satu-satunya sumbu yang menentukan ke mana PR ini
+/// bermuara**, jadi ia dijawab sekali di kepala dokumen dan bukan per baris.
+///
+/// GOLD_IMPORT / GOLD_LOCAL — barisnya menunjuk `Product`, dan PR-nya dikonversi
+/// jadi `MetalPurchase` di rail yang sesuai.
+/// SUPPLY — barisnya menunjuk `Supply`, dan PR-nya berhenti di status disetujui:
+/// belum ada dokumen pembelian non-logam di sistem ini (lihat `supply.prisma`).
+enum PurchaseRequestCategory {
+  GOLD_IMPORT
+  GOLD_LOCAL
+  SUPPLY
+}
+
+/// Mendesak atau tidak. Dua nilai, bukan skala 1–5: yang dilakukan angka ini
+/// hanya menaikkan barisnya di daftar, dan lima tingkat kepentingan yang tidak
+/// menggerbangi apa pun akan diisi "3" oleh semua orang.
+enum PurchaseRequestPriority {
+  NORMAL
+  URGENT
+}
+
+/// DRAFT    — masih milik pengaju; boleh diubah dan dihapus
+/// APPROVED — sudah disetujui; isinya terkunci dan boleh dikonversi jadi PO
+/// VOID     — dibatalkan; barisnya tetap disimpan
+///
+/// **Tidak ada nilai `CONVERTED` di kolom ini, dan itu disengaja.** Satu PR boleh
+/// dipenuhi beberapa PO dari supplier berbeda, jadi "sudah jadi PO" bukan
+/// peristiwa melainkan **hasil penjumlahan**: ia benar begitu seluruh baris
+/// tertutup PO, dan kembali tidak benar begitu salah satu PO-nya dibatalkan.
+/// Menyimpannya sebagai status berarti menyediakan tempat bagi dua jawaban untuk
+/// berselisih — pola yang sama dengan sisa lot dan saldo COA, yang juga
+/// diagregasi dan tidak dikolomkan. Layar tetap menampilkannya sebagai tahap
+/// ketiga; turunannya satu-satunya ada di `orderedQuantityByRequestItem()` dan
+/// `isRequestFulfilled()` (`src/lib/purchase-request-write.ts`).
+enum PurchaseRequestStatus {
+  DRAFT
+  APPROVED
+  VOID
+}
+
+/// Permintaan pembelian — **apa yang diminta divisi, bukan apa yang dibeli
+/// perusahaan.**
+///
+/// Ia berdiri di depan `MetalPurchase` dan tidak pernah menyentuh emas maupun
+/// uang: tidak ada jurnal, tidak ada lot, tidak ada hutang. Yang dilakukannya
+/// cuma dua — mencatat siapa meminta apa, dan menahan pesanan sampai ada yang
+/// menyetujuinya.
+///
+/// **Persetujuannya tinggal di dokumen ini, bukan di `ApprovalRequest`.**
+/// Keputusan pemilik proses: inbox direktur diisi transisi yang menyentuh emas
+/// dan uang (konfirmasi PO, konfirmasi penerimaan, voucher kas), dan permintaan
+/// bahan dari divisi diputuskan oleh atasan divisinya di halaman PR-nya sendiri.
+model PurchaseRequest {
+  id       String                  @id @default(cuid())
+  /// `PR-202608-0001`, direset tiap bulan — milik kita, tidak pernah diketik.
+  number   String                  @unique
+  status   PurchaseRequestStatus   @default(DRAFT)
+  category PurchaseRequestCategory
+
+  /// Tanggal permintaan diajukan — hari, bukan saat.
+  date         DateTime  @db.Date
+  /// Kapan barangnya dibutuhkan. Opsional: tidak semua permintaan punya
+  /// tenggat, dan menebak "tanggal + 7 hari" melahirkan tenggat yang tidak
+  /// pernah disepakati siapa pun lalu melaporkannya sebagai terlambat.
+  requiredDate DateTime? @db.Date
+
+  /// Divisi yang meminta, diketik apa adanya. Belum ada master divisi di sistem
+  /// ini, dan membuatnya hanya demi satu kolom teks akan menambah satu master
+  /// yang tidak menggerbangi apa pun.
+  department String
+  priority   PurchaseRequestPriority @default(NORMAL)
+
+  /// Supplier yang **diusulkan** pengaju — usulan, bukan keputusan. Yang
+  /// benar-benar dibeli ditentukan saat PO dibuat, dan boleh berbeda.
+  suggestedPartnerId String?
+
+  /// Mata uang perkiraan harga. Rupiah untuk permintaan lokal dan supply; PR
+  /// impor biasanya dolar, karena begitulah refinery mengutip harganya.
+  currencyCode String @default("IDR")
+
+  notes String?
+
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  voidedById   String?
+  voidedAt     DateTime?
+  voidReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  currency         Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  suggestedPartner Partner? @relation("PurchaseRequestSuggestedPartner", fields: [suggestedPartnerId], references: [id], onDelete: Restrict)
+  createdBy        User     @relation("PurchaseRequestCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy       User?    @relation("PurchaseRequestApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  voidedBy         User?    @relation("PurchaseRequestVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  items PurchaseRequestItem[]
+
+  @@index([status])
+  @@index([category])
+  @@index([date])
+  @@index([suggestedPartnerId])
+  @@map("purchase_requests")
+}
+
+/// Satu barang yang diminta.
+///
+/// **Satu dari dua kolom identitas terisi, tidak pernah keduanya**: `productId`
+/// untuk logam, `supplyId` untuk barang non-logam. Kategori dokumennya yang
+/// memutuskan mana yang berlaku, dan `assertItemsMatchCategory()`
+/// (`src/lib/purchase-request-write.ts`) menolak baris yang mengisi kolom milik
+/// kategori lain — dua kolom nullable tanpa penjaga hanya menyediakan tempat
+/// bagi baris yang tidak menunjuk apa pun.
+model PurchaseRequestItem {
+  id        String @id @default(cuid())
+  requestId String
+  /// Urutan tampil, 1-based — supaya pesan validasi bisa menyebut "baris ke-2".
+  lineNo    Int
+
+  productId String?
+  supplyId  String?
+
+  /// Satuan yang dipakai petugas mengetik baris logam ini, sama artinya dengan
+  /// `MetalPurchaseItem.weightUnit`. `null` untuk baris supply — satuannya ikut
+  /// masternya ("Jerigen 30 kg"), dan memaksa gram/oz di sana tidak punya arti.
+  weightUnit WeightUnit?
+
+  /// Jumlah yang diminta, **dalam satuan dasar barisnya**: gram untuk logam
+  /// (apa pun `weightUnit`-nya — satuan itu cara mengetik, ini nilai yang
+  /// disimpan), dan jumlah satuan masternya untuk supply.
+  quantity Decimal @db.Decimal(14, 4)
+
+  /// Harga perkiraan per satu satuan barisnya, dalam `currencyCode` dokumen.
+  /// **Perkiraan dan tetap perkiraan** — tidak pernah dibaca oleh jurnal mana
+  /// pun; yang mengikat adalah harga di PO-nya.
+  estUnitPrice Decimal @db.Decimal(18, 8)
+  /// `estUnitPrice × quantity dinyatakan dalam weightUnit`. Computed server-side.
+  estAmount    Decimal @db.Decimal(18, 2)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supply  Supply?         @relation(fields: [supplyId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, lineNo])
+  @@index([requestId])
+  @@index([productId])
+  @@index([supplyId])
+  @@map("purchase_request_items")
+}

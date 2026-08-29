@@ -1,0 +1,128 @@
+/// Master barang — apa saja yang bisa dibeli, disimpan, dan diolah. Identifiers
+/// stay in English; label Indonesianya dipetakan di `src/lib/product.ts`.
+///
+/// **Kenapa master, bukan enum.** Pertanyaan "jenis barang apa" dulu dijawab
+/// enum (`MetalPurchaseGoodsType`), dan itu cukup selama hanya ada emas. Begitu
+/// perak masuk sebagai bahan baku, setiap jenis baru berarti satu nilai enum,
+/// satu migrasi, dan satu cabang di tiap `switch` — padahal yang berbeda antar
+/// jenis cuma **data**: logamnya apa, kadar bawaannya berapa, kadarnya boleh
+/// dinegosiasikan atau tidak, dan wajib bersertifikat atau tidak. Semua itu
+/// kolom, jadi jenis barang berikutnya adalah satu baris, bukan satu deploy.
+///
+/// Produk **dinonaktifkan, tidak pernah dihapus** — sama seperti mitra dan
+/// lokasi: dokumen lama harus tetap bisa me-resolve barangnya.
+
+/// Logam yang jadi dasar barang. Ini sumbu yang paling dalam di seluruh sistem:
+/// posisi stok, invarian mutasi, dan laporan semuanya dipisah per logam, karena
+/// satu gram perak dan satu gram emas bukan besaran yang boleh dijumlahkan.
+enum Metal {
+  GOLD
+  SILVER
+}
+
+/// Bentuk barang saat **dibeli**. Sengaja tidak memakai `MetalLotForm`: yang di
+/// sini adalah bentuk di dokumen (satu baris PO "emas batangan 1.000 g"),
+/// sedangkan `MetalLotForm.BAR` adalah satu keping di rak. Satu baris BULLION
+/// melahirkan banyak lot BAR, jadi keduanya memang bukan hal yang sama.
+///
+/// BULLION — batangan bersertifikat; kadar dipatok, tiap keping punya nomor seri
+/// GRANULE — granul/butiran logam murni; kadar dipatok, tapi ditakar per gram
+///           dan tidak punya nomor seri — sekantong 500 g tidak bisa dibelah jadi
+///           "keping" yang bisa dicocokkan ke sertifikat
+/// JEWELRY — perhiasan jadi
+/// SCRAP   — perhiasan tua/rusak untuk dilebur; kadar hasil uji
+enum ProductForm {
+  BULLION
+  GRANULE
+  JEWELRY
+  SCRAP
+}
+
+/// Dasar perhitungan harga per gram — **dibekukan di baris dokumen**, bukan
+/// dibaca ulang dari produk saat menampilkan.
+///
+/// GROSS — harga dikalikan berat kotor. Dipakai batangan: kadarnya sudah setinggi
+///         yang bisa didapat (emas 99,99% / perak 99,90%), jadi di lapangan yang
+///         dinegosiasikan memang harga per gram batangnya, bukan per gram isinya.
+/// FINE  — harga dikalikan berat murni. Dipakai perhiasan dan scrap: kadarnya
+///         beragam, jadi satu-satunya harga yang bisa dibandingkan antar barang
+///         adalah harga per gram emas yang benar-benar ada di dalamnya.
+enum PriceBasis {
+  GROSS
+  FINE
+}
+
+/// Satuan yang dipakai petugas saat mengetik. Beratnya sendiri **selalu disimpan
+/// dalam gram** — membandingkan dokumen dengan realisasinya tidak boleh menuntut
+/// konversi di setiap query, dan konstanta yang ditulis ulang per tempat adalah
+/// cara dua laporan berselisih. Satu-satunya konversi hidup di
+/// `src/lib/weight.ts` (`GRAM_PER_TROY_OUNCE`).
+///
+/// Troy ounce, bukan ons timbangan dapur: 31,1034768 g lawan 28,3495 g. Salah
+/// pilih melebihkan pesanan 1.000 oz sekitar 2,8 kg.
+///
+/// Tinggal di sini, bukan di `sales.prisma`, karena satuan berat adalah kosakata
+/// pengukuran yang sama-sama dipakai penjualan dan pembelian — invoice refinery
+/// impor dikutip per troy ounce persis seperti order ekspor.
+enum WeightUnit {
+  GRAM
+  TROY_OUNCE
+}
+
+model Product {
+  id   String @id @default(cuid())
+  /// `PRD-0001` — dibuat server-side, tidak pernah diketik.
+  code String @unique
+  name String
+
+  metal Metal
+  form  ProductForm
+
+  /// Kadar bawaan dalam persen. Wajib terisi untuk barang yang kadarnya tetap
+  /// (batangan), `null` untuk scrap yang kadarnya baru diketahui setelah diuji.
+  defaultPurityPercent Decimal? @db.Decimal(7, 4)
+
+  /// Kadar tidak dinegosiasikan — form mengunci fieldnya dan server menimpa
+  /// apa pun yang dikirim client dengan `defaultPurityPercent`. Membiarkannya
+  /// diketik cuma membuka jalan bagi 99,9% yang salah harga.
+  purityLocked Boolean @default(false)
+
+  /// Tiap keping wajib punya nomor seri + sertifikat sebelum barangnya boleh
+  /// dinyatakan diterima. Berlaku untuk batangan, emas maupun perak.
+  requiresCertificate Boolean @default(false)
+
+  /// Akun persediaan yang didebit saat barang ini diterima, dan akun singgah
+  /// yang dipakai selama barangnya masih di jalan.
+  ///
+  /// **Kolom, bukan peta di kode.** Pertanyaan "baris ini mendebit akun mana"
+  /// dijawab data dengan alasan yang sama yang membuat jenis barang jadi master
+  /// alih-alih enum: bentuk barang berikutnya (granul perak, platina) harus jadi
+  /// satu baris master, bukan satu cabang `switch` dan satu deploy.
+  ///
+  /// Keduanya nullable dan tetap nullable — master ini sudah terisi sebelum
+  /// akuntansinya ada, dan produk yang belum dipetakan harus tetap bisa dibaca.
+  /// Yang menagihnya adalah **konfirmasi dokumen**, bukan kolomnya: menjurnal
+  /// penerimaan barang tanpa akun ditolak dengan pesan yang menyebut barangnya
+  /// (`src/lib/metal-purchase-journal.ts`), sehingga master yang belum lengkap
+  /// ketahuan saat dipakai alih-alih memblokir setiap layar yang menyentuhnya.
+  inventoryAccountId String?
+  transitAccountId   String?
+
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventoryAccount LedgerAccount? @relation("ProductInventoryAccount", fields: [inventoryAccountId], references: [id], onDelete: Restrict)
+  transitAccount   LedgerAccount? @relation("ProductTransitAccount", fields: [transitAccountId], references: [id], onDelete: Restrict)
+
+  requestItems PurchaseRequestItem[]
+  lots         MetalLot[]
+
+  @@index([metal])
+  @@index([form])
+  @@index([isActive])
+  @@index([inventoryAccountId])
+  @@index([transitAccountId])
+  @@map("products")
+}
