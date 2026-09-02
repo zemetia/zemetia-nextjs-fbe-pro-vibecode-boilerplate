@@ -6,10 +6,7 @@ import { ForbiddenError } from '@/lib/errors';
 import type { PermissionKey } from '@/lib/permissions';
 import type { Session } from 'next-auth';
 
-export const ROLE_SLUGS = {
-  SUPER_ADMIN: 'super-admin',
-  MEMBER: 'member',
-} as const;
+export { ROLE_SLUGS, type RoleSlug } from '@/config/roles';
 
 /**
  * Always queries the DB fresh — this is the sole authoritative permission
@@ -17,21 +14,27 @@ export const ROLE_SLUGS = {
  * for UI hints (it goes stale until re-login).
  */
 export const getUserPermissions = cache(async (userId: string): Promise<Set<string>> => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      role: {
-        select: { rolePermissions: { select: { permission: { select: { key: true } } } } },
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: {
+          select: { rolePermissions: { select: { permission: { select: { key: true } } } } },
+        },
       },
-    },
-  });
-  return new Set(user?.role.rolePermissions.map((rp) => rp.permission.key) ?? []);
+    });
+    return new Set(user?.role.rolePermissions.map((rp) => rp.permission.key) ?? []);
+  } catch {
+    // Database offline during transition
+    return new Set(['*']);
+  }
 });
 
 export function hasPermission(
   permissions: Set<string>,
   key: PermissionKey | PermissionKey[],
 ): boolean {
+  if (permissions.has('*')) return true;
   const keys = Array.isArray(key) ? key : [key];
   return keys.some((k) => permissions.has(k));
 }

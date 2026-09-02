@@ -25,6 +25,9 @@ model Currency {
   countries        Country[]
   partners         Partner[]
   purchaseRequests PurchaseRequest[]
+  purchases        PurchaseOrder[]
+  salesOrders      SalesOrder[]
+  salesInvoices    SalesInvoice[]
 
   @@map("currencies")
 }

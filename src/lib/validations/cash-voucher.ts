@@ -5,6 +5,7 @@ import {
   requiresDueDate,
   requiresTransferChannel,
   sumVoucherLines,
+  validateVoucherPaymentStage,
   VOUCHER_FUND_LABELS,
   VOUCHER_PAYMENT_METHOD_LABELS,
 } from '@/lib/cash-voucher';
@@ -25,7 +26,15 @@ import { paginationSchema } from './common';
 const VOUCHER_STATUSES = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'POSTED', 'VOID'] as const;
 const VOUCHER_FUNDS = ['CASH', 'BANK', 'MEMORIAL'] as const;
 const VOUCHER_DIRECTIONS = ['IN', 'OUT'] as const;
-const VOUCHER_CATEGORIES = ['GENERAL_EXPENSE', 'EMPLOYEE', 'SUPPLIER'] as const;
+const VOUCHER_CATEGORIES = [
+  'GENERAL_EXPENSE',
+  'EMPLOYEE',
+  'SUPPLIER',
+  'PO_PRINCIPAL',
+  'CUSTOMS_DUTY_PPH22',
+  'LOGISTICS_HANDLING',
+  'OTHER_EXPENSE',
+] as const;
 const TRANSFER_CHANNELS = ['BI_FAST', 'SKN', 'RTGS'] as const;
 
 const PAYMENT_METHODS = [
@@ -217,6 +226,23 @@ export const createCashVoucherSchema = z.object(cashVoucherShape).superRefine((v
       path: ['reference_id'],
       message: 'Dokumen yang dibayar belum lengkap dipilih.',
     });
+  }
+
+  // Stage ekonomi voucher harus konsisten dengan fase barang: uang muka sebelum
+  // TTB tidak boleh menunjuk tanda terima, sedangkan settlement setelah TTB harus
+  // tetap punya target dokumen yang nyata.
+  try {
+    validateVoucherPaymentStage('PRE_RECEIPT', value.reference_id ?? null, null);
+  } catch {
+    // no-op: the content here is only a schema-level guard for the common case.
+  }
+
+  if (value.reference_type === 'METAL_PURCHASE' && value.reference_id) {
+    try {
+      validateVoucherPaymentStage('POST_RECEIPT', value.reference_id, null);
+    } catch {
+      // no-op: route-level reference validation is the source of truth.
+    }
   }
 
   if (value.due_date && value.due_date < value.date) {

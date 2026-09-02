@@ -13,10 +13,9 @@ import { paginationSchema } from './common';
  * karena payload sendirian tidak bisa menjawabnya.
  */
 
-const CATEGORIES = ['GOLD_IMPORT', 'GOLD_LOCAL', 'SUPPLY'] as const;
+const CATEGORIES = ['GOLD_IMPORT', 'GOLD_LOCAL', 'SUPPLY', 'CHEMICALS_REFINERY', 'SAFETY_GA'] as const;
 const PRIORITIES = ['NORMAL', 'URGENT'] as const;
 const STATUSES = ['DRAFT', 'APPROVED', 'VOID'] as const;
-const WEIGHT_UNITS = ['GRAM', 'TROY_OUNCE'] as const;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -42,7 +41,7 @@ function optionalText(label: string, max: number) {
 const itemSchema = z.object({
   product_id: z.string().trim().max(50, 'Barang yang dipilih tidak dikenali').optional(),
   supply_id: z.string().trim().max(50, 'Barang yang dipilih tidak dikenali').optional(),
-  weight_unit: z.enum(WEIGHT_UNITS, 'Satuan berat tidak dikenali').optional(),
+  unit_id: z.string('Satuan wajib dipilih').trim().min(1, 'Satuan wajib dipilih').max(50, 'Satuan yang dipilih tidak dikenali'),
   quantity: z.coerce
     .number('Jumlah tidak valid')
     .positive('Jumlah harus lebih besar dari nol')
@@ -65,6 +64,12 @@ const purchaseRequestShape = {
     .max(100, 'Divisi peminta maksimal 100 karakter'),
   priority: z.enum(PRIORITIES, 'Prioritas tidak dikenali').optional(),
   suggested_partner_id: z.string().trim().max(50, 'Mitra yang dipilih tidak dikenali').optional(),
+  /// --- Field legacy (`src/dto/purchaseRequest.dto.js`, `PurchaseRequestPage`) ---
+  /// Nama pemohon & rekomendasi supplier sebagai teks bebas — kolomnya sudah
+  /// ada di model (`requesterName`/`recommendedSupplier`) tapi belum pernah
+  /// diterima gerbang tulis ini.
+  requester_name: optionalText('Nama pemohon', 100),
+  recommended_supplier: optionalText('Rekomendasi supplier', 150),
   currency_code: z
     .string('Mata uang wajib dipilih')
     .trim()

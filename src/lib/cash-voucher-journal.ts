@@ -60,6 +60,7 @@ export async function postVoucherJournal(
       source: 'PAYMENT',
       referenceType: VOUCHER_REFERENCE_TYPE,
       referenceId: voucher.id,
+      cashVoucherId: voucher.id,
       post: true,
       lines: buildVoucherJournalLines(
         voucher.direction,

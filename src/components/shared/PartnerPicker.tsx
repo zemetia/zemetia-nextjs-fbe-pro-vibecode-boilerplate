@@ -12,7 +12,7 @@ import type { PartnerOrigin, PartnerVO } from '@/types/value-objects';
 import { PartnerQuickAddDialog } from './PartnerQuickAddDialog';
 
 /** One page is plenty for a picker — the combobox filters what it already holds. */
-const OPTIONS_LIMIT = 100;
+const OPTIONS_LIMIT = 30;
 
 /**
  * Which side of the trade the document is on — the same partner row can be

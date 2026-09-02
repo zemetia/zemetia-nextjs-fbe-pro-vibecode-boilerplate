@@ -43,6 +43,11 @@
   "exclude": [
     "node_modules",
     ".storybook",
-    "storybook-static"
+    "storybook-static",
+    "modules",
+    "data",
+    "legacy",
+    "src/app/admin/units",
+    "src/services/unit.service.ts"
   ]
 }

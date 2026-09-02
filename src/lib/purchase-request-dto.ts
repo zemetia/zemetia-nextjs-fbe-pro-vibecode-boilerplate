@@ -49,7 +49,15 @@ function toItemDTO(
           unit: item.supply.unit,
         }
       : null,
-    weight_unit: item.weightUnit,
+    unit: {
+      id: item.unit.id,
+      code: item.unit.code,
+      symbol: item.unit.symbol,
+      name: item.unit.name,
+      category_code: item.unit.category.code,
+      conversion_factor: Number(item.unit.conversionFactor),
+      is_anchor: item.unit.isAnchor,
+    },
     quantity,
     est_unit_price: Number(item.estUnitPrice),
     est_amount: Number(item.estAmount),
@@ -82,6 +90,11 @@ export function toPurchaseRequestDTO(
     est_total_amount: roundTo(estTotal, AMOUNT_SCALE),
     is_fulfilled: isFulfilled,
     is_partially_fulfilled: hasOrder && !isFulfilled,
+    requester_name: row.requesterName,
+    recommended_supplier: row.recommendedSupplier,
+    converted_po_number: row.convertedPoNumber,
+    conversion_date: row.conversionDate ? fromUtcDateOnly(row.conversionDate) : null,
+    converted_by: row.convertedBy,
     notes: row.notes,
     created_at: row.createdAt.toISOString(),
   };

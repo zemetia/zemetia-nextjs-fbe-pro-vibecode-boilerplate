@@ -67,12 +67,24 @@ export const VOUCHER_DIRECTION_OPTIONS = VOUCHER_DIRECTIONS.map((value) => ({
   label: VOUCHER_DIRECTION_LABELS[value],
 }));
 
-export const VOUCHER_CATEGORIES = ['GENERAL_EXPENSE', 'EMPLOYEE', 'SUPPLIER'] as const;
+export const VOUCHER_CATEGORIES = [
+  'GENERAL_EXPENSE',
+  'EMPLOYEE',
+  'SUPPLIER',
+  'PO_PRINCIPAL',
+  'CUSTOMS_DUTY_PPH22',
+  'LOGISTICS_HANDLING',
+  'OTHER_EXPENSE',
+] as const;
 
 export const VOUCHER_CATEGORY_LABELS: Record<VoucherCategory, string> = {
   GENERAL_EXPENSE: 'Biaya Umum',
   EMPLOYEE: 'Karyawan',
   SUPPLIER: 'Supplier',
+  PO_PRINCIPAL: 'Pokok Supplier / PO',
+  CUSTOMS_DUTY_PPH22: 'PPh 22',
+  LOGISTICS_HANDLING: 'Logistik & Penanganan',
+  OTHER_EXPENSE: 'Biaya Tambahan',
 };
 
 export const VOUCHER_CATEGORY_OPTIONS = VOUCHER_CATEGORIES.map((value) => ({
@@ -171,6 +183,41 @@ export function requiresDueDate(method: VoucherPaymentMethod): boolean {
 
 export function requiresTransferChannel(method: VoucherPaymentMethod): boolean {
   return method === 'BANK_TRANSFER';
+}
+
+/**
+ * Payment stage validation rules for the purchase flow.
+ *
+ * PRE_RECEIPT means the money is a down payment before goods enter the vault, so
+ * it must point at the purchase order and cannot point at a GoodsReceipt.
+ * POST_RECEIPT means the payment happens after receipt or is settling a confirmed
+ * purchase; at least one real document target must exist, and a delivery may be
+ * present when the post-receipt settlement references the receipt.
+ */
+export function validateVoucherPaymentStage(
+  stage: 'PRE_RECEIPT' | 'POST_RECEIPT' | 'OTHER',
+  purchaseId: string | null,
+  deliveryId: string | null,
+): void {
+  if (stage === 'PRE_RECEIPT') {
+    if (!purchaseId) {
+      throw new Error('Pembayaran uang muka sebelum TTB harus menunjuk PurchaseOrder.');
+    }
+
+    if (deliveryId) {
+      throw new Error('Pembayaran uang muka sebelum TTB tidak boleh menunjuk GoodsReceipt.');
+    }
+
+    return;
+  }
+
+  if (stage === 'POST_RECEIPT') {
+    if (!purchaseId && !deliveryId) {
+      throw new Error('Pembayaran setelah TTB harus menunjuk PurchaseOrder atau GoodsReceipt.');
+    }
+
+    return;
+  }
 }
 
 export const VOUCHER_TRANSFER_CHANNELS = ['BI_FAST', 'SKN', 'RTGS'] as const;

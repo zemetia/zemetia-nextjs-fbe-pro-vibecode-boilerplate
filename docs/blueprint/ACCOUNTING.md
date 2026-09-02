@@ -98,13 +98,13 @@ Implementasi: [src/pages/LmLocalTrading.jsx](../../src/pages/LmLocalTrading.jsx)
 | `1135` | PPh 22 Dibayar Di Muka (Impor Emas) | detail |
 | `1132` | Piutang Usaha Ekspor USD | detail |
 | `1113-2` | Piutang Usaha Ekspor | detail |
-| `1121` | Uang Muka Pembelian | **header** |
 | `1121-1` | Uang Muka Pembelian Emas Lokal | detail |
 | `1121-2` | Uang Muka Pembelian Emas Impor | detail |
-| `1121-3` | Uang Muka Pembelian Operasional | detail |
+| `1135` | Uang Muka Impor / Pembelian Valas | detail |
 | `2116` | Uang Muka Penjualan | **header** |
 | `2116-1` | Uang Muka Penjualan Emas Lokal | detail |
 | `2116-2` | Uang Muka Penjualan Perhiasan Ekspor | detail |
+| `2150` | Uang Muka Penjualan | detail |
 
 ### Pendapatan & HPP
 

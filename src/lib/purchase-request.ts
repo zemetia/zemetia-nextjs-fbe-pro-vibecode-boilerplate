@@ -1,16 +1,21 @@
 import { roundTo } from '@/lib/number';
-import { GRAM_PER_TROY_OUNCE, WEIGHT_SCALE } from '@/lib/weight';
+import { WEIGHT_SCALE } from '@/lib/weight';
 import type {
   PurchaseRequestCategory,
   PurchaseRequestPriority,
   PurchaseRequestStage,
   PurchaseRequestStatus,
-  WeightUnit,
 } from '@/types/value-objects';
 
 export const PURCHASE_REQUEST_STATUSES = ['DRAFT', 'APPROVED', 'VOID'] as const;
 
-export const PURCHASE_REQUEST_CATEGORIES = ['GOLD_IMPORT', 'GOLD_LOCAL', 'SUPPLY'] as const;
+export const PURCHASE_REQUEST_CATEGORIES = [
+  'GOLD_IMPORT',
+  'GOLD_LOCAL',
+  'SUPPLY',
+  'CHEMICALS_REFINERY',
+  'SAFETY_GA',
+] as const;
 
 export const PURCHASE_REQUEST_PRIORITIES = ['NORMAL', 'URGENT'] as const;
 
@@ -18,6 +23,8 @@ export const PURCHASE_REQUEST_CATEGORY_LABELS: Record<PurchaseRequestCategory, s
   GOLD_IMPORT: 'Logam Impor',
   GOLD_LOCAL: 'Logam Lokal',
   SUPPLY: 'Barang Non-Logam',
+  CHEMICALS_REFINERY: 'Bahan Kimia & Kowi Refineri',
+  SAFETY_GA: 'Perlengkapan K3/GA',
 };
 
 export const PURCHASE_REQUEST_CATEGORY_DESCRIPTIONS: Record<PurchaseRequestCategory, string> = {
@@ -25,6 +32,10 @@ export const PURCHASE_REQUEST_CATEGORY_DESCRIPTIONS: Record<PurchaseRequestCateg
   GOLD_LOCAL: 'Logam dari mitra dalam negeri, termasuk perhiasan untuk dilebur.',
   SUPPLY:
     'Bahan kimia, alat, dan keperluan kantor.',
+  CHEMICALS_REFINERY:
+    'Asam nitrat, kowi grafit, dan bahan kimia proses refineri.',
+  SAFETY_GA:
+    'Alat pelindung diri dan perlengkapan K3/GA.',
 };
 
 export const PURCHASE_REQUEST_PRIORITY_LABELS: Record<PurchaseRequestPriority, string> = {
@@ -114,19 +125,19 @@ export function purchaseRequestStage(
 }
 
 /**
- * Nilai perkiraan satu baris. Harga dikutip **per satuan barisnya**, sedangkan
- * jumlahnya disimpan gram, jadi baris yang diminta per troy ounce dikalikan
- * dalam troy ounce — bukan gramnya dikalikan harga per ounce.
- *
- * Baris supply tidak punya satuan berat: `unit` `null` berarti jumlahnya sudah
- * dalam satuan yang dipakai harganya.
+ * Nilai perkiraan satu baris. Harga dikutip **per satuan yang diketik petugas**,
+ * sedangkan jumlahnya disimpan dalam satuan anchor kategorinya (gram untuk
+ * berat, liter untuk volume, dst) — jadi baris yang diminta per troy ounce
+ * dikalikan dalam troy ounce, bukan gramnya dikalikan harga per ounce.
+ * `unitConversionFactor` adalah `Unit.conversionFactor` baris ini: nilai
+ * anchor dibagi faktor itu untuk balik ke satuan yang diketik.
  */
 export function estimatedLineAmount(
-  quantityGram: number,
-  unit: WeightUnit | null,
+  quantityAnchor: number,
+  unitConversionFactor: number,
   pricePerUnit: number,
 ): number {
-  const quantityInUnit = unit === 'TROY_OUNCE' ? quantityGram / GRAM_PER_TROY_OUNCE : quantityGram;
+  const quantityInUnit = quantityAnchor / unitConversionFactor;
 
   return roundTo(quantityInUnit * pricePerUnit, 2);
 }

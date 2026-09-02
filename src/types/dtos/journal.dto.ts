@@ -54,6 +54,12 @@ export interface JournalEntryDTO {
   /** Σ debit — sama dengan Σ kredit, jadi satu angka cukup untuk daftar. */
   total_amount: number;
   line_count: number;
+  lines?: JournalLineDTO[];
+  /** Kunci pengelompokan "per transaksi" (BKK/BBK/TTB/PEMBELIAN_LOCAL/dst). */
+  group_key: string;
+  group_label: string;
+  /** Nomor dokumen sumber (voucher/TTB/PO) — jatuh ke `number` bila tak ada. */
+  document_number: string;
   created_at: string;
 }
 

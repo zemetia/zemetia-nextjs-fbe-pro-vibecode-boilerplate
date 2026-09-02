@@ -8,11 +8,11 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="table-container relative w-full overflow-x-auto rounded-md border border-line bg-surface/30 shadow-glass backdrop-blur-[12px]"
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("custom-table w-full caption-bottom text-sm tabular-nums", className)}
         {...props}
       />
     </div>
@@ -24,7 +24,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
     <thead
       data-slot="table-header"
       className={cn(
-        "bg-surface-raised [&_tr]:border-b [&_tr]:border-border",
+        "bg-surface/90 [&_tr]:border-b [&_tr]:border-gold/25",
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
     <tfoot
       data-slot="table-footer"
       className={cn(
-        "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
+        "border-t-2 border-gold/30 bg-surface/90 font-medium [&>tr]:last:border-b-0",
         className
       )}
       {...props}
@@ -60,7 +60,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-primary-subtle/60 has-aria-expanded:bg-primary-subtle/60 data-[state=selected]:bg-primary-subtle",
+        "border-b border-line transition-colors duration-150 even:bg-white/[0.015] hover:bg-gold/[0.05] data-[state=selected]:bg-gold/[0.08]",
         className
       )}
       {...props}
@@ -73,7 +73,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-2 text-left align-middle text-xs font-semibold tracking-wide whitespace-nowrap text-foreground-muted uppercase [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "h-11 px-4 py-3.5 text-left align-middle text-xs font-semibold tracking-wider text-fg-soft uppercase whitespace-nowrap bg-surface/90 [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -86,7 +86,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "px-4 py-3.5 align-middle whitespace-nowrap text-fg [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -101,7 +101,7 @@ function TableCaption({
   return (
     <caption
       data-slot="table-caption"
-      className={cn("mt-4 text-sm text-muted-foreground", className)}
+      className={cn("mt-4 text-xs text-fg-muted", className)}
       {...props}
     />
   )
@@ -120,9 +120,11 @@ function TableEmpty({
     <TableRow>
       <TableCell
         colSpan={colSpan}
-        className={cn("h-24 text-center text-foreground-muted", className)}
+        className={cn("py-12 text-center text-fg-muted", className)}
       >
-        {message}
+        <div className="flex flex-col items-center justify-center gap-2">
+          <p className="text-xs text-fg-muted">{message}</p>
+        </div>
       </TableCell>
     </TableRow>
   )

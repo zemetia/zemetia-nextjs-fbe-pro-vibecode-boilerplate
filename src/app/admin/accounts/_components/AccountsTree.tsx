@@ -17,13 +17,13 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  CoaTable as Table,
+  CoaTableBody as TableBody,
+  CoaTableCell as TableCell,
+  CoaTableHead as TableHead,
+  CoaTableHeader as TableHeader,
+  CoaTableRow as TableRow,
+} from '@/components/ui/CoaTable';
 import type { AccountNodeVO, AccountType } from '@/types/value-objects';
 import { AccountFormDialog } from './AccountFormDialog';
 import { AccountRowActions } from './AccountRowActions';

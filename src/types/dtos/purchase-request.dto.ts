@@ -4,9 +4,18 @@ import type { PaginatedDTO } from './pagination.dto';
 import type { ProductFormDTO } from './product.dto';
 import type { SupplyCategoryDTO } from './supply.dto';
 
+/// Dipertahankan sebagai sumber kanonik untuk `sales.dto.ts` &
+/// `metal-purchase.dto.ts` — dokumen itu masih memakai satuan berat khusus
+/// logam. `PurchaseRequestItemDTO` sendiri sudah pindah ke `Unit` master
+/// (lihat `unit` di bawah), bukan lagi enum ini.
 export type WeightUnitDTO = 'GRAM' | 'TROY_OUNCE';
 
-export type PurchaseRequestCategoryDTO = 'GOLD_IMPORT' | 'GOLD_LOCAL' | 'SUPPLY';
+export type PurchaseRequestCategoryDTO =
+  | 'GOLD_IMPORT'
+  | 'GOLD_LOCAL'
+  | 'SUPPLY'
+  | 'CHEMICALS_REFINERY'
+  | 'SAFETY_GA';
 export type PurchaseRequestPriorityDTO = 'NORMAL' | 'URGENT';
 
 export type PurchaseRequestStatusDTO = 'DRAFT' | 'APPROVED' | 'VOID';
@@ -27,12 +36,22 @@ export interface PurchaseRequestProductRefDTO {
   form: ProductFormDTO;
 }
 
+export interface PurchaseRequestUnitRefDTO {
+  id: string;
+  code: string;
+  symbol: string;
+  name: string;
+  category_code: string;
+  conversion_factor: number;
+  is_anchor: boolean;
+}
+
 export interface PurchaseRequestItemDTO {
   id: string;
   line_no: number;
   product: PurchaseRequestProductRefDTO | null;
   supply: PurchaseRequestSupplyRefDTO | null;
-  weight_unit: WeightUnitDTO | null;
+  unit: PurchaseRequestUnitRefDTO;
   quantity: number;
   est_unit_price: number;
   est_amount: number;
@@ -55,6 +74,14 @@ export interface PurchaseRequestDTO {
   est_total_amount: number;
   is_fulfilled: boolean;
   is_partially_fulfilled: boolean;
+  /** Field legacy (`src/dto/purchaseRequest.dto.js`) — dipertahankan agar
+   *  dokumen lama & form legacy tetap terbaca sama. */
+  requester_name: string | null;
+  recommended_supplier: string | null;
+  /** Jejak konversi ke PO (legacy `convertedPoNumber`/`conversionDate`/`convertedBy`). */
+  converted_po_number: string | null;
+  conversion_date: string | null;
+  converted_by: string | null;
   notes: string | null;
   created_at: string;
 }

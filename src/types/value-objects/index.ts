@@ -18,4 +18,5 @@ export type * from './ledger-report.vo';
 export type * from './supply.vo';
 export type * from './purchase-request.vo';
 export type * from './metal-purchase.vo';
-export type * from './sales-order.vo';
+export type * from './sales.vo';
+export type * from './unit.vo';

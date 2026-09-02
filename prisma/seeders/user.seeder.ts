@@ -1,43 +1,122 @@
 import bcrypt from 'bcryptjs';
-import type { Role } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import type { SeededRoles } from './role.seeder';
 
 const PASSWORD_SALT_ROUNDS = 12;
 
-/**
- * Creates the bootstrap Super Admin — the only account that cannot be made from
- * the UI, since creating users requires being signed in already. Everyone else
- * is added through `POST /api/users`.
- *
- * Re-running it re-asserts the role, reactivates the account and re-hashes the
- * password from the environment, which doubles as the recovery path if the
- * bootstrap admin is locked out. The password is never printed.
- *
- * Idempotent — safe to run on every deploy.
- */
-export async function seedUsers(superAdmin: Role): Promise<void> {
-  const email = process.env.SEED_SUPER_ADMIN_EMAIL;
-  const password = process.env.SEED_SUPER_ADMIN_PASSWORD;
+export interface SeedUserDefinition {
+  email: string;
+  name: string;
+  roleId: string;
+}
 
-  if (!email || !password) {
-    console.warn(
-      'Users: SEED_SUPER_ADMIN_EMAIL / SEED_SUPER_ADMIN_PASSWORD not set — skipping bootstrap admin.',
-    );
-    return;
+/**
+ * Creates seed accounts for each operational role in PT TAN ERP:
+ * - Super Admin (admin@tan.local)
+ * - Owner / Pemilik (owner@tan.local)
+ * - Direktur Utama / Dirut (dirut@tan.local & direktur@tan.local)
+ * - Purchasing (purchasing@tan.local)
+ * - Vault & Gudang (vault@tan.local)
+ * - Produksi Perhiasan (production@tan.local)
+ * - Sales & Ekspor (sales@tan.local)
+ * - Keuangan & Kasir (finance@tan.local)
+ * - Akuntansi SAK EMKM (accounting@tan.local)
+ * - Member / Staff (member@tan.local)
+ *
+ * Password default: `process.env.SEED_DEFAULT_PASSWORD || process.env.SEED_SUPER_ADMIN_PASSWORD || 'TanErp!2026'`
+ * Idempotent — aman dijalankan berulang kali pada setiap build / deploy.
+ */
+export async function seedUsers(roles: SeededRoles): Promise<void> {
+  const defaultPassword =
+    process.env.SEED_DEFAULT_PASSWORD ||
+    process.env.SEED_SUPER_ADMIN_PASSWORD ||
+    'TanErp!2026';
+
+  const superAdminEmail = (
+    process.env.SEED_SUPER_ADMIN_EMAIL || 'admin@tan.local'
+  ).toLowerCase();
+
+  const hashedPassword = await bcrypt.hash(defaultPassword, PASSWORD_SALT_ROUNDS);
+
+  const usersToSeed: SeedUserDefinition[] = [
+    {
+      email: superAdminEmail,
+      name: 'Super Admin',
+      roleId: roles.superAdmin.id,
+    },
+    {
+      email: 'owner@tan.local',
+      name: 'Bpk. Hendra (Owner PT TAN)',
+      roleId: roles.owner.id,
+    },
+    {
+      email: 'dirut@tan.local',
+      name: 'Direktur Utama (Dirut)',
+      roleId: roles.direktur.id,
+    },
+    {
+      email: 'direktur@tan.local',
+      name: 'Direktur Utama PT TAN',
+      roleId: roles.direktur.id,
+    },
+    {
+      email: 'purchasing@tan.local',
+      name: 'Manager Purchasing',
+      roleId: roles.purchasing.id,
+    },
+    {
+      email: 'vault@tan.local',
+      name: 'Petugas Vault & Gudang',
+      roleId: roles.vaultOfficer.id,
+    },
+    {
+      email: 'production@tan.local',
+      name: 'Supervisor Produksi',
+      roleId: roles.production.id,
+    },
+    {
+      email: 'sales@tan.local',
+      name: 'Sales & Ekspor Executive',
+      roleId: roles.sales.id,
+    },
+    {
+      email: 'finance@tan.local',
+      name: 'Keuangan & Kasir',
+      roleId: roles.finance.id,
+    },
+    {
+      email: 'accounting@tan.local',
+      name: 'Akuntan SAK EMKM',
+      roleId: roles.accounting.id,
+    },
+    {
+      email: 'member@tan.local',
+      name: 'Staff Member',
+      roleId: roles.member.id,
+    },
+  ];
+
+  for (const user of usersToSeed) {
+    await prisma.user.upsert({
+      where: { email: user.email },
+      update: {
+        name: user.name,
+        roleId: user.roleId,
+        password: hashedPassword,
+        isActive: true,
+      },
+      create: {
+        email: user.email,
+        name: user.name,
+        password: hashedPassword,
+        roleId: user.roleId,
+        isActive: true,
+      },
+    });
   }
 
-  const hashed = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
-  await prisma.user.upsert({
-    where: { email: email.toLowerCase() },
-    update: { roleId: superAdmin.id, password: hashed, isActive: true },
-    create: {
-      email: email.toLowerCase(),
-      name: 'Super Admin',
-      password: hashed,
-      roleId: superAdmin.id,
-    },
-  });
-
-  console.log(`Users: bootstrap Super Admin ready (${email.toLowerCase()})`);
+  console.log(
+    `Users: ${usersToSeed.length} accounts in sync across all roles (default password set)`,
+  );
 }

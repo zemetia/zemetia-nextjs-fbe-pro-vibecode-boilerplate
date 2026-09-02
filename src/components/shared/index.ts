@@ -27,4 +27,8 @@ export type {
 } from './RequestApprovalDialog';
 export { SupplyPicker } from './SupplyPicker';
 export type { SupplyPickerProps } from './SupplyPicker';
+export { UnitPicker } from './UnitPicker';
+export type { UnitPickerProps } from './UnitPicker';
+export { MeasurementUnitPicker } from './MeasurementUnitPicker';
+export type { MeasurementUnitPickerProps } from './MeasurementUnitPicker';
 

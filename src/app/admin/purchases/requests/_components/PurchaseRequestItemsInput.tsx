@@ -3,9 +3,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 
 import { formatCurrency, formatNumber } from '@/lib/number';
-import { WEIGHT_UNIT_OPTIONS } from '@/lib/weight';
 import { Button } from '@/components/ui/Button';
-import { Combobox } from '@/components/ui/Combobox';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import {
@@ -16,13 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ProductPicker, SupplyPicker } from '@/components/shared';
-import type {
-  ProductVO,
-  PurchaseRequestCategory,
-  SupplyVO,
-  WeightUnit,
-} from '@/types/value-objects';
+import { MeasurementUnitPicker, ProductPicker, SupplyPicker } from '@/components/shared';
+import type { ProductVO, PurchaseRequestCategory, SupplyVO } from '@/types/value-objects';
 import {
   emptyItem,
   previewItemAmount,
@@ -77,7 +70,7 @@ export function PurchaseRequestItemsInput({
   }
 
   function addItem() {
-    onChange([...items, emptyItem(category)]);
+    onChange([...items, emptyItem()]);
   }
 
   function removeItem(index: number) {
@@ -115,7 +108,7 @@ export function PurchaseRequestItemsInput({
               <TableHead className="min-w-[240px]">
                 {isSupply ? 'Barang Non-Logam' : 'Produk Logam Mulia'}
               </TableHead>
-              {!isSupply && <TableHead className="w-32">Satuan Berat</TableHead>}
+              <TableHead className="w-40">Satuan</TableHead>
               <TableHead className="w-36">
                 {isSupply ? 'Jumlah Satuan' : 'Kuantitas / Berat'}
               </TableHead>
@@ -133,6 +126,7 @@ export function PurchaseRequestItemsInput({
             {items.map((item, index) => {
               const rowNum = index + 1;
               const itemError = errors[`items.${index}.product_id`] || errors[`items.${index}.supply_id`];
+              const unitError = errors[`items.${index}.unit_id`];
               const qtyError = errors[`items.${index}.quantity`];
               const priceError = errors[`items.${index}.est_unit_price`];
               const subtotal = previewItemAmount(item);
@@ -159,18 +153,21 @@ export function PurchaseRequestItemsInput({
                       />
                     )}
                   </TableCell>
-                  {!isSupply && (
-                    <TableCell>
-                      <Combobox
-                        options={WEIGHT_UNIT_OPTIONS}
-                        value={item.weightUnit ?? 'GRAM'}
-                        onValueChange={(val) =>
-                          updateField(index, 'weightUnit', val as WeightUnit)
-                        }
-                        aria-label={`Satuan berat baris ke-${rowNum}`}
-                      />
-                    </TableCell>
-                  )}
+                  <TableCell>
+                    <MeasurementUnitPicker
+                      value={item.unitId ?? ''}
+                      onChange={(unit) => {
+                        const next = [...items];
+                        const current = next[index];
+                        if (!current) return;
+                        next[index] = { ...current, unitId: unit.id, unitLabel: unit.label };
+                        onChange(next);
+                      }}
+                      categoryCode={isSupply ? undefined : 'WEIGHT'}
+                      error={unitError}
+                      aria-label={`Satuan baris ke-${rowNum}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <NumberInput
                       value={item.quantity}

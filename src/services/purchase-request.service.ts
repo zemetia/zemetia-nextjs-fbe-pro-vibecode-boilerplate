@@ -13,7 +13,7 @@ import {
   PURCHASE_REQUEST_PRIORITY_LABELS,
   PURCHASE_REQUEST_STAGE_LABELS,
 } from '@/lib/purchase-request';
-import { displayWeight, WEIGHT_SCALE } from '@/lib/weight';
+import { WEIGHT_SCALE } from '@/lib/weight';
 import type {
   PurchaseRequestDetailDTO,
   PurchaseRequestDTO,
@@ -32,28 +32,19 @@ import type {
 
 const EMPTY = '—';
 
-/** Suffix satuan berat — sama dengan yang dipakai dokumen pembeliannya. */
-const UNIT_SUFFIX = { GRAM: 'g', TROY_OUNCE: 'oz' } as const;
-
 /**
  * Jumlah baris, **dinyatakan kembali dalam satuan yang dipakai mengetiknya**.
- * Kolomnya menyimpan gram; baris yang diminta 400 oz dibaca lagi sebagai 400 oz,
- * bukan 12.441,3907 g yang harus dibagi sendiri di kepala.
- *
- * Baris supply tidak punya satuan berat — satuannya ikut masternya dan angkanya
- * dipakai apa adanya.
+ * Kolomnya menyimpan nilai anchor kategori satuannya (gram/liter/meter/pcs);
+ * baris yang diminta 400 oz dibaca lagi sebagai 400 oz, bukan 12.441,3907 g
+ * yang harus dibagi sendiri di kepala.
  */
 function quantityLabel(item: PurchaseRequestItemDTO, value: number): string {
-  if (item.weight_unit) {
-    return `${formatNumber(displayWeight(value, item.weight_unit), { decimalScale: WEIGHT_SCALE })} ${UNIT_SUFFIX[item.weight_unit]}`;
-  }
-
-  return `${formatNumber(value, { decimalScale: 2 })} ${item.supply?.unit ?? ''}`.trim();
+  const displayValue = value / item.unit.conversion_factor;
+  return `${formatNumber(displayValue, { decimalScale: WEIGHT_SCALE })} ${item.unit.symbol}`;
 }
 
 function unitLabelOf(item: PurchaseRequestItemDTO): string {
-  if (item.weight_unit) return UNIT_SUFFIX[item.weight_unit];
-  return item.supply?.unit ?? EMPTY;
+  return item.unit.symbol;
 }
 
 function toItemVO(item: PurchaseRequestItemDTO, currencyCode: string): PurchaseRequestItemVO {
@@ -70,7 +61,15 @@ function toItemVO(item: PurchaseRequestItemDTO, currencyCode: string): PurchaseR
     metal: item.product?.metal,
     form: item.product?.form,
     supplyCategory: item.supply?.category,
-    weightUnit: item.weight_unit ?? undefined,
+    unit: {
+      id: item.unit.id,
+      code: item.unit.code,
+      symbol: item.unit.symbol,
+      name: item.unit.name,
+      categoryCode: item.unit.category_code,
+      conversionFactor: item.unit.conversion_factor,
+      isAnchor: item.unit.is_anchor,
+    },
     unitLabel: unitLabelOf(item),
     quantity: item.quantity,
     quantityLabel: quantityLabel(item, item.quantity),
@@ -155,8 +154,8 @@ export type PurchaseRequestListParams = ListParams & {
 export type PurchaseRequestItemPayload = {
   product_id?: string;
   supply_id?: string;
-  weight_unit?: 'GRAM' | 'TROY_OUNCE';
-  /** Dalam satuan barisnya — server yang mengubahnya ke gram. */
+  unit_id: string;
+  /** Dalam satuan barisnya — server yang mengubahnya ke anchor kategori satuan itu. */
   quantity: number;
   est_unit_price: number;
   notes?: string;

@@ -1,35 +1,28 @@
-import { redirect } from 'next/navigation';
-import type { Metadata } from 'next';
+﻿'use client';
 
-import { requirePermission } from '@/lib/rbac';
-import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { Typography } from '@/components/ui/Typography';
-import { AccountsTree } from './_components/AccountsTree';
+import dynamic from 'next/dynamic';
+import { AdminPageWrapper } from '@/components/layout/AdminPageWrapper';
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-};
+interface PageViewProps {
+  setActivePage: (pageId: string) => void;
+}
 
-export default async function AccountsPage() {
-  try {
-    await requirePermission('accounts:list');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) redirect('/sign-in');
-    if (error instanceof ForbiddenError) redirect('/');
-    throw error;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <Typography variant="h2">Bagan Akun</Typography>
-        <Typography variant="muted">
-          Kode akun mengikuti posisinya di bagan: satu digit per tingkat, empat digit untuk tingkat
-          1–4 dan lima digit untuk tingkat terdalam. Transaksi hanya bisa masuk ke akun yang belum
-          punya turunan.
-        </Typography>
+const View = dynamic<PageViewProps>(() => import('@/views/ChartOfAccounts'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center">
+      <div className="flex items-center gap-2 text-fg-soft font-medium">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+        <span>Memuat modul...</span>
       </div>
-      <AccountsTree />
     </div>
+  ),
+});
+
+export default function Page() {
+  return (
+    <AdminPageWrapper>
+      {({ setActivePage }) => <View setActivePage={setActivePage} />}
+    </AdminPageWrapper>
   );
 }

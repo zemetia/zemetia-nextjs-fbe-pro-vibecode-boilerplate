@@ -28,12 +28,16 @@ async function main() {
     seedCountries,
     seedAccounts,
     seedProducts,
+    seedUnits,
+    seedPartners,
+    seedCustomers,
+    seedSupplies,
   } = await import('./seeders');
 
   try {
     const permissions = await seedPermissions();
-    const { superAdmin } = await seedRoles(permissions);
-    await seedUsers(superAdmin);
+    const roles = await seedRoles(permissions);
+    await seedUsers(roles);
 
     // Reference data. Currencies first — countries carry the FK.
     await seedCurrencies();
@@ -46,6 +50,16 @@ async function main() {
     // Master barang — baris dokumen pembelian menunjuk ke sini, jadi tanpa satu
     // pun produk aktif form pembelian tidak punya apa pun untuk dipilih.
     await seedProducts();
+
+    // Master satuan & tipe satuan — anchor-based conversion
+    await seedUnits();
+
+    // Master mitra (supplier + customer legacy) + bahan operasional (supply) —
+    // wajib sesudah currency & country (FK-nya), supaya form PR/PO/SO yang
+    // sudah tersambung database punya pilihan.
+    await seedPartners();
+    await seedCustomers();
+    await seedSupplies();
 
     console.log('Seed complete.');
   } finally {

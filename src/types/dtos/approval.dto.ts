@@ -1,6 +1,8 @@
 import type { PaginatedDTO } from './pagination.dto';
 
 export type ApprovalKindDTO =
+  | 'METAL_PURCHASE_CONFIRM'
+  | 'METAL_PURCHASE_DELIVERY_CONFIRM'
   | 'CASH_VOUCHER_APPROVE'
   | 'PRODUCTION_ORDER_RELEASE';
 

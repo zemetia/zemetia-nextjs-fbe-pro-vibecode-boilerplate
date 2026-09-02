@@ -1029,6 +1029,20 @@ const PDFExporter = {
                     valIDR > 0 ? `Rp ${valIDR.toLocaleString('id-ID')}` : '-'
                 ]);
             });
+        } else if (Array.isArray(ttb.certificates) && ttb.certificates.length > 0) {
+            const unitPrice = parseFloat(ttb.unitPriceIDRPerGram || 0);
+            ttb.certificates.forEach((cert, idx) => {
+                const barWeight = parseFloat(cert.weight || 0);
+                const valIDR = barWeight * unitPrice;
+                tableRows.push([
+                    idx + 1,
+                    ttb.itemDescription || 'Emas Batangan 999.9',
+                    ttb.receivedPurity ? `${ttb.receivedPurity}%` : '99.99% (Fine Gold)',
+                    `${barWeight.toLocaleString('id-ID', { maximumFractionDigits: 4 })} g`,
+                    cert.serialNumber || '-',
+                    valIDR > 0 ? `Rp ${Math.round(valIDR).toLocaleString('id-ID')}` : '-'
+                ]);
+            });
         } else {
             const weight = parseFloat(ttb.receivedWeightGram || ttb.weight || 0);
             const valIDR = parseFloat(ttb.totalValueIDR || ttb.totalAmount || 0);
@@ -1037,7 +1051,7 @@ const PDFExporter = {
                 ttb.itemDescription || ttb.itemName || 'Logam Mulia Emas Murni',
                 ttb.receivedPurity ? `${ttb.receivedPurity}%` : '99.99% (Fine Gold)',
                 `${weight.toFixed(2)} g`,
-                ttb.serialNumbers || ttb.serialNo || '-',
+                ttb.barSerialNumbers || ttb.serialNumbers || ttb.serialNo || '-',
                 valIDR > 0 ? `Rp ${valIDR.toLocaleString('id-ID')}` : '-'
             ]);
         }
@@ -1759,8 +1773,11 @@ const PDFExporter = {
         y += 5;
         doc.setFontSize(9);
         doc.setFont('RobotoMono', 'normal');
-        const poDate = new Date(order.poDate || order.orderDate || order.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-        const infoText = `NO. PO : ${order.poNumber || '-'}        TANGGAL : ${poDate}`;
+        const poDate = new Date(order.poDate || order.orderDate || order.date || order.createdAt || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        let infoText = `NO. PO : ${order.poNumber || '-'}        TANGGAL : ${poDate}`;
+        if (order.prNumber || order.prId) {
+            infoText += `        REF. PR : ${order.prNumber || order.prId}`;
+        }
         doc.text(infoText, pageWidth / 2, y, { align: 'center' });
 
         y += 5;
@@ -2107,8 +2124,12 @@ const PDFExporter = {
         const totAmount = parseFloat(order.totalAmount || order.totalCostIDR || order.totalValueIDR || 0);
         const serials = order.serialNumbers || order.serialNo || 'Sesuai fisik sertifikat terlampir';
 
+        const refOrderDoc = (order.prNumber || order.prId)
+            ? `${order.poNumber || order.receiptNo || '-'}\n(PR: ${order.prNumber || order.prId})`
+            : (order.poNumber || order.receiptNo || '-');
+
         const tableRows = [[
-            order.poNumber || order.receiptNo || '-',
+            refOrderDoc,
             order.itemName || order.itemDescription || 'Emas Batangan Logam Mulia Murni 999.9',
             `${totWeight.toFixed(2)} g`,
             order.purity ? `${order.purity}%` : '99.99% (24K)',

@@ -6,15 +6,17 @@ export type MetalLotFormDTO = 'BAR' | 'GRANULE' | 'JEWELRY' | 'SCRAP' | 'BAL';
 
 export type BalStageDTO = 'OPEN' | 'SEALED';
 
-export type MetalMovementDirectionDTO = 'IN' | 'OUT' | 'INTERNAL';
+export type MetalMovementDirectionDTO = 'IN' | 'OUT';
 export type MetalMovementStatusDTO = 'DRAFT' | 'POSTED' | 'VOID';
-export type MetalMovementTypeDTO = 'PURCHASE' | 'PRODUCTION_ISSUE' | 'PRODUCTION_RECEIPT' | 'PRODUCTION_RETURN' | 'SALES' | 'ADJUSTMENT';
-
-export interface JewelryModelRefDTO {
-  id: string;
-  code: string;
-  name: string;
-}
+export type MetalMovementTypeDTO =
+  | 'RECEIPT'
+  | 'SORT'
+  | 'TRANSFER'
+  | 'REFINE_OUT'
+  | 'REFINE_IN'
+  | 'PRODUCTION'
+  | 'ISSUE'
+  | 'ADJUSTMENT';
 
 export interface StorageLocationRefDTO {
   id: string;

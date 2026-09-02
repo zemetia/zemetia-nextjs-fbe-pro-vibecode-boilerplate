@@ -6,3 +6,7 @@ export { seedCurrencies } from './currency.seeder';
 export { seedCountries } from './country.seeder';
 export { seedAccounts } from './account.seeder';
 export { seedProducts } from './product.seeder';
+export { seedUnits } from './unit.seeder';
+export { seedPartners } from './partner.seeder';
+export { seedCustomers } from './customer.seeder';
+export { seedSupplies } from './supply.seeder';

@@ -8,6 +8,7 @@ import type { Metal } from './inventory.vo';
 import type { PaginatedVO } from './pagination.vo';
 import type { ProductForm } from './product.vo';
 import type { SupplyCategory } from './supply.vo';
+import type { UnitVO } from './unit.vo';
 
 export type WeightUnit = WeightUnitDTO;
 export type PurchaseRequestCategory = PurchaseRequestCategoryDTO;
@@ -26,7 +27,7 @@ export interface PurchaseRequestItemVO {
   metal?: Metal;
   form?: ProductForm;
   supplyCategory?: SupplyCategory;
-  weightUnit?: WeightUnit;
+  unit: Pick<UnitVO, 'id' | 'code' | 'symbol' | 'name' | 'categoryCode' | 'conversionFactor' | 'isAnchor'>;
   unitLabel: string;
   quantity: number;
   quantityLabel: string;

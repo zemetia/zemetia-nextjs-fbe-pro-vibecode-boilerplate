@@ -194,7 +194,11 @@ const PurchaseOrder = {
         const isPkp = supplierObj ? (supplierObj.taxStatus === 'PKP' || supplierObj.is_pkp === true) : false;
         const defaultTaxRate = (typeof Storage !== 'undefined' && Storage.get && Storage.get('erp_settings')?.defaultTaxRate) ?? 11;
         const enforcedTaxRate = isPkp ? defaultTaxRate : 0;
-        const subtotal = orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity) * parseFloat(item.unitPrice)), 0);
+        const subtotal = orderData.items.reduce((sum, item) => {
+            const p = parseFloat(item.unitPrice ?? item.unitPriceUSD ?? 0);
+            const q = parseFloat(item.quantity ?? item.qty ?? item.weight ?? 0);
+            return sum + (q * p);
+        }, 0);
         const taxAmount = Math.round(subtotal * (enforcedTaxRate / 100));
         const total = subtotal + taxAmount;
 
@@ -203,13 +207,13 @@ const PurchaseOrder = {
         const subtotalIDR = currency === 'USD' ? (subtotal * exchangeRate) : subtotal;
         const importDuty = parseFloat(orderData.importDuty || 0);
         const freightAndInsurance = parseFloat(orderData.freightAndInsurance || 0);
-        const totalQty = orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
-        const totalLandedCostIDR = subtotalIDR + importDuty + freightAndInsurance;
-        const unitLandedCostIDRPerGram = totalQty > 0 ? (totalLandedCostIDR / totalQty) : 0;
+        const totalQty = orderData.items.reduce((sum, item) => sum + (parseFloat(item.quantity ?? item.qty ?? item.weight ?? 0) || 0), 0);
+        const totalLandedCostIDR = orderData.totalLandedCostIDR || (subtotalIDR + importDuty + freightAndInsurance);
+        const unitLandedCostIDRPerGram = orderData.unitLandedCostIDRPerGram || (totalQty > 0 ? (totalLandedCostIDR / totalQty) : 0);
 
         const order = {
-            id: Date.now(),
-            poNumber: await this.generatePONumber(),
+            id: orderData.id || Date.now(),
+            poNumber: orderData.poNumber || await this.generatePONumber(),
             supplier: orderData.supplier,
             supplierName: orderData.supplierName,
             orderDate: orderData.orderDate,
@@ -218,6 +222,7 @@ const PurchaseOrder = {
             exchangeRate: exchangeRate,
             subtotalIDR: subtotalIDR,
             importDuty: importDuty,
+            pph22Import: parseFloat(orderData.pph22Import || 0),
             freightAndInsurance: freightAndInsurance,
             totalLandedCostIDR: totalLandedCostIDR,
             unitLandedCostIDRPerGram: unitLandedCostIDRPerGram,
@@ -225,20 +230,41 @@ const PurchaseOrder = {
             sppbNo: orderData.sppbNo || '',
             mawbNo: orderData.mawbNo || '',
             barSerialNumbers: orderData.barSerialNumbers || [],
+            invoiceNumber: orderData.invoiceNumber || '',
+            paymentTerms: orderData.paymentTerms || '',
+            unitMode: orderData.unitMode || (currency === 'USD' ? 'oz' : 'gram'),
+            quantityUnits: orderData.quantityUnits ?? (orderData.weightGrams || totalQty),
+            weightGrams: orderData.weightGrams ?? totalQty,
+            weightOz: orderData.weightOz ?? (totalQty / 31.1034768),
+            baseAmountUSD: orderData.baseAmountUSD ?? (currency === 'USD' ? subtotal : 0),
+            totalAmountUSD: orderData.totalAmountUSD ?? (currency === 'USD' ? total : 0),
+            paidAmountIDR: orderData.paidAmountIDR || 0,
+            remainingBalanceIDR: orderData.remainingBalanceIDR ?? totalLandedCostIDR,
+            paymentStatus: orderData.paymentStatus || 'UNPAID',
+            paymentHistory: orderData.paymentHistory || [],
+            logisticsCarrier: orderData.logisticsCarrier || '',
             items: orderData.items.map(item => {
                 // Look up inventory GL account from master items
                 const masterItems = Storage.getItems ? Storage.getItems() : (Storage.get(Storage.KEYS.ITEMS) || []);
                 const masterItem = masterItems.find(mi => mi.id === item.itemId || mi.code === item.itemCode);
                 const inventoryAccount = masterItem?.inventoryAccount || '';
+                const unitPrice = parseFloat(item.unitPrice ?? item.unitPriceUSD ?? 0);
+                const unitPriceUSD = parseFloat(item.unitPriceUSD ?? (currency === 'USD' ? unitPrice : 0));
+                const unitPriceIDR = parseFloat(item.unitPriceIDR ?? (currency === 'USD' ? unitPrice * exchangeRate : unitPrice));
+                const qty = parseFloat(item.quantity ?? item.qty ?? item.weight ?? 0);
 
                 return {
-                    itemId: item.itemId,
-                    itemCode: item.itemCode,
-                    itemName: item.itemName,
-                    quantity: parseFloat(item.quantity),
-                    unit: item.unit,
-                    unitPrice: parseFloat(item.unitPrice),
-                    subtotal: parseFloat(item.quantity) * parseFloat(item.unitPrice),
+                    itemId: item.itemId || item.itemCode || '',
+                    itemCode: item.itemCode || item.itemId || '',
+                    itemName: item.itemName || item.name || '',
+                    quantity: qty,
+                    unit: item.unit || 'gram',
+                    unitPrice: unitPrice,
+                    unitPriceUSD: unitPriceUSD,
+                    unitPriceIDR: unitPriceIDR,
+                    subtotal: qty * unitPrice,
+                    totalUSD: parseFloat(item.totalUSD ?? (currency === 'USD' ? qty * unitPrice : 0)),
+                    totalAmount: parseFloat(item.totalAmount ?? (qty * unitPrice)),
                     notes: item.notes || '',
                     inventoryAccount: inventoryAccount  // GL account for journal
                 };
@@ -248,14 +274,16 @@ const PurchaseOrder = {
             taxAmount: taxAmount,
             total: total,
             reference: orderData.reference || '',
-            prfId: orderData.prfId || null,
-            prfNumber: orderData.prfNumber || '',
+            prfId: orderData.prfId || orderData.prId || null,
+            prfNumber: orderData.prfNumber || orderData.prNumber || '',
+            prId: orderData.prId || orderData.prfId || '',
+            prNumber: orderData.prNumber || orderData.prfNumber || '',
             prfNotes: orderData.prfNotes || '',
             notes: orderData.notes || '',
-            status: 'draft', // draft, submitted, approved, received, cancelled
+            status: orderData.status || 'draft', // draft, submitted, approved, received, cancelled
             createdBy: Auth?.getCurrentUser?.()?.id || 'system',
             createdByName: Auth?.getCurrentUser?.()?.name || 'system',
-            createdAt: new Date().toISOString(),
+            createdAt: orderData.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
 

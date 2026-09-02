@@ -74,4 +74,30 @@ describe('permission catalog', () => {
       'users:set-status',
     ]);
   });
+
+  it('matches all nav menu permissions to catalog entries', async () => {
+    const { NAV_SECTIONS, PINNED_NAV_ITEMS } = await import('@/app/admin/_components/nav.config');
+    const allNavItems = [...PINNED_NAV_ITEMS, ...NAV_SECTIONS.flatMap((s) => s.items)];
+
+    for (const item of allNavItems) {
+      expect(
+        PERMISSION_CATALOG_BY_KEY.has(item.permission),
+        `Nav item "${item.label}" has invalid permission key: ${item.permission}`,
+      ).toBe(true);
+    }
+  });
+
+  it('ensures all role default permissions exist in the catalog', async () => {
+    const { ROLE_DEFAULT_PERMISSIONS } = await import('@/config/roles');
+
+    for (const [roleSlug, keys] of Object.entries(ROLE_DEFAULT_PERMISSIONS)) {
+      for (const key of keys) {
+        if (key === '*') continue;
+        expect(
+          PERMISSION_CATALOG_BY_KEY.has(key),
+          `Role "${roleSlug}" references uncataloged permission key: ${key}`,
+        ).toBe(true);
+      }
+    }
+  });
 });

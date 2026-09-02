@@ -7,6 +7,7 @@ import {
   paymentMethodsForFund,
   requiresDueDate,
   sumVoucherLines,
+  validateVoucherPaymentStage,
   voucherKind,
   VOUCHER_PAYMENT_METHODS,
 } from './cash-voucher';
@@ -57,6 +58,22 @@ describe('payment method ↔ fund', () => {
     expect(requiresDueDate('CHEQUE')).toBe(true);
     expect(requiresDueDate('GIRO')).toBe(true);
     expect(requiresDueDate('BANK_TRANSFER')).toBe(false);
+  });
+});
+
+describe('validateVoucherPaymentStage', () => {
+  it('keeps advance payment before receipt tied to the purchase, never to the TTB', () => {
+    expect(() => validateVoucherPaymentStage('PRE_RECEIPT', 'purchase-1', null)).not.toThrow();
+    expect(() => validateVoucherPaymentStage('PRE_RECEIPT', null, 'delivery-1')).toThrow(
+      'Pembayaran uang muka sebelum TTB harus menunjuk PurchaseOrder.',
+    );
+  });
+
+  it('requires a real target after the goods have arrived', () => {
+    expect(() => validateVoucherPaymentStage('POST_RECEIPT', 'purchase-1', null)).not.toThrow();
+    expect(() => validateVoucherPaymentStage('POST_RECEIPT', null, null)).toThrow(
+      'Pembayaran setelah TTB harus menunjuk PurchaseOrder atau GoodsReceipt.',
+    );
   });
 });
 

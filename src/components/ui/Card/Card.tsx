@@ -21,12 +21,12 @@ export function Card({
   return (
     <div
       className={cn(
-        'relative rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        'relative rounded-md border border-line bg-card text-card-foreground shadow-glass backdrop-blur-[16px]',
         // Only clip when there is a bar to clip — otherwise focus rings and
         // sticky children inside the card get cut off.
         accent && 'overflow-hidden',
         interactive &&
-          'transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md',
+          'transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-line-hover hover:shadow-md',
         !noPadding && 'p-6',
         className,
       )}

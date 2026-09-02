@@ -8,7 +8,6 @@ import type {
   PurchaseRequestItemVO,
   PurchaseRequestPriority,
   SupplyVO,
-  WeightUnit,
 } from '@/types/value-objects';
 
 export interface PurchaseRequestItemFormState {
@@ -18,7 +17,8 @@ export interface PurchaseRequestItemFormState {
   supplyId?: string;
   supplyLabel?: string;
   supplyUnit?: string;
-  weightUnit?: WeightUnit;
+  unitId?: string;
+  unitLabel?: string;
   quantity?: number;
   estUnitPrice?: number;
   notes?: string;
@@ -43,7 +43,7 @@ function nextKey(prefix: string): string {
   return `${prefix}-${sequence}`;
 }
 
-export function emptyItem(category: PurchaseRequestCategory): PurchaseRequestItemFormState {
+export function emptyItem(): PurchaseRequestItemFormState {
   return {
     key: nextKey('pr-item'),
     productId: undefined,
@@ -51,7 +51,8 @@ export function emptyItem(category: PurchaseRequestCategory): PurchaseRequestIte
     supplyId: undefined,
     supplyLabel: undefined,
     supplyUnit: undefined,
-    weightUnit: category === 'SUPPLY' ? undefined : 'GRAM',
+    unitId: undefined,
+    unitLabel: undefined,
     quantity: undefined,
     estUnitPrice: undefined,
     notes: '',
@@ -69,7 +70,6 @@ export function withProduct(
     supplyId: undefined,
     supplyLabel: undefined,
     supplyUnit: undefined,
-    weightUnit: item.weightUnit ?? 'GRAM',
   };
 }
 
@@ -84,7 +84,6 @@ export function withSupply(
     supplyUnit: supply.unit,
     productId: undefined,
     productLabel: undefined,
-    weightUnit: undefined,
     estUnitPrice: item.estUnitPrice ?? supply.lastPriceIdr,
   };
 }
@@ -101,7 +100,7 @@ export function emptyForm(
     suggestedPartnerId: '',
     currencyCode: category === 'GOLD_IMPORT' ? 'USD' : 'IDR',
     notes: '',
-    items: [emptyItem(category)],
+    items: [emptyItem()],
   };
 }
 
@@ -109,10 +108,7 @@ function text(value?: string | null): string {
   return !value || value === '—' ? '' : value;
 }
 
-function toItemFormState(
-  item: PurchaseRequestItemVO,
-  category: PurchaseRequestCategory,
-): PurchaseRequestItemFormState {
+function toItemFormState(item: PurchaseRequestItemVO): PurchaseRequestItemFormState {
   return {
     key: nextKey('pr-item'),
     productId: item.productId,
@@ -120,7 +116,8 @@ function toItemFormState(
     supplyId: item.supplyId,
     supplyLabel: item.supplyId ? `${item.itemCode} — ${item.itemLabel}` : undefined,
     supplyUnit: item.supplyId ? item.unitLabel : undefined,
-    weightUnit: category === 'SUPPLY' ? undefined : (item.weightUnit ?? 'GRAM'),
+    unitId: item.unit.id,
+    unitLabel: `${item.unit.name} (${item.unit.symbol})`,
     quantity: item.quantity,
     estUnitPrice: item.estUnitPrice,
     notes: text(item.notes),
@@ -139,8 +136,8 @@ export function toFormState(request: PurchaseRequestDetailVO): PurchaseRequestFo
     notes: text(request.notes),
     items:
       request.items.length > 0
-        ? request.items.map((item) => toItemFormState(item, request.category))
-        : [emptyItem(request.category)],
+        ? request.items.map((item) => toItemFormState(item))
+        : [emptyItem()],
   };
 }
 
@@ -170,7 +167,7 @@ export function toPayload(form: PurchaseRequestFormState): PurchaseRequestWriteP
     items: form.items.map((item) => ({
       product_id: form.category !== 'SUPPLY' ? (item.productId || undefined) : undefined,
       supply_id: form.category === 'SUPPLY' ? (item.supplyId || undefined) : undefined,
-      weight_unit: form.category !== 'SUPPLY' ? item.weightUnit : undefined,
+      unit_id: item.unitId ?? '',
       quantity: item.quantity ?? 0,
       est_unit_price: item.estUnitPrice ?? 0,
       notes: item.notes?.trim() || undefined,

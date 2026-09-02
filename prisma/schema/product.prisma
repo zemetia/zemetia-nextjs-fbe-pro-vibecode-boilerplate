@@ -2,7 +2,7 @@
 /// stay in English; label Indonesianya dipetakan di `src/lib/product.ts`.
 ///
 /// **Kenapa master, bukan enum.** Pertanyaan "jenis barang apa" dulu dijawab
-/// enum (`MetalPurchaseGoodsType`), dan itu cukup selama hanya ada emas. Begitu
+/// enum (`PurchaseOrderType`), dan itu cukup selama hanya ada emas. Begitu
 /// perak masuk sebagai bahan baku, setiap jenis baru berarti satu nilai enum,
 /// satu migrasi, dan satu cabang di tiap `switch` — padahal yang berbeda antar
 /// jenis cuma **data**: logamnya apa, kadar bawaannya berapa, kadarnya boleh
@@ -116,8 +116,10 @@ model Product {
   inventoryAccount LedgerAccount? @relation("ProductInventoryAccount", fields: [inventoryAccountId], references: [id], onDelete: Restrict)
   transitAccount   LedgerAccount? @relation("ProductTransitAccount", fields: [transitAccountId], references: [id], onDelete: Restrict)
 
-  requestItems PurchaseRequestItem[]
-  lots         MetalLot[]
+  requestItems  PurchaseRequestItem[]
+  purchaseItems PurchaseOrderItem[]
+  salesItems    SalesOrderItem[]
+  lots          MetalLot[]
 
   @@index([metal])
   @@index([form])

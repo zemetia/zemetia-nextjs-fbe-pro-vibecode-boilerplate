@@ -3,7 +3,14 @@ import type { PaginatedDTO } from './pagination.dto';
 export type VoucherStatusDTO = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'POSTED' | 'VOID';
 export type VoucherFundDTO = 'CASH' | 'BANK' | 'MEMORIAL';
 export type VoucherDirectionDTO = 'IN' | 'OUT';
-export type VoucherCategoryDTO = 'GENERAL_EXPENSE' | 'EMPLOYEE' | 'SUPPLIER';
+export type VoucherCategoryDTO =
+  | 'GENERAL_EXPENSE'
+  | 'EMPLOYEE'
+  | 'SUPPLIER'
+  | 'PO_PRINCIPAL'
+  | 'CUSTOMS_DUTY_PPH22'
+  | 'LOGISTICS_HANDLING'
+  | 'OTHER_EXPENSE';
 export type VoucherTransferChannelDTO = 'BI_FAST' | 'SKN' | 'RTGS';
 
 export type VoucherPaymentMethodDTO =

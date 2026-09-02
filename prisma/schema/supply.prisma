@@ -10,7 +10,7 @@
 /// emas.
 ///
 /// **Ia berhenti di permintaan pembelian.** Barang di sini boleh diminta lewat
-/// PR, tapi tidak bisa dikonversi jadi `MetalPurchase`: dokumen itu melahirkan
+/// PR, tapi tidak bisa dikonversi jadi `PurchaseOrder`: dokumen itu melahirkan
 /// lot dan jurnal persediaan logam. Pengadaannya diselesaikan lewat voucher kas,
 /// dan PR-nya berhenti di status disetujui — bukan karena lupa, tapi karena
 /// belum ada dokumen pembelian non-logam di sistem ini.

@@ -52,6 +52,18 @@ export interface CreateJournalEntryInput {
   /** Document that caused the entry, e.g. `purchase_order` + its id. */
   referenceType?: string | null;
   referenceId?: string | null;
+  /** FK ke MetalPurchase — dipakai modul pembelian, bukan `referenceType`/`referenceId`. */
+  purchaseId?: string | null;
+  /** FK ke MetalPurchaseDelivery (TTB). */
+  deliveryId?: string | null;
+  /** FK ke SalesOrder — dipakai modul penjualan. */
+  salesOrderId?: string | null;
+  /** FK ke SalesDelivery (surat jalan) — dipakai modul penjualan. */
+  salesDeliveryId?: string | null;
+  /** FK ke SalesInvoice (faktur) — dipakai modul penjualan. */
+  salesInvoiceId?: string | null;
+  /** FK ke CashVoucher — dipakai modul voucher, bersamaan dengan `referenceType`/`referenceId`. */
+  cashVoucherId?: string | null;
   lines: JournalLineInput[];
   /** Skip the draft stage and post straight to the ledger. */
   post?: boolean;
@@ -202,6 +214,9 @@ async function writeJournalEntry(
       source: input.source ?? 'MANUAL',
       referenceType: input.referenceType ?? null,
       referenceId: input.referenceId ?? null,
+      purchaseId: input.purchaseId ?? null,
+      deliveryId: input.deliveryId ?? null,
+      cashVoucherId: input.cashVoucherId ?? null,
       status: input.post ? 'POSTED' : 'DRAFT',
       postedAt: input.post ? new Date() : null,
       postedById: input.post ? actorId : null,

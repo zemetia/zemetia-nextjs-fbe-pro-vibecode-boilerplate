@@ -1,0 +1,658 @@
+/// Purchasing segment — pembelian logam (emas & perak). Identifiers stay in
+/// English; the Indonesian labels shown in the UI are mapped at the presentation
+/// layer (`src/lib/metal-purchase.ts`).
+
+/// Which rail the metal came in on — the halaman it lives on.
+///
+/// IMPORT — refinery luar negeri: harga dalam mata uang mereka, ada bea masuk & freight
+/// LOCAL  — mitra dalam negeri: semuanya rupiah
+///
+/// Bentuk barang **bukan** sumbu di sini lagi: satu dokumen boleh memuat emas
+/// batangan, perak batangan, dan scrap sekaligus, jadi jawabannya milik baris
+/// (`PurchaseOrderItem.productId`), bukan milik dokumen.
+enum PurchaseOrderType {
+  IMPORT
+  LOCAL
+  SCRAP_LOCAL
+}
+
+/// Cara transaksinya berjalan. Ini yang menentukan prefiks nomor dokumen —
+/// `PO-LM-…` vs `KW-LM-…` — dan kapan barangnya dianggap sudah di tangan.
+///
+/// PO — dipesan dulu; barang dan pembayarannya menyusul, masing-masing punya progresnya sendiri
+/// DP — Direct Payment: dibayar dan diterima di tempat, jadi penerimaannya dicatat sekaligus
+enum PurchaseOrderPaymentType {
+  PO
+  DP
+}
+
+/// DRAFT     — masih bisa diubah dan dihapus, belum dianggap terjadi
+/// CONFIRMED — terkunci; koreksi dilakukan dengan membatalkan, bukan mengedit
+/// VOID      — dibatalkan setelah dikonfirmasi; barisnya tetap disimpan
+enum PurchaseOrderStatus {
+  DRAFT
+  CONFIRMED
+  VOID
+}
+
+/// Status pelunasan dokumen — cermin `paymentStatus` legacy
+/// ('UNPAID' | 'PARTIALLY_PAID' | 'PAID'). Dipertahankan sebagai kolom di
+/// dokumen (bukan hanya turunan dari voucher) karena modal "Riwayat Cicilan",
+/// KPI, dan guard-rail kasir legacy membacanya langsung.
+enum PurchasePaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+/// Kategori pembayaran PO — cermin `paymentCategory` legacy. Menentukan akun
+/// default & pengaruhnya ke sisa hutang komersial: hanya `PO_PRINCIPAL` yang
+/// mengurangi sisa hutang; `CUSTOMS_DUTY_PPH22` (PPh 22 impor 0,25%),
+/// `LOGISTICS_HANDLING` (kargo), dan `OTHER_EXPENSE` dicatat terpisah.
+enum PurchasePaymentCategory {
+  PO_PRINCIPAL
+  CUSTOMS_DUTY_PPH22
+  LOGISTICS_HANDLING
+  OTHER_EXPENSE
+}
+
+/// Satu dokumen pembelian logam.
+///
+/// **Header menyimpan kesepakatan, baris menyimpan barangnya.** Berat, kadar dan
+/// harga dulu duduk di sini — benar selama satu dokumen berarti satu barang, dan
+/// diam-diam salah begitu satu invoice refinery memuat batangan emas bersama
+/// batangan perak. Semuanya turun ke `PurchaseOrderItem`.
+///
+/// **Tidak ada kolom berat di header, dan itu disengaja.** Menjumlahkan 1.000 g
+/// emas dengan 500 g perak menghasilkan 1.500 g yang tidak berarti apa-apa —
+/// alasan yang sama dengan invarian mutasi yang berdiri per logam. Yang boleh
+/// dijumlah cuma uang, karena satu dokumen selalu satu mata uang.
+///
+/// **Kurs disimpan di sini, dan satu angka itu berlaku sampai lunas.** Aturan
+/// ini dulu terbalik — kurs dianggap milik tiap voucher, karena diandaikan
+/// rupiah yang ditukar bank pada hari transfer. Kenyataannya supplier impor
+/// dibayar dari rekening dolar: dolar masuk, dolar keluar, tidak pernah jadi
+/// rupiah di tengah jalan. Jadi tidak ada kurs kedua yang bisa berbeda, dan
+/// tidak ada selisih kurs untuk direalisasi — hutang yang berdiri di kurs PO
+/// ditutup persis nol oleh cicilan yang memakai kurs yang sama.
+///
+/// Diketik saat dokumen dibuat (boleh terisi otomatis dari feed, tapi yang sah
+/// adalah kurs yang disepakati, bukan angka dari internet), dan dibekukan
+/// begitu dokumen dikonfirmasi. `null` untuk dokumen rupiah — mengisi 1 di sana
+/// hanya menyediakan angka yang bisa salah tanpa pernah berguna.
+///
+/// Confirmed documents are voided, never deleted — only a DRAFT can be removed.
+model PurchaseOrder {
+  id     String              @id @default(cuid())
+  /// `PO-LM-202608-0001` atau `KW-LM-202608-0001`, restarting each month.
+  /// Prefiksnya mengikuti `paymentType` dan tidak pernah diketik.
+  number String              @unique
+  type   PurchaseOrderType
+  status PurchaseOrderStatus @default(DRAFT)
+
+  /// PO atau Direct Payment. Import selalu PO.
+  paymentType PurchaseOrderPaymentType @default(PO)
+
+  /// Mitra yang menjual — harus berperan supplier dengan asal yang cocok dengan
+  /// `type` (`assertPartnerMatchesType`).
+  partnerId String
+  /// Calendar day of the purchase — a day, not an instant.
+  date      DateTime @db.Date
+
+  /// Kapan tagihan ini jatuh tempo. **Opsional dan tetap opsional** — mayoritas
+  /// pembelian lokal adalah harga kesepakatan yang dibayar di tempat, dan
+  /// memaksa tanggal jatuh tempo di setiap dokumen hanya melahirkan tanggal
+  /// karangan yang kelak dilaporkan sebagai hutang lewat tempo.
+  ///
+  /// **Dibekukan di dokumen, bukan dihitung dari `Partner.purchaseTermDays` saat
+  /// laporan dibaca.** Termin di master adalah usulan awal; kalau umur hutang
+  /// menghitungnya ulang tiap kali dibuka, satu koreksi termin akan diam-diam
+  /// mengubah umur seluruh hutang lama — kesalahan yang sama dengan membaca
+  /// ulang `priceBasis` dari master produk.
+  ///
+  /// Kosong berarti **tidak ada jatuh tempo yang disepakati**, bukan "jatuh tempo
+  /// hari ini": dokumen tanpa tanggal ini berdiri di embernya sendiri di laporan
+  /// umur hutang, tidak pernah dihitung terlambat.
+  dueDate DateTime? @db.Date
+
+  /// Nomor invoice milik supplier, diketik apa adanya. **Tanpa unique**: nomor
+  /// ini milik orang lain, dua supplier bisa memakai nomor yang sama, dan nomor
+  /// bebas yang masuk ke kolom kita akan dibaca generator sebagai nomor
+  /// tertinggi lalu membekukan urutan (bug `SUPP-` vs `MTR-`).
+  supplierInvoiceNumber String?
+
+  /// Dokumen kepabeanan & pengangkutan kiriman impor, diketik apa adanya dan
+  /// semuanya opsional: nomornya lahir di pihak lain (bea cukai, maskapai) dan
+  /// datang bertahap — PIB diajukan, SPPB keluar sesudah jalurnya ditetapkan,
+  /// MAWB sudah ada sejak barangnya berangkat. **Tanpa unique**, alasan yang
+  /// sama dengan nomor invoice supplier: nomor ini milik orang lain.
+  ///
+  /// Tempatnya dokumen, bukan penerimaan — keputusan pemilik prosesnya. Yang
+  /// menempel pada kedatangannya sendiri hanyalah COR, dan itu ada di
+  /// `GoodsReceipt`.
+  /// Pemberitahuan Impor Barang.
+  pibNumber  String?
+  /// Surat Persetujuan Pengeluaran Barang.
+  sppbNumber String?
+  /// Master Air Waybill.
+  mawbNumber String?
+
+  /// Kurir yang dikuasakan mengurus kiriman impor ini, berikut nomor surat
+  /// kuasanya (`SK-KURIR-2026-0801`).
+  ///
+  /// **Ini bukan kurir penerimaan.** Yang di `GoodsReceipt` menjawab
+  /// "siapa yang mengantar kiriman ini" — satu dokumen yang dikirim tiga kali
+  /// punya tiga jawaban. Yang di sini menjawab "siapa yang kita kuasakan atas
+  /// dokumen ini", dan surat kuasanya terbit sekali atas dokumennya sendiri,
+  /// sederajat dengan PIB/SPPB/MAWB.
+  ///
+  /// Namanya **teks bebas, bukan relasi ke mitra**: yang dicetak di surat kuasa
+  /// adalah nama yang disebut di lapangan ("Brinks"), dan belum ada satu aturan
+  /// pun yang bergantung pada mitra mana ia — master yang tidak menggerbangi apa
+  /// pun cuma memaksa petugas memilih hal tanpa konsekuensi.
+  ///
+  /// Keduanya nullable dan tetap nullable: kurirnya ditunjuk setelah barangnya
+  /// dipesan, dan surat kuasanya terbit setelah kurirnya ditunjuk.
+  courierName          String?
+  courierMandateNumber String?
+
+  /// Transaction currency. `IDR` for LOCAL.
+  currencyCode String
+
+  /// **Satuan berat tidak ada di sini, dan itu disengaja.** Ia dulu duduk di
+  /// dokumen, dengan alasan "satu invoice dikutip dalam satu satuan" — benar
+  /// untuk invoice refinery yang seluruhnya ounce, dan langsung salah begitu satu
+  /// dokumen memuat batangan yang dikutip per ounce bersama scrap yang ditimbang
+  /// per gram. Jawabannya milik barang, jadi tempatnya `PurchaseOrderItem.weightUnit`.
+  ///
+  /// Σ `amount` seluruh baris, dalam `currencyCode`. Computed server-side.
+  goodsAmount Decimal @db.Decimal(18, 2)
+
+  /// Rupiah per satu satuan `currencyCode`. Wajib bila dokumennya bukan rupiah,
+  /// `null` bila rupiah — lihat catatan kurs di atas model.
+  exchangeRate Decimal? @db.Decimal(18, 6)
+
+  /// Dokumen ini **tidak punya kolom biaya sama sekali** — biaya selalu baris,
+  /// tidak pernah kolom. Yang menempel pada satu kiriman (ongkos kurir, freight
+  /// kiriman itu) jadi `GoodsReceiptCharge`; yang menempel pada kesepakatannya
+  /// sendiri dan tidak bisa dibagi ke kiriman mana pun jadi `PurchaseOrderCharge`.
+  notes String?
+
+  createdById   String
+  confirmedById String?
+  confirmedAt   DateTime?
+  voidedById    String?
+  voidedAt      DateTime?
+  /// Alasan pembatalan — wajib diisi saat status menjadi VOID.
+  voidReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Relasi ke Purchase Request asal
+  purchaseRequestId String?
+  purchaseRequest   PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id], onDelete: SetNull)
+
+  /// Otorisasi TTD Direktur / Pemilik
+  directorApprovedById String?
+  directorApprovedBy   User?     @relation("PurchaseOrderDirectorApprovedBy", fields: [directorApprovedById], references: [id], onDelete: Restrict)
+  directorApprovedAt   DateTime?
+
+  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  currency    Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  createdBy   User     @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  confirmedBy User?    @relation("PurchaseOrderConfirmedBy", fields: [confirmedById], references: [id], onDelete: Restrict)
+  voidedBy    User?    @relation("PurchaseOrderVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  items          PurchaseOrderItem[]
+  /// Biaya yang menempel pada dokumennya sendiri, bukan pada satu kiriman.
+  charges        PurchaseOrderCharge[]
+  /// Penerimaan barang atas dokumen ini — bisa lebih dari satu (kirim bertahap).
+  deliveries     GoodsReceipt[]
+  /// Lot stok yang lahir dari dokumen ini saat barangnya diterima.
+  lots           MetalLot[]
+  /// Jurnal akuntansi yang dicatat atas transaksi pembelian ini
+  journalEntries JournalEntry[]
+  /// Voucher pembayaran yang menunjuk dokumen ini (Foreign Key connected)
+  vouchers       CashVoucher[]
+
+  // ── Pelacakan pembayaran (cermin legacy `pttan_local_purchases` /
+  //    `erp_purchase_orders`) ────────────────────────────────────────────────
+  /// Akumulasi yang sudah dibayar (pokok supplier), sisa hutang, dan status —
+  /// dibaca langsung oleh modal "Riwayat Cicilan", KPI, dan guard-rail kasir.
+  /// `remainingBalanceIdr` = `totalAmountIDR - paidAmountIDR` (legacy).
+  paymentStatus       PurchasePaymentStatus @default(UNPAID)
+  paidAmountIdr       Decimal               @default(0) @db.Decimal(18, 2)
+  remainingBalanceIdr Decimal?              @db.Decimal(18, 2)
+
+  /// Akumulasi kategori non-pokok — PPh 22 impor, kargo/logistik, biaya lain.
+  customsPaidAmountIdr       Decimal @default(0) @db.Decimal(18, 2)
+  logisticsPaidAmountIdr     Decimal @default(0) @db.Decimal(18, 2)
+  otherExpensesPaidAmountIdr Decimal @default(0) @db.Decimal(18, 2)
+
+  /// Voucher & tanggal pembayaran terakhir (legacy `lastPaymentVoucher` /
+  /// `lastPaymentDate`).
+  lastPaymentVoucher String?
+  lastPaymentDate    DateTime? @db.Date
+
+  /// Riwayat cicilan — audit trail BBK/BKK per dokumen.
+  payments PurchaseOrderPayment[]
+
+  @@index([type])
+  @@index([status])
+  @@index([date])
+  @@index([dueDate])
+  @@index([partnerId])
+  @@index([paymentType])
+  @@index([purchaseRequestId])
+  @@index([directorApprovedById])
+  @@map("purchase_orders")
+}
+
+/// Biaya yang menempel pada **dokumennya**, bukan pada satu kiriman.
+///
+/// Kembarannya `GoodsReceiptCharge`, dan pembagiannya satu pertanyaan:
+/// *biaya ini akan muncul lagi kalau barangnya dikirim dua kali?* Kalau ya
+/// (ongkos kurir, freight kiriman itu) tempatnya penerimaan; kalau tidak — biaya
+/// yang lahir dari kesepakatannya sendiri dan tidak bisa dibagi ke kiriman mana
+/// pun — tempatnya di sini. Keduanya tetap **baris, bukan kolom**: yang berbeda
+/// antar biaya cuma namanya dan angkanya, jadi keduanya data.
+///
+/// Selalu rupiah dan selalu beban tersendiri: tidak masuk `goodsAmount` dan tidak
+/// ikut progres pembayaran, karena barangnya bisa bernilai valas dan menjumlahkan
+/// dua mata uang tanpa kurs adalah angka yang tidak pernah benar.
+model PurchaseOrderCharge {
+  id         String @id @default(cuid())
+  purchaseId String
+  /// Urutan tampil, ditetapkan server mengikuti urutan barisnya di form.
+  lineNo     Int
+
+  name      String
+  amountIdr Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchase PurchaseOrder @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseId, lineNo])
+  @@index([purchaseId])
+  @@map("purchase_order_charges")
+}
+
+/// Satu baris riwayat cicilan pembelian — cermin `paymentHistory[]` legacy.
+/// Ditulis oleh kasir saat voucher BBK/BKK diterbitkan untuk dokumen ini
+/// (`recordPOPayment` di legacy). `category` menentukan akun default dan
+/// apakah baris ini mengurangi sisa hutang komersial.
+model PurchaseOrderPayment {
+  id         String @id @default(cuid())
+  purchaseId String
+  /// Urutan tampil — riwayat legacy memakai unshift (terbaru di depan).
+  lineNo     Int
+
+  /// Nomor voucher pembayaran (legacy: 'BBK-2026-002').
+  voucherNo   String?
+  voucherType String?
+  date        DateTime? @db.Date
+
+  category      PurchasePaymentCategory
+  /// Label tampilan legacy, mis. '💰 Uang Muka Impor (DP)' — dipertahankan
+  /// apa adanya supaya dokumen lama tetap terbaca sama.
+  categoryLabel String?
+
+  payee           String?
+  bank            String?
+  /// Rekening kas/bank sumber dana — legacy `bankAccountCode` ('1111-USD' dst.).
+  bankAccountCode String?
+  /// Akun lawan yang dijurnal — legacy `accountCode` ('1135', '2110', '1159').
+  accountCode     String?
+
+  amount Decimal @db.Decimal(18, 2)
+  notes  String?
+
+  recordedAt DateTime @default(now())
+
+  purchase PurchaseOrder @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseId, lineNo])
+  @@index([purchaseId])
+  @@index([category])
+  @@map("purchase_order_payments")
+}
+
+/// Satu barang di dalam dokumen pembelian.
+///
+/// Produknya yang menjawab logam, bentuk, dan aturan kadarnya — jadi menambah
+/// "perak batangan" tidak menyentuh tabel ini sama sekali.
+///
+/// **`priceBasis` dibekukan di baris, bukan dibaca ulang dari produk.** Kalau
+/// dasarnya dibaca dari master saat menampilkan, satu koreksi di master akan
+/// diam-diam mengubah arti setiap dokumen lama yang sudah dikonfirmasi.
+model PurchaseOrderItem {
+  id         String @id @default(cuid())
+  purchaseId String
+  /// Urutan tampil, 1-based. Dipakai supaya baris tidak berpindah-pindah antar
+  /// pembacaan dan supaya pesan validasi bisa menyebut "baris ke-2".
+  lineNo     Int
+  productId  String
+
+  /// Satuan yang dipakai petugas mengetik berat baris ini **dan** satuan
+  /// `pricePerUnit`-nya, termasuk berat tiap kepingnya dan berat tiap
+  /// penerimaannya.
+  ///
+  /// **Milik baris, bukan dokumen.** Satu dokumen boleh memuat batangan yang
+  /// dikutip refinery per troy ounce bersama scrap yang ditimbang di meja per
+  /// gram; memaksa keduanya satu satuan berarti salah satunya harus dibagi
+  /// 31,1034768 di kepala sebelum diketik — persis pekerjaan yang kolom ini ada
+  /// untuk menghapusnya.
+  ///
+  /// **Beratnya sendiri tetap disimpan gram di semua kolom** (`weightGram`,
+  /// berat keping, berat penerimaan). Satuan ini cuma menentukan bagaimana
+  /// angkanya diketik dan dibaca — begitu barangnya masuk brankas, yang tercatat
+  /// di lot dan buku mutasi adalah gram, sehingga membandingkan pesanan dengan
+  /// stok tidak pernah menuntut konversi di dalam query.
+  ///
+  /// Default `GRAM` supaya baris yang tersimpan sebelum kolom ini ada berarti
+  /// persis seperti sebelumnya.
+  weightUnit WeightUnit @default(GRAM)
+
+  /// Berat kotor yang disepakati — berat yang ditimbang, apa adanya. **Selalu
+  /// gram**, apa pun `weightUnit`: satuan itu cara mengetik, ini nilai yang
+  /// disimpan.
+  weightGram     Decimal @db.Decimal(14, 4)
+  /// Kadar dalam persen. Untuk produk `purityLocked` (batangan) diisi server
+  /// dari `Product.defaultPurityPercent`; untuk scrap/perhiasan diketik.
+  purityPercent  Decimal @db.Decimal(7, 4)
+  /// Berat murni, dibulatkan 4 desimal. Computed.
+  ///
+  /// **Logam murni tidak dipotong kadarnya**: batangan dan granul emas 99,99% /
+  /// perak 99,90% dihitung sebesar berat aslinya, karena itulah berat yang
+  /// dibayar, dikirim, dan disimpan. Selain itu `weightGram × purityPercent /
+  /// 100`. Satu-satunya turunannya ada di `fineWeight()` (`src/lib/metal-lot.ts`),
+  /// dan kadarnya tetap disimpan di kolom sebelah sebagai keterangan sertifikat.
+  fineWeightGram Decimal @db.Decimal(14, 4)
+
+  /// Diturunkan server dari bentuk produk — GROSS untuk batangan, FINE untuk
+  /// perhiasan/scrap. Tidak pernah dipilih pengguna.
+  priceBasis   PriceBasis
+  /// Harga per **satu `weightUnit` baris ini**, dalam mata uang dokumen, atas
+  /// dasar `priceBasis` — jadi invoice refinery yang berbunyi USD 2.410/oz masuk
+  /// apa adanya, bukan dibagi 31,1034768 lebih dulu.
+  ///
+  /// Delapan desimal, bukan empat: harga inilah yang dihitung balik saat petugas
+  /// mengetik nilai barisnya, jadi skalanya yang menentukan apakah nilai itu
+  /// selamat pulang-pergi (docs/knowledge/LEARN.md, 2026-08-11).
+  pricePerUnit Decimal    @db.Decimal(18, 8)
+  /// `pricePerUnit × berat dasar harga, dinyatakan dalam weightUnit`. Computed.
+  amount       Decimal    @db.Decimal(18, 2)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Relasi ke baris Purchase Request
+  purchaseRequestItemId String?
+  purchaseRequestItem   PurchaseRequestItem? @relation(fields: [purchaseRequestItemId], references: [id], onDelete: SetNull)
+
+  purchase PurchaseOrder @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  certificates  PurchaseOrderItemCertificate[]
+  deliveryLines GoodsReceiptLine[]
+
+  @@unique([purchaseId, lineNo])
+  @@index([purchaseId])
+  @@index([productId])
+  @@index([purchaseRequestItemId])
+  @@map("purchase_order_items")
+}
+
+/// Satu keping batangan beserta sertifikatnya — seri, beratnya sendiri, dan
+/// pencetaknya.
+///
+/// **Tempatnya di baris PO, bukan di penerimaan.** Untuk import serinya memang
+/// sudah tertulis di invoice, jadi mengetiknya lagi saat barang datang melahirkan
+/// dua daftar yang tidak pernah dicocokkan siapa pun. Boleh diisi belakangan —
+/// `deliveryLineId` yang menjawab keping mana yang sudah benar-benar datang, dan
+/// penerimaan tidak bisa dikonfirmasi sebelum Σ berat keping = berat barisnya.
+model PurchaseOrderItemCertificate {
+  id     String @id @default(cuid())
+  itemId String
+
+  /// Nomor seri di sertifikat. Unik lintas seluruh stok saat jadi `MetalLot`;
+  /// di sini cukup unik per baris, karena dokumen yang dibatalkan tidak boleh
+  /// mengunci serinya selamanya.
+  serialNumber      String
+  /// Berat keping itu sendiri.
+  weightGram        Decimal @db.Decimal(14, 4)
+  certificateNumber String?
+  refinerName       String?
+
+  /// Penerimaan yang membawanya. `null` = belum datang.
+  deliveryLineId String?
+  /// Lot yang lahir dari keping ini saat penerimaannya dikonfirmasi.
+  lotId          String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item         PurchaseOrderItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  deliveryLine GoodsReceiptLine? @relation(fields: [deliveryLineId], references: [id], onDelete: SetNull)
+  lot          MetalLot?         @relation(fields: [lotId], references: [id], onDelete: SetNull)
+
+  @@unique([itemId, serialNumber])
+  @@index([itemId])
+  @@index([deliveryLineId])
+  @@map("purchase_order_item_certificates")
+}
+
+/// DRAFT      — sedang dicatat, belum menyentuh stok maupun buku besar
+/// IN_TRANSIT — barang dinyatakan berangkat; hutang usaha lahir di sini
+/// CONFIRMED  — barang dinyatakan diterima; di sinilah lot dan mutasi RECEIPT lahir
+/// VOID       — dibatalkan; mutasi & jurnalnya ikut di-VOID, barisnya tetap disimpan
+///
+/// **`IN_TRANSIT` ada karena "dipesan" dan "sedang di jalan" bukan kejadian yang
+/// sama.** PO bisa dikonfirmasi hari ini dan refinery baru berangkat dua minggu
+/// lagi; menjurnal hutang saat PO dikonfirmasi berarti mencatat emas dalam
+/// perjalanan yang belum berangkat ke mana-mana. Hak milik pindah saat barang
+/// dikapalkan, dan di situlah hutang usaha lahir.
+///
+/// **Boleh dilompati.** Pembelian lokal dan DP yang barangnya diserahkan langsung
+/// pergi dari DRAFT ke CONFIRMED, dan jurnalnya menyusut jadi satu (D persediaan
+/// / K hutang) alih-alih dua. Memaksa keduanya lewat sini hanya melahirkan
+/// tanggal berangkat karangan untuk barang yang diantar sendiri.
+enum GoodsReceiptStatus {
+  DRAFT
+  IN_TRANSIT
+  CONFIRMED
+  VOID
+}
+
+/// Penerimaan barang atas sebuah pembelian — lapis realisasi di atas lapis
+/// komitmen, persis pemisahan order ↔ pengiriman di sisi penjualan.
+///
+/// **Kurir hidup di sini, bukan di PO.** Satu dokumen yang dikirim tiga kali
+/// punya tiga kurir dan tiga ongkos; menaruhnya di header memaksa ketiganya jadi
+/// satu angka yang tidak pernah disepakati siapa pun.
+///
+/// **Header tidak punya kolom berat maupun kadar.** Satu kiriman boleh memuat
+/// batangan 99,99% bersama scrap 70%, dan kadar rata-rata bukan angka yang pernah
+/// disepakati siapa pun — pola yang sama dengan `SalesDelivery`.
+model GoodsReceipt {
+  id     String             @id @default(cuid())
+  /// `TT-202608-0001` (tanda terima), direset tiap bulan. Tidak pernah diketik.
+  number String             @unique
+  status GoodsReceiptStatus @default(DRAFT)
+
+  purchaseId String
+  /// Tanggal barang diterima — a day, not an instant.
+  date       DateTime @db.Date
+
+  /// Mitra yang mengantar — mitra berperan `isCourier`. `null` bila diambil
+  /// sendiri atau diserahkan langsung oleh supplier.
+  courierPartnerId String?
+  /// Nomor resi / AWB milik kurir, diketik apa adanya. Tanpa unique — sama
+  /// seperti nomor invoice supplier, ia milik orang lain.
+  trackingNumber   String?
+  /// Nama orang yang menerima barangnya di meja kita.
+  receivedByName   String?
+  /// Certificate of Receipt kiriman ini. Tempatnya di sini, bukan di dokumen:
+  /// ia lahir dari kedatangannya sendiri, jadi satu PO yang dikirim tiga kali
+  /// punya tiga nomor COR.
+  corNumber        String?
+
+  // ── Field legacy TTB (`pttan_goods_receipts` + `src/dto/goodsReceipt.dto.js`)
+  /// Nomor surat jalan supplier (legacy `supplierDoNumber`).
+  supplierDoNumber String?
+  /// Nomor dokumen kepabeanan — di TTB modern tetap dicatat di sini (bukan
+  /// hanya di PO) karena nomornya baru diverifikasi saat fisik tiba.
+  pibNo            String?
+  sppbNo           String?
+  mawbNo           String?
+
+  /// Laci/slot brankas tujuan & nomor segel keamanan — input operator fisik.
+  safeBoxSlot    String?
+  securitySealNo String?
+
+  /// Nomor seri batangan yang diterima (teks multi-serial, dipisah koma) &
+  /// nomor sertifikat assay.
+  barSerialNumbers   String?
+  assayCertificateNo String?
+
+  /// Komparator timbangan: berat menurut dokumen vs berat yang benar-benar
+  /// ditimbang saat diterima; selisihnya dihitung otomatis.
+  documentWeightGram    Decimal? @db.Decimal(14, 4)
+  receivedWeightGram    Decimal? @db.Decimal(14, 4)
+  weightDiscrepancyGram Decimal? @db.Decimal(14, 4)
+
+  notes String?
+
+  /// Mutasi RECEIPT yang lahir saat penerimaan ini dikonfirmasi. Sengaja tanpa FK,
+  /// pola yang sama dengan `referenceType`/`referenceId` — buku mutasi berdiri
+  /// sendiri dan tidak boleh bisa ditarik ikut terhapus.
+  movementId String?
+
+  /// Tanggal barang dinyatakan berangkat. Hari, bukan saat — dan **kolom
+  /// tersendiri, bukan `date`**: `date` adalah tanggal barang diterima, dan satu
+  /// kiriman impor berangkat berminggu-minggu sebelum sampai. Jurnal hutangnya
+  /// bertanggal yang ini.
+  shippedAt   DateTime? @db.Date
+  shippedById String?
+
+  createdById   String
+  confirmedById String?
+  confirmedAt   DateTime?
+  voidedById    String?
+  voidedAt      DateTime?
+  voidReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Verifikasi TTD 1: Pihak Pengantar / Kurir (courierPartnerId)
+  /// Verifikasi TTD 2: Petugas Penerima Fisik
+  receivedById   String?
+  /// Verifikasi TTD 3: Petugas Brankas / Vault Officer (1157/1158)
+  vaultOfficerId String?
+  /// Verifikasi TTD 4: Otorisasi Direktur Utama / Pemilik
+  directorId     String?
+
+  purchase       PurchaseOrder @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  courierPartner Partner?      @relation("GoodsReceiptCourier", fields: [courierPartnerId], references: [id], onDelete: Restrict)
+  createdBy      User          @relation("GoodsReceiptCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  receivedBy     User?         @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  vaultOfficer   User?         @relation("GoodsReceiptVaultOfficer", fields: [vaultOfficerId], references: [id], onDelete: Restrict)
+  director       User?         @relation("GoodsReceiptDirector", fields: [directorId], references: [id], onDelete: Restrict)
+  shippedBy      User?         @relation("GoodsReceiptShippedBy", fields: [shippedById], references: [id], onDelete: Restrict)
+  confirmedBy    User?         @relation("GoodsReceiptConfirmedBy", fields: [confirmedById], references: [id], onDelete: Restrict)
+  voidedBy       User?         @relation("GoodsReceiptVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  lines          GoodsReceiptLine[]
+  charges        GoodsReceiptCharge[]
+  journalEntries JournalEntry[]
+  /// Voucher pembayaran yang menunjuk tanda terima ini (Foreign Key connected)
+  vouchers       CashVoucher[]
+
+  @@index([purchaseId])
+  @@index([status])
+  @@index([date])
+  @@index([courierPartnerId])
+  @@index([receivedById])
+  @@index([vaultOfficerId])
+  @@index([directorId])
+  @@map("goods_receipts")
+}
+
+/// Satu biaya yang menempel pada sebuah penerimaan — bea masuk, freight &
+/// asuransi, ongkos kurir, dan apa pun yang muncul di kiriman berikutnya.
+///
+/// **Kenapa baris, bukan kolom.** Tiga kolom tetap (`importDutyIdr`,
+/// `freightInsuranceIdr`, `courierCostIdr`) hanya benar selama daftarnya tidak
+/// pernah bertambah; begitu ada handling, sewa brankas, atau jasa uji kadar,
+/// setiap biaya baru berarti satu migrasi, satu field form, dan satu baris di
+/// tiap tempat yang menjumlahkannya. Yang berbeda antar biaya cuma **namanya dan
+/// angkanya**, jadi keduanya data.
+///
+/// Namanya teks bebas dengan tiga saran terisi di form (bea masuk, freight &
+/// asuransi, biaya kurir) — belum ada aturan apa pun yang bergantung pada jenis
+/// biaya, dan master yang tidak menggerbangi apa pun cuma memaksa petugas
+/// memilih hal tanpa konsekuensi (pelajaran kategori mitra, 2026-08-10).
+///
+/// Selalu **rupiah** dan selalu **beban tersendiri**: tidak menambah nilai
+/// barang, tidak masuk `goodsAmount`, dan tidak ikut progres pembayaran —
+/// barangnya bisa bernilai valas, dan menjumlahkan dua mata uang tanpa kurs
+/// adalah angka yang tidak pernah benar.
+model GoodsReceiptCharge {
+  id         String @id @default(cuid())
+  deliveryId String
+  /// Urutan tampil, ditetapkan server mengikuti urutan barisnya di form.
+  lineNo     Int
+
+  name      String
+  amountIdr Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  delivery GoodsReceipt @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, lineNo])
+  @@index([deliveryId])
+  @@map("goods_receipt_charges")
+}
+
+/// Berapa yang datang atas satu baris PO. Progres pemenuhan dihitung **per
+/// baris**, bukan per dokumen: berat dua logam berbeda tidak bisa dijumlahkan,
+/// jadi dokumen dinyatakan CLOSED hanya bila setiap barisnya sudah tertutup.
+model GoodsReceiptLine {
+  id             String @id @default(cuid())
+  deliveryId     String
+  purchaseItemId String
+
+  /// Berat kotor yang benar-benar diterima. Untuk barang bersertifikat wajib
+  /// sama dengan Σ berat kepingnya — kalau keduanya boleh berbeda, dokumen dan
+  /// gudang berselisih sejak hari pertama.
+  weightGram     Decimal @db.Decimal(14, 4)
+  /// Kadar barang yang diterima. Default-nya kadar barisnya, tapi tetap kolom
+  /// tersendiri: hasil uji ulang saat barang datang boleh berbeda dari taksiran
+  /// saat menyepakati harga.
+  purityPercent  Decimal @db.Decimal(7, 4)
+  /// `weightGram × purityPercent / 100`. Computed.
+  fineWeightGram Decimal @db.Decimal(14, 4)
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  delivery     GoodsReceipt      @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  purchaseItem PurchaseOrderItem @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+
+  /// Keping yang dibawa kiriman ini — hanya untuk barang bersertifikat.
+  certificates PurchaseOrderItemCertificate[]
+
+  @@unique([deliveryId, purchaseItemId])
+  @@index([deliveryId])
+  @@index([purchaseItemId])
+  @@map("goods_receipt_lines")
+}

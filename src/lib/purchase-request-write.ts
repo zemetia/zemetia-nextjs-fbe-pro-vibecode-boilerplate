@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { roundTo } from '@/lib/number';
-import { toGram, WEIGHT_SCALE } from '@/lib/weight';
+import { WEIGHT_SCALE } from '@/lib/weight';
 import {
   canApprovePurchaseRequest,
   canVoidPurchaseRequest,
@@ -17,8 +17,9 @@ import type { CreatePurchaseRequestInput } from '@/lib/validations';
 import type {
   PurchaseRequestCategory,
   PurchaseRequestPriority,
-  WeightUnit,
 } from '@/types/value-objects';
+
+const WEIGHT_CATEGORY_CODE = 'WEIGHT';
 
 /**
  * Gerbang tulis permintaan pembelian. **Ia tidak pernah menyentuh emas maupun
@@ -35,6 +36,17 @@ export const PURCHASE_REQUEST_INCLUDE = {
     include: {
       product: { select: { id: true, code: true, name: true, metal: true, form: true } },
       supply: { select: { id: true, code: true, name: true, category: true, unit: true } },
+      unit: {
+        select: {
+          id: true,
+          code: true,
+          symbol: true,
+          name: true,
+          conversionFactor: true,
+          isAnchor: true,
+          category: { select: { code: true } },
+        },
+      },
     },
   },
 } satisfies Prisma.PurchaseRequestInclude;
@@ -88,9 +100,9 @@ export interface PurchaseRequestItemInput {
   productId: string | null;
   /** Terisi untuk kategori supply. */
   supplyId: string | null;
-  /** Satuan yang dipakai mengetik `quantity`; `null` untuk baris supply. */
-  weightUnit: WeightUnit | null;
-  /** Dalam satuan barisnya — dikonversi ke gram di sini, sekali. */
+  /** Satuan yang dipakai mengetik `quantity` — wajib untuk semua kategori. */
+  unitId: string;
+  /** Dalam satuan barisnya — dikonversi ke anchor kategorinya di sini, sekali. */
   quantity: number;
   estUnitPrice: number;
   notes: string | null;
@@ -106,6 +118,9 @@ export interface PurchaseRequestWriteInput {
   currencyCode: string;
   notes: string | null;
   items: PurchaseRequestItemInput[];
+  /** Legacy `PurchaseRequestPage`: nama pemohon & rekomendasi supplier sebagai teks bebas. */
+  requesterName: string | null;
+  recommendedSupplier: string | null;
 }
 
 /**
@@ -125,10 +140,12 @@ export function toPurchaseRequestWriteInput(
     suggestedPartnerId: body.suggested_partner_id ?? null,
     currencyCode: body.currency_code ?? 'IDR',
     notes: body.notes ?? null,
+    requesterName: body.requester_name ?? null,
+    recommendedSupplier: body.recommended_supplier ?? null,
     items: body.items.map((item) => ({
       productId: item.product_id ?? null,
       supplyId: item.supply_id ?? null,
-      weightUnit: item.weight_unit ?? null,
+      unitId: item.unit_id,
       quantity: item.quantity,
       estUnitPrice: item.est_unit_price,
       notes: item.notes ?? null,
@@ -136,20 +153,39 @@ export function toPurchaseRequestWriteInput(
   };
 }
 
+interface UnitRef {
+  id: string;
+  conversionFactor: number;
+  categoryCode: string;
+  isActive: boolean;
+}
+
 /**
  * Kategori dokumen memutuskan kolom identitas mana yang berlaku, dan baris yang
  * mengisi kolom milik kategori lain ditolak di sini — bukan diam-diam diabaikan.
  * Baris yang ditolak menyebut nomornya, karena "ada baris yang salah" pada
  * dokumen sepuluh baris bukan pesan yang bisa ditindaklanjuti siapa pun.
+ *
+ * Baris logam wajib memilih satuan berkategori `WEIGHT` — barang berat tidak
+ * pernah dijual per liter atau per meter. Baris supply bebas memilih kategori
+ * satuan apa pun (`VOLUME` untuk jerigen, `UNIT` untuk pcs, dst).
  */
 function assertItemsMatchCategory(
   category: PurchaseRequestCategory,
   items: PurchaseRequestItemInput[],
+  units: Map<string, UnitRef>,
 ): void {
   const wantsMetal = isMetalCategory(category);
 
   items.forEach((item, index) => {
     const lineNo = index + 1;
+    const unit = units.get(item.unitId);
+    if (!unit) {
+      throw new NotFoundError(`Baris ke-${lineNo} memilih satuan yang tidak ditemukan.`);
+    }
+    if (!unit.isActive) {
+      throw new ValidationError(`Baris ke-${lineNo} memilih satuan yang sudah nonaktif.`);
+    }
 
     if (wantsMetal) {
       if (!item.productId) {
@@ -160,8 +196,8 @@ function assertItemsMatchCategory(
           `Baris ke-${lineNo} berisi barang non-logam, padahal permintaan ini berkategori logam. Pindahkan ke permintaan tersendiri.`,
         );
       }
-      if (!item.weightUnit) {
-        throw new ValidationError(`Baris ke-${lineNo} belum memilih satuan beratnya.`);
+      if (unit.categoryCode !== WEIGHT_CATEGORY_CODE) {
+        throw new ValidationError(`Baris ke-${lineNo} harus memilih satuan berat, bukan satuan lain.`);
       }
       return;
     }
@@ -175,6 +211,24 @@ function assertItemsMatchCategory(
       );
     }
   });
+}
+
+async function loadUnits(unitIds: string[]): Promise<Map<string, UnitRef>> {
+  const rows = await prisma.unit.findMany({
+    where: { id: { in: unitIds } },
+    select: { id: true, conversionFactor: true, isActive: true, category: { select: { code: true } } },
+  });
+
+  const map = new Map<string, UnitRef>();
+  for (const row of rows) {
+    map.set(row.id, {
+      id: row.id,
+      conversionFactor: Number(row.conversionFactor),
+      categoryCode: row.category.code,
+      isActive: row.isActive,
+    });
+  }
+  return map;
 }
 
 async function assertProductsUsable(productIds: string[]): Promise<void> {
@@ -233,26 +287,30 @@ async function assertPartnerUsable(partnerId: string): Promise<void> {
   }
 }
 
-/** Baris input → kolom baris. Konversi ke gram terjadi persis sekali, di sini. */
-function toItemColumns(items: PurchaseRequestItemInput[]) {
+/** Baris input → kolom baris. Konversi ke satuan anchor terjadi persis sekali, di sini. */
+function toItemColumns(items: PurchaseRequestItemInput[], units: Map<string, UnitRef>) {
   return items.map((item, index) => {
-    const quantityGram = item.weightUnit ? toGram(item.quantity, item.weightUnit) : item.quantity;
+    const unit = units.get(item.unitId);
+    if (!unit) throw new NotFoundError(`Baris ke-${index + 1} memilih satuan yang tidak ditemukan.`);
+
+    const quantityAnchor = item.quantity * unit.conversionFactor;
 
     return {
       lineNo: index + 1,
       productId: item.productId,
       supplyId: item.supplyId,
-      weightUnit: item.weightUnit,
-      quantity: roundTo(quantityGram, WEIGHT_SCALE),
+      unitId: item.unitId,
+      quantity: roundTo(quantityAnchor, WEIGHT_SCALE),
       estUnitPrice: item.estUnitPrice,
-      estAmount: estimatedLineAmount(quantityGram, item.weightUnit, item.estUnitPrice),
+      estAmount: estimatedLineAmount(quantityAnchor, unit.conversionFactor, item.estUnitPrice),
       notes: item.notes,
     };
   });
 }
 
-async function assertInputUsable(input: PurchaseRequestWriteInput): Promise<void> {
-  assertItemsMatchCategory(input.category, input.items);
+async function assertInputUsable(input: PurchaseRequestWriteInput): Promise<Map<string, UnitRef>> {
+  const units = await loadUnits(input.items.map((item) => item.unitId));
+  assertItemsMatchCategory(input.category, input.items, units);
 
   await assertProductsUsable(
     input.items.map((item) => item.productId).filter((id): id is string => id !== null),
@@ -261,6 +319,8 @@ async function assertInputUsable(input: PurchaseRequestWriteInput): Promise<void
     input.items.map((item) => item.supplyId).filter((id): id is string => id !== null),
   );
   if (input.suggestedPartnerId) await assertPartnerUsable(input.suggestedPartnerId);
+
+  return units;
 }
 
 // ── Tulis ────────────────────────────────────────────────────────────────────
@@ -269,7 +329,7 @@ export async function createPurchaseRequest(
   input: PurchaseRequestWriteInput,
   actorId: string,
 ): Promise<PurchaseRequestDetailRow> {
-  await assertInputUsable(input);
+  const units = await assertInputUsable(input);
 
   return createWithPurchaseRequestNumber(input.date, (number) =>
     prisma.purchaseRequest.create({
@@ -283,8 +343,10 @@ export async function createPurchaseRequest(
         suggestedPartnerId: input.suggestedPartnerId,
         currencyCode: input.currencyCode,
         notes: input.notes,
+        requesterName: input.requesterName,
+        recommendedSupplier: input.recommendedSupplier,
         createdById: actorId,
-        items: { create: toItemColumns(input.items) },
+        items: { create: toItemColumns(input.items, units) },
       },
       include: PURCHASE_REQUEST_DETAIL_INCLUDE,
     }),
@@ -317,7 +379,7 @@ export async function updatePurchaseRequest(
     );
   }
 
-  await assertInputUsable(input);
+  const units = await assertInputUsable(input);
 
   return prisma.$transaction(async (tx) => {
     await tx.purchaseRequestItem.deleteMany({ where: { requestId: id } });
@@ -333,7 +395,9 @@ export async function updatePurchaseRequest(
         suggestedPartnerId: input.suggestedPartnerId,
         currencyCode: input.currencyCode,
         notes: input.notes,
-        items: { create: toItemColumns(input.items) },
+        requesterName: input.requesterName,
+        recommendedSupplier: input.recommendedSupplier,
+        items: { create: toItemColumns(input.items, units) },
       },
       include: PURCHASE_REQUEST_DETAIL_INCLUDE,
     });

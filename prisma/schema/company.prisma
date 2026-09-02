@@ -1,0 +1,22 @@
+/// Company segment — profil perusahaan yang dicetak di kop surat dokumen
+/// (`pttan_company_profile`). Satu baris; dirawat dari `SystemSettingsPage`.
+model CompanyProfile {
+  id String @id @default("tan")
+
+  companyName String
+  logoUrl     String?
+
+  address String?
+  phone   String?
+  email   String?
+
+  npwp   String?
+  nibPeb String?
+
+  /// Mata uang default laporan — legacy: 'USD'.
+  currencyDefault String @default("USD")
+
+  updatedAt DateTime @updatedAt
+
+  @@map("company_profiles")
+}

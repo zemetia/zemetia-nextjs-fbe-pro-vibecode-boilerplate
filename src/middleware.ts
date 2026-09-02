@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.next());
   }
 
-  // Page routes — redirect unauthenticated /admin/* requests to sign-in
+  // Page routes — auth guard: belum login → /sign-in dengan callbackUrl
   const authBlocked = await applyAuthGuard(request);
   if (authBlocked) return authBlocked;
 

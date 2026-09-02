@@ -2,13 +2,19 @@
 /// bermuara**, jadi ia dijawab sekali di kepala dokumen dan bukan per baris.
 ///
 /// GOLD_IMPORT / GOLD_LOCAL — barisnya menunjuk `Product`, dan PR-nya dikonversi
-/// jadi `MetalPurchase` di rail yang sesuai.
+/// jadi `PurchaseOrder` di rail yang sesuai.
 /// SUPPLY — barisnya menunjuk `Supply`, dan PR-nya berhenti di status disetujui:
 /// belum ada dokumen pembelian non-logam di sistem ini (lihat `supply.prisma`).
 enum PurchaseRequestCategory {
   GOLD_IMPORT
   GOLD_LOCAL
   SUPPLY
+
+  /// --- Kategori legacy (`PurchaseRequestPage` lama) ---
+  /// Bahan kimia & kowi refineri, serta perlengkapan K3/GA — pengadaan
+  /// non-logam yang tetap bisa dikonversi ke PO operasional.
+  CHEMICALS_REFINERY
+  SAFETY_GA
 }
 
 /// Mendesak atau tidak. Dua nilai, bukan skala 1–5: yang dilakukan angka ini
@@ -70,6 +76,22 @@ model PurchaseRequest {
   department String
   priority   PurchaseRequestPriority @default(NORMAL)
 
+  /// --- Field legacy (`src/dto/purchaseRequest.dto.js`) ---
+  /// Nama pengaju (legacy `requesterName`) & supplier yang diusulkan sebagai
+  /// teks apa adanya — dipertahankan supaya dokumen lama tetap terbaca sama.
+  requesterName       String?
+  recommendedSupplier String?
+
+  /// Estimasi total (IDR) — legacy `totalEstimatedAmountIDR`.
+  totalEstimatedAmountIdr Decimal? @db.Decimal(18, 2)
+
+  /// Jejak konversi ke PO (legacy `convertedPoNumber`/`conversionDate`/
+  /// `convertedBy`) — dipertahankan sebagai catatan, sementara status
+  /// `CONVERTED TO PO` legacy tetap bisa diturunkan dari relasi `purchases`.
+  convertedPoNumber String?
+  conversionDate    DateTime? @db.Date
+  convertedBy       String?
+
   /// Supplier yang **diusulkan** pengaju — usulan, bukan keputusan. Yang
   /// benar-benar dibeli ditentukan saat PO dibuat, dan boleh berbeda.
   suggestedPartnerId String?
@@ -96,7 +118,8 @@ model PurchaseRequest {
   approvedBy       User?    @relation("PurchaseRequestApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   voidedBy         User?    @relation("PurchaseRequestVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
 
-  items PurchaseRequestItem[]
+  items     PurchaseRequestItem[]
+  purchases PurchaseOrder[]
 
   @@index([status])
   @@index([category])
@@ -122,14 +145,19 @@ model PurchaseRequestItem {
   productId String?
   supplyId  String?
 
-  /// Satuan yang dipakai petugas mengetik baris logam ini, sama artinya dengan
-  /// `MetalPurchaseItem.weightUnit`. `null` untuk baris supply — satuannya ikut
-  /// masternya ("Jerigen 30 kg"), dan memaksa gram/oz di sana tidak punya arti.
-  weightUnit WeightUnit?
+  /// Satuan yang dipakai petugas mengetik baris ini — **wajib untuk semua
+  /// kategori**, logam maupun supply. Diambil dari master `Unit` (`unit.prisma`),
+  /// bukan enum tertutup: baris logam memilih dari kategori `WEIGHT` (gram, kg,
+  /// troy ounce, ...), baris supply bebas memilih kategori yang sesuai barangnya
+  /// (`VOLUME` untuk jerigen bahan kimia, `UNIT` untuk pcs/pasang, dst).
+  /// `assertItemsMatchCategory()` (`src/lib/purchase-request-write.ts`) yang
+  /// menjaga baris logam hanya memilih satuan berkategori `WEIGHT`.
+  unitId String
 
-  /// Jumlah yang diminta, **dalam satuan dasar barisnya**: gram untuk logam
-  /// (apa pun `weightUnit`-nya — satuan itu cara mengetik, ini nilai yang
-  /// disimpan), dan jumlah satuan masternya untuk supply.
+  /// Jumlah yang diminta, **dinormalisasi ke satuan anchor kategori unitnya**:
+  /// gram untuk `WEIGHT`, liter untuk `VOLUME`, meter untuk `LENGTH`, pcs untuk
+  /// `UNIT` — dikonversi sekali di sini lewat `unit.conversionFactor`, bukan
+  /// dihitung ulang tiap dibaca.
   quantity Decimal @db.Decimal(14, 4)
 
   /// Harga perkiraan per satu satuan barisnya, dalam `currencyCode` dokumen.
@@ -144,13 +172,16 @@ model PurchaseRequestItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  product Product?        @relation(fields: [productId], references: [id], onDelete: Restrict)
-  supply  Supply?         @relation(fields: [supplyId], references: [id], onDelete: Restrict)
+  request       PurchaseRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product       Product?            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supply        Supply?             @relation(fields: [supplyId], references: [id], onDelete: Restrict)
+  unit          Unit                @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  purchaseItems PurchaseOrderItem[]
 
   @@unique([requestId, lineNo])
   @@index([requestId])
   @@index([productId])
   @@index([supplyId])
+  @@index([unitId])
   @@map("purchase_request_items")
 }

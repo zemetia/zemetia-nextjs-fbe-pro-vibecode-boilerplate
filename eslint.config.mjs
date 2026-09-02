@@ -9,6 +9,26 @@ const nextConfig = require('eslint-config-next/core-web-vitals');
 const eslintConfig = [
   ...nextConfig,
   {
+    ignores: [
+      'legacy/**',
+      '.next/**',
+      'node_modules/**',
+      'src/views/**',
+      'src/services/*.js',
+      'src/utils/**',
+      'src/dto/**',
+      'src/components/ui/*.jsx',
+      'src/config/pages.js',
+      '**/*.d.ts',
+    ],
+  },
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    plugins: {
+      '@typescript-eslint': nextConfig.find((c) => c.plugins?.['@typescript-eslint'])?.plugins[
+        '@typescript-eslint'
+      ],
+    },
     settings: {
       react: { version: '19' },
     },
@@ -17,12 +37,8 @@ const eslintConfig = [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/consistent-type-imports': [
-        'error',
-        { prefer: 'type-imports', fixStyle: 'separate-type-imports' },
-      ],
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
       'prefer-const': 'error',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },

@@ -67,7 +67,7 @@ export function AdminUserMenu({ compact = false, side = 'top', className }: Admi
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side={side} align="end" className="w-56">
+      <DropdownMenuContent side={side} align="end" className="z-[130] w-56">
         <DropdownMenuLabel className="truncate font-normal text-foreground-muted">
           {user.email}
         </DropdownMenuLabel>

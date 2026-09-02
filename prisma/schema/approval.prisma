@@ -19,6 +19,8 @@
 /// CASH_VOUCHER_APPROVE            — menyetujui voucher keuangan
 /// PRODUCTION_ORDER_RELEASE        — merilis SPK ke lantai produksi
 enum ApprovalKind {
+  METAL_PURCHASE_CONFIRM
+  METAL_PURCHASE_DELIVERY_CONFIRM
   CASH_VOUCHER_APPROVE
   PRODUCTION_ORDER_RELEASE
 }

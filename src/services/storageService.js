@@ -1,0 +1,2796 @@
+// Storage Service Layer
+// Clean ES module abstraction wrapping data persistence, sequencers, and SAK EMKM business entities
+import {
+  LocalPurchaseDTO,
+  ImportPurchaseDTO,
+  PurchaseRequestDTO,
+  GoodsReceiptDTO,
+  LocalSaleDTO,
+  LocalDeliveryOrderDTO,
+  LocalInvoiceDTO,
+  ScrapPurchaseDTO,
+  ProductionSPKDTO,
+  ProductionSettlementDTO,
+  ExportSalesOrderDTO,
+  ExportInvoiceDTO,
+  ExportDeliveryOrderDTO,
+  VoucherDTO,
+  JournalEntryDTO,
+  MasterItemDTO,
+  FinishedGoodDTO,
+  SupplierDTO,
+  CustomerDTO
+} from '../dto';
+
+
+export const KEYS = {
+  JOURNAL_ENTRIES: 'erp_journal_entries',
+  CHART_OF_ACCOUNTS: 'erp_chart_of_accounts',
+  PURCHASE_ORDERS: 'erp_purchase_orders',
+  CUSTOMERS: 'erp_customers',
+  SUPPLIERS: 'erp_suppliers',
+  ITEMS: 'erp_items',
+  WAREHOUSES: 'erp_warehouses',
+  VOUCHERS: 'erp_vouchers',
+  CHEQUES: 'erp_cheques',
+  CHEQUE_BOOKS: 'pttan_cheque_books',
+  EXPORT_INVOICES: 'pttan_export_invoices',
+  EXPORT_SALES_ORDERS: 'pttan_export_sales_orders',
+  EXPORT_DELIVERY_ORDERS: 'pttan_export_delivery_orders',
+  GOODS_RECEIPTS: 'pttan_goods_receipts',
+  LOCAL_PURCHASES: 'pttan_local_purchases',
+  SCRAP_PURCHASES: 'pttan_scrap_purchases',
+  PRODUCTION_SPK: 'pttan_production_spk',
+  PRODUCTION_SETTLEMENTS: 'pttan_production_settlements',
+  PURCHASE_REQUESTS: 'pttan_purchase_requests',
+  VAULT_TRANSFERS: 'pttan_vault_transfers',
+  COMPANY_PROFILE: 'pttan_company_profile',
+  MASTER_FINISHED_GOODS: 'pttan_master_finished_goods',
+  SILVER_TRANSACTIONS: 'pttan_silver_transactions',
+  LOCAL_SALES: 'pttan_local_sales',
+  LOCAL_SALES_ORDERS: 'pttan_local_sales_orders',
+  LOCAL_DELIVERY_ORDERS: 'pttan_local_delivery_orders',
+  LOCAL_INVOICES: 'pttan_local_invoices'
+};
+
+const getGlobalStorage = () => {
+  if (typeof window !== 'undefined' && window.Storage) {
+    return window.Storage;
+  }
+  return null;
+};
+
+export const getStorage = (key, defaultValue = null) => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.get === 'function') {
+    const val = storage.get(key);
+    return val !== undefined && val !== null ? val : defaultValue;
+  }
+  return defaultValue;
+};
+
+export const setStorage = async (key, value, silent = false) => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.set === 'function') {
+    return await storage.set(key, value, silent);
+  }
+  return false;
+};
+
+export const getNextReferenceNumber = async (type) => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.getNextReferenceNumber === 'function') {
+    return await storage.getNextReferenceNumber(type);
+  }
+  const prefixMap = {
+    po: 'PO-',
+    grn: 'GRN-',
+    voucher: 'VCH-',
+    journal: 'JRN-',
+    invoice: 'INV-',
+    pr: 'PR-'
+  };
+  const pfx = prefixMap[type] || `${(type || 'DOC').toUpperCase()}-`;
+  return `${pfx}${Date.now().toString().slice(-6)}`;
+};
+
+// ==========================================
+// CHART OF ACCOUNTS (COA)
+// ==========================================
+
+export const getCOA = () => {
+  const storage = getGlobalStorage();
+  let list = [];
+  if (storage) {
+    list = storage.get(KEYS.CHART_OF_ACCOUNTS) || (typeof storage.getDefaultChartOfAccounts === 'function' ? storage.getDefaultChartOfAccounts() : []);
+  }
+  if (!Array.isArray(list)) list = [];
+
+  // Injeksi akun Uang Muka SAK EMKM bila belum ada
+  if (!list.some(a => a.code === '1121-1')) {
+    list.push({ code: '1121-1', name: 'Uang Muka Pembelian Emas Lokal', type: 'detail', category: 'aset', isTan: true });
+  }
+  if (!list.some(a => a.code === '1121-2')) {
+    list.push({ code: '1121-2', name: 'Uang Muka Pembelian Emas Impor', type: 'detail', category: 'aset', isTan: true });
+  }
+  if (!list.some(a => a.code === '1135')) {
+    list.push({ code: '1135', name: 'Uang Muka Impor / Pembelian Valas', type: 'detail', category: 'aset', isTan: true });
+  }
+  if (!list.some(a => a.code === '2116')) {
+    list.push({ code: '2116', name: 'Uang Muka Penjualan', type: 'header', category: 'kewajiban' });
+  }
+  if (!list.some(a => a.code === '2116-1')) {
+    list.push({ code: '2116-1', name: 'Uang Muka Penjualan Emas Lokal', type: 'detail', category: 'kewajiban', isTan: true });
+  }
+  if (!list.some(a => a.code === '2116-2')) {
+    list.push({ code: '2116-2', name: 'Uang Muka Penjualan Perhiasan Ekspor', type: 'detail', category: 'kewajiban', isTan: true });
+  }
+  if (!list.some(a => a.code === '2150')) {
+    list.push({ code: '2150', name: 'Uang Muka Penjualan', type: 'detail', category: 'kewajiban', isTan: true });
+  }
+  list.sort((a, b) => a.code.localeCompare(b.code));
+
+  return list;
+};
+
+export const saveCOA = async (accounts) => {
+  return await setStorage(KEYS.CHART_OF_ACCOUNTS, accounts, true);
+};
+
+export const resetToDefaultCOA = async () => {
+  const storage = getGlobalStorage();
+  if (storage && typeof storage.getDefaultChartOfAccounts === 'function') {
+    const officialCoa = storage.getDefaultChartOfAccounts();
+    await saveCOA(officialCoa);
+    return officialCoa;
+  }
+  return getCOA();
+};
+
+export const addCOAAccount = async (newAccount) => {
+  const accounts = getCOA();
+  if (accounts.some(a => a.code === newAccount.code)) {
+    return { success: false, error: 'Kode akun sudah digunakan' };
+  }
+  accounts.push(newAccount);
+  accounts.sort((a, b) => a.code.localeCompare(b.code));
+  await saveCOA(accounts);
+  return { success: true };
+};
+
+// ==========================================
+// MASTER DATA (Items, FG, Customers, Suppliers)
+// ==========================================
+
+export const getMasterItems = () => {
+  const storage = getGlobalStorage();
+  let raw = [];
+  if (storage && typeof storage.getItems === 'function') {
+    raw = storage.getItems() || [];
+  } else {
+    raw = getStorage(KEYS.ITEMS, []);
+  }
+  return MasterItemDTO.fromStorageList(raw);
+};
+
+export const saveMasterItem = async (item) => {
+  const items = getMasterItems();
+  items.unshift(MasterItemDTO.toStorage(item));
+  return await setStorage(KEYS.ITEMS, items);
+};
+
+export const saveMasterItems = async (items) => {
+  const clean = Array.isArray(items) ? items.map(i => MasterItemDTO.toStorage(i)) : [];
+  return await setStorage(KEYS.ITEMS, clean);
+};
+
+export const getFinishedGoods = () => {
+  const raw = getStorage(KEYS.MASTER_FINISHED_GOODS, [
+    { id: 'JWL-RNG-750-001', sku: 'JWL-RNG-750-001', name: 'Dubai Arabian Casting Ring', type: 'Cincin (Ring)', karat: '750', purity: 75.0, goldColor: 'Yellow Gold', stdWeightGram: 4.50, laborFeeIDRPerGram: 15000, hsCode: '7113.19.90', inventoryAccount: '1160' },
+    { id: 'JWL-CHN-700-005', sku: 'JWL-CHN-700-005', name: 'Italian Hollow Rope Chain', type: 'Kalung (Necklace)', karat: '700', purity: 70.0, goldColor: 'Rose Gold', stdWeightGram: 12.00, laborFeeIDRPerGram: 18000, hsCode: '7113.19.90', inventoryAccount: '1160' },
+    { id: 'JWL-BNG-375-010', sku: 'JWL-BNG-375-010', name: 'Stamped Diamond Cut Bangle', type: 'Gelang (Bangle)', karat: '375', purity: 37.5, goldColor: 'White Gold', stdWeightGram: 8.50, laborFeeIDRPerGram: 12000, hsCode: '7113.19.90', inventoryAccount: '1160' }
+  ]);
+  return FinishedGoodDTO.fromStorageList(raw);
+};
+
+export const saveFinishedGood = async (fg) => {
+  const list = getFinishedGoods();
+  list.unshift(FinishedGoodDTO.toStorage(fg));
+  return await setStorage(KEYS.MASTER_FINISHED_GOODS, list);
+};
+
+export const saveFinishedGoods = async (list) => {
+  const clean = Array.isArray(list) ? list.map(i => FinishedGoodDTO.toStorage(i)) : [];
+  return await setStorage(KEYS.MASTER_FINISHED_GOODS, clean);
+};
+
+export const getCustomers = () => {
+  return CustomerDTO.fromStorageList(getStorage(KEYS.CUSTOMERS, []));
+};
+
+export const saveCustomer = async (cust) => {
+  const customers = getCustomers();
+  customers.unshift(CustomerDTO.toStorage(cust));
+  return await setStorage(KEYS.CUSTOMERS, customers);
+};
+
+export const saveCustomers = async (customers) => {
+  const clean = Array.isArray(customers) ? customers.map(c => CustomerDTO.toStorage(c)) : [];
+  return await setStorage(KEYS.CUSTOMERS, clean);
+};
+
+export const DEFAULT_SUPPLIERS = [
+  {
+    id: 'SUPP-ANTAM-01',
+    code: 'SUPP-LOK-001',
+    name: 'PT Antam Tbk (UBPP LM Jakarta)',
+    category: 'LOCAL',
+    type: 'LOCAL',
+    suppliedItems: ['Emas Batangan 999.9 (Bullion Bar)', 'Emas Butiran (Granule / Grain)'],
+    country: 'Indonesia',
+    currency: 'IDR',
+    paymentTerms: 'CASH',
+    taxStatus: 'PKP',
+    npwp: '01.000.013.8-093.000',
+    contact: 'Divisi Pemasaran & Penjualan LM',
+    phone: '021-4757108',
+    email: 'gold@antam.com',
+    address: 'Gedung Graha Dipta Antam, Jl. Pemuda No. 1, Pulogadung, Jakarta Timur',
+    bankName: 'Bank Mandiri',
+    bankAccountNumber: '123-00-9876543-1',
+    bankAccountHolder: 'PT Aneka Tambang Tbk',
+    notes: 'Produsen emas batangan resmi BUMN dengan sertifikat LBMA & London Good Delivery',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-PEG-01',
+    code: 'SUPP-LOK-002',
+    name: 'PT Pegadaian (Persero) Jakarta',
+    category: 'LOCAL',
+    type: 'LOCAL',
+    suppliedItems: ['Emas Batangan 999.9 (Bullion Bar)', 'Emas Galeri 24'],
+    country: 'Indonesia',
+    currency: 'IDR',
+    paymentTerms: 'CASH',
+    taxStatus: 'PKP',
+    npwp: '01.001.603.5-051.000',
+    contact: 'Unit Bisnis Emas Galeri 24',
+    phone: '021-3155550',
+    email: 'emas@pegadaian.co.id',
+    address: 'Jl. Kramat Raya 162, Senen, Jakarta Pusat',
+    bankName: 'Bank BRI',
+    bankAccountNumber: '0019-01-000123-30-0',
+    bankAccountHolder: 'PT Pegadaian (Persero)',
+    notes: 'Pengadaan emas batangan tunai diambil kurir internal via Surat Kuasa',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-UBS-01',
+    code: 'SUPP-LOK-003',
+    name: 'PT UBS Fine Gold (Untung Bersama Sejahtera)',
+    category: 'LOCAL',
+    type: 'LOCAL',
+    suppliedItems: ['Emas Batangan 999.9 (Bullion Bar)', 'Perhiasan Emas Karat'],
+    country: 'Indonesia',
+    currency: 'IDR',
+    paymentTerms: 'NET-14',
+    taxStatus: 'PKP',
+    npwp: '01.325.478.1-609.000',
+    contact: 'Sales Corporate Bullion',
+    phone: '031-8706666',
+    email: 'corporate@ubsgold.com',
+    address: 'Jl. Kenjeran 395-399, Surabaya, Jawa Timur',
+    bankName: 'Bank BCA',
+    bankAccountNumber: '010-888-9999',
+    bankAccountHolder: 'PT Untung Bersama Sejahtera',
+    notes: 'Pabrikan perhiasan dan emas batangan UBS Surabaya',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-YLG-01',
+    code: 'SUPP-IMP-001',
+    name: 'YLG Bullion Singapore Pte Ltd',
+    category: 'OVERSEAS',
+    type: 'OVERSEAS',
+    suppliedItems: ['Emas Batangan 999.9 (Bullion Bar)', 'LBMA Good Delivery Gold Bar'],
+    country: 'Singapore',
+    currency: 'USD',
+    paymentTerms: 'CBD',
+    taxStatus: 'NON_PKP',
+    npwp: '-',
+    contact: 'Trading Desk Singapore',
+    phone: '+65-6535-2288',
+    email: 'bullion@ylgbullion.sg',
+    address: '10 Collyer Quay, #10-01 Ocean Financial Centre, Singapore 049315',
+    bankName: 'DBS Bank Singapore',
+    bankAccountNumber: '003-902345-1',
+    bankAccountHolder: 'YLG Bullion Singapore Pte Ltd',
+    notes: 'Pemasok emas batangan impor LBMA Singapura dengan pengawalan BRINKS',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-VAL-01',
+    code: 'SUPP-IMP-002',
+    name: 'Valcambi SA Switzerland',
+    category: 'OVERSEAS',
+    type: 'OVERSEAS',
+    suppliedItems: ['Emas Batangan 999.9 (Bullion Bar)', 'Emas Butiran (Granule / Grain)'],
+    country: 'Switzerland (Swiss)',
+    currency: 'USD',
+    paymentTerms: 'CBD',
+    taxStatus: 'NON_PKP',
+    npwp: '-',
+    contact: 'International Sales Desk',
+    phone: '+41-91-6955555',
+    email: 'sales@valcambi.com',
+    address: 'Via Passeggiata 3, 6828 Balerna, Switzerland',
+    bankName: 'UBS Switzerland AG',
+    bankAccountNumber: 'CH93-0023-0230-1234-5678-0',
+    bankAccountHolder: 'Valcambi SA',
+    notes: 'Refinery terkemuka Swiss bersertifikat LBMA Good Delivery 999.9',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-SCRAP-01',
+    code: 'SUPP-SCRAP-001',
+    name: 'Pengepul Emas & Toko Emas Cikini',
+    category: 'SCRAP',
+    type: 'SCRAP',
+    suppliedItems: ['Scrap Emas / Perhiasan Bekas', 'Emas Rongsok Kadar Campur'],
+    country: 'Indonesia',
+    currency: 'IDR',
+    paymentTerms: 'CASH',
+    taxStatus: 'NON_PKP',
+    npwp: '',
+    contact: 'H. Rusli Iskandar',
+    phone: '0812-9876-5432',
+    email: 'rusli.scrapemas@gmail.com',
+    address: 'Pusat Perhiasan Gold Center Cikini Blok B No. 12, Menteng, Jakarta Pusat',
+    bankName: 'Bank BCA',
+    bankAccountNumber: '542-0192834',
+    bankAccountHolder: 'Rusli Iskandar',
+    notes: 'Pengepul scrap perhiasan emas leburan regional Jakarta',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-CHEM-01',
+    code: 'SUPP-CONS-001',
+    name: 'PT Kimia Logam Mulia Jaya',
+    category: 'CONSUMABLE',
+    type: 'CONSUMABLE',
+    suppliedItems: ['Bahan Kimia Refineri (Nitric / Borax)', 'Kowi & Crucible Lebur', 'Alat Uji & Timbangan Lab'],
+    country: 'Indonesia',
+    currency: 'IDR',
+    paymentTerms: 'NET-30',
+    taxStatus: 'PKP',
+    npwp: '02.456.789.0-034.000',
+    contact: 'Ibu Ratna Susanti',
+    phone: '021-58301234',
+    email: 'sales@kimialogammulia.co.id',
+    address: 'Kawasan Industri Daan Mogot KM 19, Kalideres, Jakarta Barat',
+    bankName: 'Bank Mandiri',
+    bankAccountNumber: '118-00-5544332-2',
+    bankAccountHolder: 'PT Kimia Logam Mulia Jaya',
+    notes: 'Pemasok bahan kimia pengolahan refining emas, asam nitrat, boraks, kowi tanah liat & grafit',
+    status: 'ACTIVE'
+  },
+  {
+    id: 'SUPP-ALLOY-01',
+    code: 'SUPP-ALLOY-001',
+    name: 'Indo Silver & Master Alloy Mandiri',
+    category: 'ALLOY',
+    type: 'ALLOY',
+    suppliedItems: ['Perak Murni (Silver Bar / Granule)', 'Master Alloy (Copper / Zinc / Karat)'],
+    country: 'Indonesia',
+    currency: 'IDR',
+    paymentTerms: 'CASH',
+    taxStatus: 'NON_PKP',
+    npwp: '',
+    contact: 'Bambang Sudibyo',
+    phone: '0813-1122-3344',
+    email: 'indosilver.alloy@yahoo.com',
+    address: 'Jl. Pangeran Jayakarta No. 88, Mangga Dua Selatan, Jakarta Pusat',
+    bankName: 'Bank BCA',
+    bankAccountNumber: '218-3019284',
+    bankAccountHolder: 'Bambang Sudibyo',
+    notes: 'Penyedia perak murni 99.9% untuk paduan alloy kasting emas karat 750 / 700',
+    status: 'ACTIVE'
+  }
+];
+
+export const getSuppliers = () => {
+  const raw = getStorage(KEYS.SUPPLIERS, DEFAULT_SUPPLIERS);
+  return SupplierDTO.fromStorageList(raw);
+};
+
+export const saveSupplier = async (supp) => {
+  const suppliers = getSuppliers();
+  const cleanSupp = SupplierDTO.toStorage(supp);
+  if (!cleanSupp.id) {
+    cleanSupp.id = cleanSupp.code || `SUPP-${Date.now()}`;
+  }
+  const existingIndex = suppliers.findIndex(s => s.id === cleanSupp.id || (cleanSupp.code && s.code === cleanSupp.code));
+  if (existingIndex >= 0) {
+    suppliers[existingIndex] = { ...suppliers[existingIndex], ...cleanSupp, updatedAt: new Date().toISOString() };
+  } else {
+    suppliers.unshift(cleanSupp);
+  }
+  await setStorage(KEYS.SUPPLIERS, suppliers);
+  return { success: true, supplier: cleanSupp };
+};
+
+export const deleteSupplier = async (id) => {
+  const suppliers = getSuppliers();
+  const filtered = suppliers.filter(s => s.id !== id && s.code !== id);
+  await setStorage(KEYS.SUPPLIERS, filtered);
+  return { success: true };
+};
+
+export const getSupplierById = (idOrCode) => {
+  const suppliers = getSuppliers();
+  return suppliers.find(s => s.id === idOrCode || s.code === idOrCode) || null;
+};
+
+export const saveSuppliers = async (suppliers) => {
+  const clean = Array.isArray(suppliers) ? suppliers.map(s => SupplierDTO.toStorage(s)) : [];
+  return await setStorage(KEYS.SUPPLIERS, clean);
+};
+
+// ==========================================
+// JOURNAL ENTRIES & FINANCIAL POSTINGS
+// ==========================================
+
+export const getJournalEntries = () => {
+  return JournalEntryDTO.fromStorageList(getStorage(KEYS.JOURNAL_ENTRIES, []));
+};
+
+export const saveJournalEntries = async (journals) => {
+  const clean = Array.isArray(journals) ? journals.map(j => JournalEntryDTO.toStorage(j)) : [];
+  return await setStorage(KEYS.JOURNAL_ENTRIES, clean);
+};
+
+export const addJournalEntry = async (entry) => {
+  const journals = getJournalEntries();
+  const entryNum = entry.entryNumber || await getNextReferenceNumber('journal');
+  const newEntry = JournalEntryDTO.toStorage({
+    id: entry.id || Date.now(),
+    entryNumber: entryNum,
+    date: entry.date || new Date().toISOString().split('T')[0],
+    description: entry.description || 'Jurnal Penyesuaian',
+    lines: entry.lines || [],
+    createdAt: entry.createdAt || new Date().toISOString()
+  });
+  journals.unshift(newEntry);
+  await saveJournalEntries(journals);
+  return { success: true, entry: newEntry };
+};
+
+// ==========================================
+// PURCHASE ORDERS (IMPORT & LOCAL)
+// ==========================================
+
+export const getPurchaseOrders = () => {
+  let raw = [];
+  if (typeof window !== 'undefined' && window.PurchaseOrder && typeof window.PurchaseOrder.getStoredOrders === 'function') {
+    raw = window.PurchaseOrder.getStoredOrders() || [];
+  } else {
+    raw = getStorage(KEYS.PURCHASE_ORDERS, []);
+  }
+  return ImportPurchaseDTO.fromStorageList(raw);
+};
+
+export const savePurchaseOrders = async (orders) => {
+  const clean = Array.isArray(orders) ? orders.map(o => ImportPurchaseDTO.toStorage(o)) : [];
+  return await setStorage(KEYS.PURCHASE_ORDERS, clean);
+};
+
+export const createPurchaseOrder = async (orderData) => {
+  if (typeof window !== 'undefined' && window.PurchaseOrder && typeof window.PurchaseOrder.createOrder === 'function') {
+    const res = await window.PurchaseOrder.createOrder(orderData);
+    if (res && res.success && res.order) {
+      return { success: true, order: ImportPurchaseDTO.fromStorage(res.order) };
+    }
+    return res;
+  }
+  const orders = getPurchaseOrders();
+  const nextPoNumber = orderData.poNumber || await getNextReferenceNumber('PO');
+  const fullOrder = {
+    ...orderData,
+    id: orderData.id || Date.now(),
+    poNumber: nextPoNumber
+  };
+  orders.unshift(fullOrder);
+  await savePurchaseOrders(orders);
+  return { success: true, order: ImportPurchaseDTO.fromStorage(fullOrder) };
+};
+
+export const recordPOPayment = async (poNumberOrId, paymentData) => {
+  let updated = false;
+
+  // 1. Update di PurchaseOrder (PO Impor & Standar)
+  if (typeof window !== 'undefined' && window.PurchaseOrder && typeof window.PurchaseOrder.recordPayment === 'function') {
+    const res = await window.PurchaseOrder.recordPayment(poNumberOrId, paymentData);
+    if (res && res.success) {
+      updated = true;
+    }
+  }
+
+  // Sinkronisasi data PO Impor di storage
+  const pos = getPurchaseOrders();
+  const poIndex = pos.findIndex(p => p.id === poNumberOrId || p.poNumber === poNumberOrId);
+  if (poIndex !== -1) {
+    const p = pos[poIndex];
+    const pmtAmount = parseFloat(paymentData.amount || 0);
+    const category = paymentData.category || paymentData.paymentCategory || 'PO_PRINCIPAL';
+    const hasTTB = Boolean(p.status === 'received' || p.status === 'arrived_vault' || p.grnNumber || p.isVaultReceived || p.isTTBReceived);
+
+    const defaultAccount = category === 'CUSTOMS_DUTY_PPH22'
+      ? '11903'
+      : hasTTB
+      ? '2111'
+      : (p.currency === 'USD' || p.currency === 'SGD' ? '1135' : '1121-1');
+
+    const stage = hasTTB ? 'PAYABLE_SETTLEMENT' : 'DOWN_PAYMENT';
+    const stageLabel = hasTTB ? '💰 Pelunasan Hutang Usaha (Setelah TTB)' : '💰 Uang Muka Pembelian (Sebelum TTB)';
+
+    const historyEntry = {
+      id: paymentData.id || Date.now(),
+      voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
+      voucherType: paymentData.voucherType || 'BBK',
+      date: paymentData.date || new Date().toISOString().split('T')[0],
+      category,
+      categoryLabel: paymentData.categoryLabel || (category === 'PO_PRINCIPAL' ? stageLabel : 'Biaya Pengadaan'),
+      stage,
+      stageLabel,
+      hasTTB,
+      payee: paymentData.payee || p.supplierName || 'Supplier',
+      bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
+      bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
+      accountCode: paymentData.accountCode || defaultAccount,
+      amount: pmtAmount,
+      notes: paymentData.notes || paymentData.description || '',
+      recordedAt: new Date().toISOString()
+    };
+
+    const existingHistory = Array.isArray(p.paymentHistory) ? p.paymentHistory : [];
+    let curPaid = parseFloat(p.paidAmountIDR || 0);
+    const totalAmt = parseFloat(p.totalLandedCostIDR || p.total || p.totalAmount || 0);
+    let rem = typeof p.remainingBalanceIDR !== 'undefined' ? parseFloat(p.remainingBalanceIDR) : Math.max(0, totalAmt - curPaid);
+
+    if (category === 'PO_PRINCIPAL') {
+      curPaid += pmtAmount;
+      rem = Math.max(0, totalAmt - curPaid);
+    }
+
+    pos[poIndex] = {
+      ...p,
+      paidAmountIDR: curPaid,
+      remainingBalanceIDR: rem,
+      paymentStatus: rem === 0 ? 'PAID' : curPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+      lastPaymentVoucher: historyEntry.voucherNo,
+      lastPaymentDate: historyEntry.date,
+      paymentHistory: [historyEntry, ...existingHistory],
+      updatedAt: new Date().toISOString()
+    };
+    await savePurchaseOrders(pos);
+    updated = true;
+  }
+
+  // 2. Update di Local Purchases (PO Lokal Tempo) jika ada
+  const localPurchases = getLocalPurchases();
+  const pIndex = localPurchases.findIndex(p => p.id === poNumberOrId || p.poNumber === poNumberOrId || p.receiptNo === poNumberOrId);
+  if (pIndex !== -1) {
+    const p = localPurchases[pIndex];
+    const pmtAmount = parseFloat(paymentData.amount || 0);
+    const category = paymentData.category || paymentData.paymentCategory || 'PO_PRINCIPAL';
+    const hasTTB = Boolean(p.status === 'received' || p.status === 'arrived_vault' || p.grnNumber || p.isVaultReceived || p.isTTBReceived);
+
+    const defaultAccount = category === 'CUSTOMS_DUTY_PPH22'
+      ? '11903'
+      : hasTTB
+      ? '2111'
+      : '1121-1';
+
+    const stage = hasTTB ? 'PAYABLE_SETTLEMENT' : 'DOWN_PAYMENT';
+    const stageLabel = hasTTB ? '💰 Pelunasan Hutang Usaha (Setelah TTB)' : '💰 Uang Muka Pembelian (Sebelum TTB)';
+
+    let categoryLabel = paymentData.categoryLabel;
+    if (!categoryLabel) {
+      switch (category) {
+        case 'CUSTOMS_DUTY_PPH22':
+          categoryLabel = '🏛️ Pajak PPh 22 Impor (0,25%)';
+          break;
+        case 'LOGISTICS_HANDLING':
+          categoryLabel = '🚚 Logistik & Handling';
+          break;
+        case 'OTHER_EXPENSE':
+          categoryLabel = '📑 Biaya Tambahan';
+          break;
+        default:
+          categoryLabel = stageLabel;
+          break;
+      }
+    }
+
+    const historyEntry = {
+      id: paymentData.id || Date.now(),
+      voucherNo: paymentData.voucherNo || paymentData.voucherNumber || 'BBK',
+      voucherType: paymentData.voucherType || 'BBK',
+      date: paymentData.date || new Date().toISOString().split('T')[0],
+      category,
+      categoryLabel,
+      stage,
+      stageLabel,
+      hasTTB,
+      payee: paymentData.payee || p.supplierName || 'Supplier',
+      bank: paymentData.bank || paymentData.bankAccountName || 'Bank BCA',
+      bankAccountCode: paymentData.bankAccountCode || '1111-IDR',
+      accountCode: paymentData.accountCode || defaultAccount,
+      amount: pmtAmount,
+      notes: paymentData.notes || paymentData.description || '',
+      recordedAt: new Date().toISOString()
+    };
+
+    const existingHistory = Array.isArray(p.paymentHistory) ? p.paymentHistory : [];
+    let curPaid = parseFloat(p.paidAmountIDR || 0);
+    const totalAmt = parseFloat(p.totalAmount || 0);
+    let rem = typeof p.remainingBalanceIDR !== 'undefined' ? parseFloat(p.remainingBalanceIDR) : Math.max(0, totalAmt - curPaid);
+    let customsPaid = parseFloat(p.customsPaidAmountIDR || 0);
+    let logisticsPaid = parseFloat(p.logisticsPaidAmountIDR || 0);
+    let otherExpensesPaid = parseFloat(p.otherExpensesPaidAmountIDR || 0);
+
+    if (category === 'PO_PRINCIPAL') {
+      curPaid += pmtAmount;
+      rem = Math.max(0, totalAmt - curPaid);
+    } else if (category === 'CUSTOMS_DUTY_PPH22') {
+      customsPaid += pmtAmount;
+    } else if (category === 'LOGISTICS_HANDLING') {
+      logisticsPaid += pmtAmount;
+    } else {
+      otherExpensesPaid += pmtAmount;
+    }
+
+    const isPaid = rem === 0;
+
+    localPurchases[pIndex] = {
+      ...p,
+      paidAmountIDR: curPaid,
+      remainingBalanceIDR: rem,
+      customsPaidAmountIDR: customsPaid,
+      logisticsPaidAmountIDR: logisticsPaid,
+      otherExpensesPaidAmountIDR: otherExpensesPaid,
+      paymentStatus: isPaid ? 'PAID' : curPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+      lastPaymentVoucher: historyEntry.voucherNo,
+      lastPaymentDate: historyEntry.date,
+      paymentHistory: [historyEntry, ...existingHistory],
+      updatedAt: new Date().toISOString()
+    };
+
+    await saveLocalPurchases(localPurchases);
+    updated = true;
+  }
+
+  return { success: updated };
+};
+
+// AGREGATOR PO & INVOICE (SINGLE SOURCE OF TRUTH)
+export const getAllPurchaseOrdersForReceipt = () => {
+  const importPOs = getPurchaseOrders() || [];
+  const localPurchases = getLocalPurchases() || [];
+
+  const normalizedImport = importPOs.map(po => ({
+    id: po.id || po.poNumber,
+    poNumber: po.poNumber || po.id,
+    type: 'IMPORT',
+    typeLabel: 'PO Impor',
+    supplierName: po.supplierName || 'Overseas Refiner',
+    weightGrams: Number(po.weightGrams || po.quantityUnits || 1000),
+    unitMode: po.unitMode || 'g',
+    quantityUnits: po.quantityUnits,
+    unitLandedCostIDRPerGram: Number(po.unitLandedCostIDRPerGram || 1350000),
+    totalLandedCostIDR: Number(po.totalLandedCostIDR || 0),
+    targetVault: '1158',
+    targetVaultName: 'Vault Impor 999.9 (Akun 1158)',
+    itemDescription: po.itemDescription || (po.items && po.items[0]?.itemName) || 'Emas Batangan Impor 999.9',
+    barSerialNumbers: po.barSerialNumbers || '',
+    certificates: po.certificates || [],
+    pibNo: po.pibNo || '',
+    sppbNo: po.sppbNo || '',
+    mawbNo: po.mawbNo || '',
+    date: po.orderDate || po.date || (po.createdAt ? po.createdAt.split('T')[0] : ''),
+    status: po.status || 'ORDERED'
+  }));
+
+  const normalizedLocal = localPurchases.map(lp => ({
+    id: lp.id || lp.poNumber || lp.receiptNo,
+    poNumber: lp.poNumber || lp.receiptNo || lp.id,
+    receiptNo: lp.receiptNo,
+    type: 'LOCAL',
+    typeLabel: 'PO Lokal',
+    supplierName: lp.supplierName || 'Supplier Emas Lokal',
+    weightGrams: Number(lp.quantityGrams || 1000),
+    unitMode: 'g',
+    quantityUnits: lp.quantityGrams,
+    unitLandedCostIDRPerGram: Number(lp.pricePerGramIDR || 1300000),
+    totalLandedCostIDR: Number(lp.totalAmount || 0),
+    targetVault: '1157',
+    targetVaultName: 'Vault Utama PT TAN (Akun 1157)',
+    itemDescription: lp.itemName || 'Emas Batangan Lokal 999.9',
+    barSerialNumbers: lp.barSerialNumbers || lp.barCertificateNo || '',
+    barCertificateNo: lp.barCertificateNo || '',
+    certificates: lp.certificates || [],
+    pibNo: '',
+    sppbNo: '',
+    mawbNo: '',
+    date: lp.date || (lp.createdAt ? lp.createdAt.split('T')[0] : ''),
+    status: lp.status || 'ORDERED'
+  }));
+
+  return [...normalizedImport, ...normalizedLocal];
+};
+
+export const getAllPurchaseOrdersForVoucherPayment = () => {
+  const importPOs = getPurchaseOrders() || [];
+  const localPurchases = getLocalPurchases() || [];
+
+  const normalizedImport = importPOs.map(po => {
+    const total = po.totalLandedCostIDR || ((po.totalAmountUSD || 0) * (po.exchangeRate || 16250)) || Number(po.total || 0);
+    const paid = Number(po.paidAmountIDR || 0);
+    const remaining = Math.max(0, total - paid);
+    return {
+      ...po,
+      poNumber: po.poNumber || po.id,
+      type: 'IMPORT',
+      typeLabel: 'PO Impor',
+      totalIDR: total,
+      paidIDR: paid,
+      remainingIDR: remaining,
+      payableAccount: '1135',
+      supplierName: po.supplierName || 'Overseas Supplier'
+    };
+  });
+
+  const normalizedLocal = localPurchases.map(lp => {
+    const total = Number(lp.totalAmount || 0);
+    const paid = Number(lp.paidAmountIDR || 0);
+    const remaining = Math.max(0, total - paid);
+    return {
+      ...lp,
+      poNumber: lp.poNumber || lp.receiptNo || lp.id,
+      type: 'LOCAL',
+      typeLabel: 'PO Lokal',
+      totalIDR: total,
+      paidIDR: paid,
+      remainingIDR: remaining,
+      payableAccount: '2111',
+      supplierName: lp.supplierName || 'Supplier Lokal'
+    };
+  });
+
+  return [...normalizedImport, ...normalizedLocal];
+};
+
+export const getAllInvoicesForVoucherReceipt = () => {
+  const localInvoices = getLocalInvoices() || [];
+  const exportInvoices = getExportInvoices() || [];
+
+  const normalizedLocal = localInvoices.map(inv => {
+    const total = Number(inv.totalAmount || inv.totalAmountIDR || 0);
+    const paid = Number(inv.paidAmountIDR || 0);
+    const remaining = Number(inv.remainingBalanceIDR !== undefined ? inv.remainingBalanceIDR : Math.max(0, total - paid));
+    return {
+      id: inv.id || inv.invoiceNo,
+      invoiceNo: inv.invoiceNo || inv.id,
+      soNumber: inv.soNumber || '',
+      doNumber: inv.doNumber || '',
+      type: 'LOCAL',
+      typeLabel: 'Faktur Penjualan Lokal',
+      customerName: inv.customerName || inv.buyerName || 'Pelanggan Lokal',
+      customerPONumber: inv.customerPONumber || '',
+      currency: 'IDR',
+      totalAmount: total,
+      paidAmount: paid,
+      remainingBalance: remaining,
+      receivableAccount: '1130',
+      receivableAccountName: 'Piutang Usaha Lokal (Akun 1130)',
+      paymentStatus: inv.paymentStatus || (remaining <= 0 ? 'PAID' : 'UNPAID'),
+      date: inv.date
+    };
+  });
+
+  const normalizedExport = exportInvoices.map(inv => {
+    const totalUSD = Number(inv.totalUSD || 0);
+    const totalIDR = Number(inv.totalIDR || totalUSD * (inv.exchangeRate || 16250));
+    const paidIDR = Number(inv.paidAmountIDR || 0);
+    const remainingIDR = Number(inv.remainingBalanceIDR !== undefined ? inv.remainingBalanceIDR : Math.max(0, totalIDR - paidIDR));
+    return {
+      id: inv.id || inv.invoiceNo,
+      invoiceNo: inv.invoiceNo || inv.id,
+      soNumber: inv.soNumber || '',
+      doNumber: '',
+      type: 'EXPORT',
+      typeLabel: 'Commercial Invoice Ekspor',
+      customerName: inv.buyerName || 'Buyer Overseas',
+      customerPONumber: inv.customerPONumber || '',
+      currency: 'USD',
+      totalUSD,
+      totalAmount: totalIDR,
+      paidAmount: paidIDR,
+      remainingBalance: remainingIDR,
+      receivableAccount: '1132',
+      receivableAccountName: 'Piutang Usaha Ekspor USD (Akun 1132)',
+      paymentStatus: inv.paymentStatus || (remainingIDR <= 0 ? 'PAID' : 'UNPAID'),
+      date: inv.date
+    };
+  });
+
+  return [...normalizedLocal, ...normalizedExport];
+};
+
+// ==========================================
+// LOCAL PURCHASES (Emas Lokal IDR)
+// ==========================================
+
+export const getLocalPurchases = () => {
+  const raw = getStorage(KEYS.LOCAL_PURCHASES, [
+    {
+      id: '1723450001',
+      receiptNo: 'NOTA-PGD-2026-001',
+      poNumber: 'PO-LOK-2026-001',
+      orderDate: '2026-08-11',
+      supplierName: 'PT Pegadaian (Persero) Jakarta',
+      itemName: 'Emas Batangan Antam 1kg (999.9)',
+      quantityGrams: 1000,
+      pricePerGramIDR: 1300000,
+      totalAmount: 1300000000,
+      barSerialNumbers: 'ANT-991100',
+      status: 'RECEIVED & STOCKED IN VAULT (VERIFIED 4 TTD)',
+      isVaultReceived: true,
+      courierName: 'Bpk. Budi Santoso'
+    }
+  ]);
+  return LocalPurchaseDTO.fromStorageList(raw);
+};
+
+export const saveLocalPurchases = async (list) => {
+  const clean = Array.isArray(list) ? list.map(item => LocalPurchaseDTO.toStorage(item)) : [];
+  return await setStorage(KEYS.LOCAL_PURCHASES, clean);
+};
+
+export const saveLocalPurchase = async (lp) => {
+  const list = getLocalPurchases();
+  const cleanItem = LocalPurchaseDTO.toStorage(lp);
+  const existingIdx = list.findIndex(item => item.id === cleanItem.id || (cleanItem.receiptNo && item.receiptNo === cleanItem.receiptNo));
+  if (existingIdx !== -1) {
+    list[existingIdx] = { ...list[existingIdx], ...cleanItem, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift({ ...cleanItem, createdAt: cleanItem.createdAt || new Date().toISOString() });
+  }
+  return await saveLocalPurchases(list);
+};
+
+// ==========================================
+// SCRAP PURCHASES & MELTING
+// ==========================================
+
+export const getScrapPurchases = () => {
+  const raw = getStorage(KEYS.SCRAP_PURCHASES, [
+    {
+      id: 'SCRAP-2026-001',
+      receiptNo: 'NOTA-SCRAP-2026-001',
+      spkMeltingNo: 'SPK-MLT-2026-001',
+      date: '2026-08-11',
+      supplierName: 'Toko Emas Mitra Sejahtera',
+      itemDescription: 'Pecahan Perhiasan Emas Bekas Karat Campur',
+      grossWeight: 500,
+      xrfPurity: 75.5,
+      estimatedFineGold: 377.5,
+      pricePerFineGram: 1200000,
+      totalAmount: 453000000,
+      paymentMethod: 'CASH',
+      creditAccount: '1110',
+      creditAccountName: 'Kas Kecil (Petty Cash)',
+      targetVault: '1152',
+      targetVaultName: 'Vault Pecahan Scrap & Leburan (Akun 1152)',
+      status: 'RECEIVED & STORED IN SCRAP VAULT',
+      createdAt: '2026-08-11T09:00:00.000Z'
+    }
+  ]);
+  return ScrapPurchaseDTO.fromStorageList(raw);
+};
+
+export const saveScrapPurchases = async (list) => {
+  const clean = Array.isArray(list) ? list.map(s => ScrapPurchaseDTO.toStorage(s)) : [];
+  return await setStorage(KEYS.SCRAP_PURCHASES, clean);
+};
+
+export const saveScrapPurchase = async (scrapData) => {
+  const list = getScrapPurchases();
+  const newScrap = ScrapPurchaseDTO.toStorage({
+    id: scrapData.receiptNo || `SCRAP-${Date.now().toString().slice(-6)}`,
+    receiptNo: scrapData.receiptNo || `NOTA-SCRAP-${Date.now().toString().slice(-4)}`,
+    spkMeltingNo: scrapData.spkMeltingNo || `SPK-MLT-${Date.now().toString().slice(-4)}`,
+    date: scrapData.date || new Date().toISOString().split('T')[0],
+    supplierName: scrapData.supplierName || 'Toko Emas Mitra',
+    itemDescription: scrapData.itemDescription || 'Pecahan Perhiasan Emas Scrap',
+    grossWeight: Number(scrapData.grossWeight || 0),
+    xrfPurity: Number(scrapData.xrfPurity || 0),
+    estimatedFineGold: Number(scrapData.estimatedFineGold || 0),
+    pricePerFineGram: Number(scrapData.pricePerFineGram || 0),
+    totalAmount: Number(scrapData.totalAmount || 0),
+    paymentMethod: scrapData.paymentMethod || 'CASH',
+    creditAccount: scrapData.creditAccount || '1110',
+    creditAccountName: scrapData.creditAccountName || 'Kas Kecil',
+    targetVault: scrapData.targetVault || '1152',
+    targetVaultName: scrapData.targetVaultName || 'Vault Pecahan Scrap (1152)',
+    status: scrapData.status || 'RECEIVED & STORED IN SCRAP VAULT',
+    createdAt: new Date().toISOString()
+  });
+
+  list.unshift(newScrap);
+  await saveScrapPurchases(list);
+
+  // Auto-post journal for scrap purchase
+  const journals = getJournalEntries();
+  const entryNum = await getNextReferenceNumber('journal');
+
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum,
+    date: newScrap.date,
+    description: `Pembelian Scrap Emas (${newScrap.receiptNo}) - ${newScrap.supplierName} [${newScrap.grossWeight}g @ ${newScrap.xrfPurity}% XRF = ${newScrap.estimatedFineGold}g Fine Gold]`,
+    lines: [
+      { accountCode: newScrap.targetVault, accountName: newScrap.targetVaultName, debit: newScrap.totalAmount, credit: 0 },
+      { accountCode: newScrap.creditAccount, accountName: newScrap.creditAccountName, debit: 0, credit: newScrap.totalAmount }
+    ],
+    createdAt: new Date().toISOString()
+  });
+
+  await saveJournalEntries(journals);
+  return { success: true, scrap: newScrap };
+};
+
+// ==========================================
+// GOODS RECEIPTS (TTB / Penerimaan Barang)
+// ==========================================
+
+export const getGoodsReceipts = () => {
+  const raw = getStorage(KEYS.GOODS_RECEIPTS, [
+    {
+      id: 'GRN-2026-001',
+      grnNumber: 'GRN-2026-001',
+      poNumber: 'PO-IMP-2026-001',
+      supplierDoNumber: 'SJ-SUP-VAL-998811',
+      pibNo: '001234/PIB/KPU-TP/2026',
+      date: '2026-08-10',
+      barSerialNumbers: 'VAL-99120, VAL-99121',
+      assayCertificateNo: 'ASSAY-VAL-88912',
+      receivedWeightGram: 1000,
+      status: 'RECEIVED & VERIFIED'
+    }
+  ]);
+  return GoodsReceiptDTO.fromStorageList(raw);
+};
+
+// Turunkan atribut TTB yang tidak lagi disimpan di dokumen TTB (nama supplier, brankas
+// tujuan, deskripsi barang, harga satuan, dan total valuasi) dari PO acuannya.
+// Brankas tujuan mengikuti jenis PO: PO Impor -> 1158, PO Lokal -> 1157.
+export const resolveGoodsReceiptPO = (grn, poList = null) => {
+  const pos = Array.isArray(poList) ? poList : (getAllPurchaseOrdersForReceipt() || []);
+  const ref = (grn && grn.poNumber) || '';
+  const po = pos.find(p => p.id === ref || p.poNumber === ref) || null;
+
+  const weight = Number((grn && grn.receivedWeightGram) || 0);
+  const unitPriceIDRPerGram = Number((po && (po.unitLandedCostIDRPerGram || po.pricePerGramIDR)) || 0);
+  const isImport = Boolean(po && (po.type === 'IMPORT' || po.isImport || po.currency === 'USD' || po.currency === 'SGD'));
+  const targetVault = po ? (po.targetVault || (isImport ? '1158' : '1157')) : '';
+  const targetVaultName = po
+    ? (po.targetVaultName || (isImport ? 'Vault Impor 999.9 (Akun 1158)' : 'Vault Utama PT TAN (Akun 1157)'))
+    : '';
+
+  return {
+    po,
+    isImport,
+    supplierName: (po && po.supplierName) || '',
+    itemDescription: (po && po.itemDescription) || '',
+    targetVault,
+    targetVaultName,
+    unitPriceIDRPerGram,
+    totalValueIDR: weight * unitPriceIDRPerGram
+  };
+};
+
+export const saveGoodsReceipts = async (list) => {
+  const clean = Array.isArray(list) ? list.map(g => GoodsReceiptDTO.toStorage(g)) : [];
+  return await setStorage(KEYS.GOODS_RECEIPTS, clean);
+};
+
+export const saveGoodsReceipt = async (receipt) => {
+  const list = getGoodsReceipts();
+  list.unshift(GoodsReceiptDTO.toStorage(receipt));
+  return await saveGoodsReceipts(list);
+};
+
+export const generateNextTTBNumber = async () => {
+  const receipts = getGoodsReceipts() || [];
+  const currentYear = new Date().getFullYear();
+  let maxSeq = 0;
+  receipts.forEach(r => {
+    const num = r.grnNumber || r.id || '';
+    const match = num.match(/TTB-(\d{4})-(\d+)/i) || num.match(/GRN-(\d{4})-(\d+)/i);
+    if (match) {
+      const yr = parseInt(match[1], 10);
+      const seq = parseInt(match[2], 10);
+      if (yr === currentYear && !isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  });
+  const nextSeq = String(maxSeq + 1).padStart(3, '0');
+  return `TTB-${currentYear}-${nextSeq}`;
+};
+
+export const recordPOReceipt = async (poNumberOrId, grnNumber) => {
+  if (!poNumberOrId || poNumberOrId === 'NON-PO') return { success: false };
+  let updated = false;
+
+  // 1. Update import / standard POs
+  const pos = getPurchaseOrders();
+  let poUpdated = false;
+  const updatedPOs = pos.map(p => {
+    if (p.poNumber === poNumberOrId || p.id === poNumberOrId) {
+      poUpdated = true;
+      return {
+        ...p,
+        status: 'received',
+        grnNumber: grnNumber,
+        isTTBReceived: true,
+        receivedAt: new Date().toISOString()
+      };
+    }
+    return p;
+  });
+  if (poUpdated) {
+    await savePurchaseOrders(updatedPOs);
+    updated = true;
+  }
+
+  // 2. Update local purchases if matching
+  const localPurchases = getLocalPurchases();
+  let localUpdated = false;
+  const updatedLocals = localPurchases.map(lp => {
+    if (lp.poNumber === poNumberOrId || lp.receiptNo === poNumberOrId || lp.id === poNumberOrId) {
+      localUpdated = true;
+      return {
+        ...lp,
+        status: 'arrived_vault',
+        grnNumber: grnNumber,
+        isTTBReceived: true,
+        isVaultReceived: true,
+        receivedAt: new Date().toISOString()
+      };
+    }
+    return lp;
+  });
+  if (localUpdated) {
+    await saveLocalPurchases(updatedLocals);
+    updated = true;
+  }
+
+  return { success: updated };
+};
+
+// ==========================================
+// PURCHASE REQUESTS (PR)
+// ==========================================
+
+export const getPurchaseRequests = () => {
+  return PurchaseRequestDTO.fromStorageList(getStorage(KEYS.PURCHASE_REQUESTS, []));
+};
+
+export const savePurchaseRequests = async (list) => {
+  const clean = Array.isArray(list) ? list.map(pr => PurchaseRequestDTO.toStorage(pr)) : [];
+  return await setStorage(KEYS.PURCHASE_REQUESTS, clean);
+};
+
+export const savePurchaseRequest = async (pr) => {
+  const list = getPurchaseRequests();
+  const cleanItem = PurchaseRequestDTO.toStorage(pr);
+  const idx = list.findIndex(item => item.id === cleanItem.id || (cleanItem.prNumber && item.prNumber === cleanItem.prNumber));
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...cleanItem, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift({ ...cleanItem, createdAt: cleanItem.createdAt || new Date().toISOString() });
+  }
+  return await savePurchaseRequests(list);
+};
+
+// PR to PO conversion prefill cache (sessionStorage based)
+const PR_PREFILL_KEY = 'pttan_pr_po_prefill';
+
+export const setPRConversionPrefill = (prefillData) => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(PR_PREFILL_KEY, JSON.stringify(prefillData));
+    } catch (e) {
+      console.warn('Failed to save PR prefill to sessionStorage', e);
+    }
+  }
+};
+
+export const getPRConversionPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      const raw = window.sessionStorage.getItem(PR_PREFILL_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to read PR prefill from sessionStorage', e);
+    }
+  }
+  return null;
+};
+
+export const clearPRConversionPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.removeItem(PR_PREFILL_KEY);
+    } catch (e) {
+      console.warn('Failed to clear PR prefill from sessionStorage', e);
+    }
+  }
+};
+
+// PO to Voucher (VO / BBK) prefill cache (sessionStorage based)
+const VOUCHER_PREFILL_KEY = 'pttan_po_voucher_prefill';
+
+export const setVoucherPrefillFromPO = (po, category = 'PO_PRINCIPAL') => {
+  if (!po) return;
+  const isImport = po.currency === 'USD' || po.currency === 'SGD' || String(po.poNumber || '').startsWith('PO-IMP');
+  const totalCostIDR = po.totalLandedCostIDR || ((po.totalAmountUSD || 0) * (po.exchangeRate || 16250)) || Number(po.totalAmount || po.total || 0);
+  const paidIDR = Number(po.paidAmountIDR || 0);
+  const remaining = Math.max(0, totalCostIDR - paidIDR);
+
+  const payload = {
+    sourcePONumber: po.poNumber || po.id,
+    poNumber: po.poNumber || po.id,
+    poId: po.id,
+    isImport,
+    supplierName: po.supplierName || po.supplier || 'Supplier',
+    currency: po.currency || 'USD',
+    exchangeRate: Number(po.exchangeRate || 16250),
+    totalAmountUSD: Number(po.totalAmountUSD || 0),
+    quantityUnits: Number(po.quantityUnits || 0),
+    unitMode: po.unitMode || 'oz',
+    weightGrams: Number(po.weightGrams || 0),
+    totalCostIDR,
+    remainingBalanceIDR: remaining > 0 ? remaining : totalCostIDR,
+    paymentCategory: category,
+    bankAccountCode: isImport ? (po.currency === 'SGD' ? '1111-SGD' : '1111-USD') : '1111-IDR',
+    accountCode: isImport ? '1135' : '2111',
+    voucherType: 'BBK'
+  };
+
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(VOUCHER_PREFILL_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('Failed to save Voucher prefill to sessionStorage', e);
+    }
+  }
+};
+
+export const getVoucherPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      const raw = window.sessionStorage.getItem(VOUCHER_PREFILL_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to read Voucher prefill from sessionStorage', e);
+    }
+  }
+  return null;
+};
+
+export const clearVoucherPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.removeItem(VOUCHER_PREFILL_KEY);
+    } catch (e) {
+      console.warn('Failed to clear Voucher prefill from sessionStorage', e);
+    }
+  }
+};
+
+// PO to Goods Receipt (DO / TTB Vault) prefill cache (sessionStorage based)
+const GOODS_RECEIPT_PREFILL_KEY = 'pttan_po_goods_receipt_prefill';
+
+export const setGoodsReceiptPrefillFromPO = (po) => {
+  if (!po) return;
+  const isImport = po.currency === 'USD' || po.currency === 'SGD' || String(po.poNumber || '').startsWith('PO-IMP');
+  const weight = Number(po.weightGrams || (po.unitMode === 'oz' && po.quantityUnits ? Math.round(po.quantityUnits * 31.1034768 * 100) / 100 : po.quantityUnits) || (po.items && po.items[0]?.quantity) || 0);
+  const unitPrice = Number(po.unitLandedCostIDRPerGram || po.pricePerGramIDR || (weight > 0 ? Math.round((po.totalLandedCostIDR || 0) / weight) : 1350000));
+  const totalVal = po.totalLandedCostIDR || (weight * unitPrice);
+
+  const payload = {
+    sourcePONumber: po.poNumber || po.id,
+    poNumber: po.poNumber || po.id,
+    poId: po.id,
+    isImport,
+    unitMode: po.unitMode || 'g',
+    quantityUnits: po.quantityUnits,
+    targetVault: isImport ? '1158' : '1157',
+    targetVaultName: isImport ? 'Vault Impor 999.9 (Akun 1158)' : 'Vault Utama LM 999.9 (Akun 1157)',
+    supplierName: po.supplierName || po.supplier || 'Supplier',
+    supplierDoNumber: po.supplierDoNumber || po.invoiceNumber || 'SJ-SUP-IMPORT',
+    pibNo: po.pibNo || '',
+    sppbNo: po.sppbNo || '',
+    mawbNo: po.mawbNo || '',
+    itemDescription: po.itemDescription || (po.items && po.items[0]?.itemName) || (isImport ? `Emas Batangan 999.9 LBMA (${po.supplierName})` : 'Emas Batangan 999.9'),
+    barSerialNumbers: Array.isArray(po.barSerialNumbers) ? po.barSerialNumbers.join(', ') : (po.barSerialNumbers || po.barCertificateNo || ''),
+    barCertificateNo: po.barCertificateNo || '',
+    certificates: po.certificates || [],
+    receivedWeightGram: weight,
+    unitPriceIDRPerGram: unitPrice,
+    totalValueIDR: totalVal
+  };
+
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(GOODS_RECEIPT_PREFILL_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('Failed to save Goods Receipt prefill to sessionStorage', e);
+    }
+  }
+};
+
+export const getGoodsReceiptPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      const raw = window.sessionStorage.getItem(GOODS_RECEIPT_PREFILL_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to read Goods Receipt prefill from sessionStorage', e);
+    }
+  }
+  return null;
+};
+
+export const clearGoodsReceiptPrefill = () => {
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.removeItem(GOODS_RECEIPT_PREFILL_KEY);
+    } catch (e) {
+      console.warn('Failed to clear Goods Receipt prefill from sessionStorage', e);
+    }
+  }
+};
+
+export const markPRAsConverted = async (prIdOrNumber, { poNumber, poType, supplier }) => {
+  const list = getPurchaseRequests();
+  let found = false;
+  const updated = list.map(pr => {
+    if (pr.id === prIdOrNumber || pr.prNumber === prIdOrNumber) {
+      found = true;
+      return {
+        ...pr,
+        status: 'CONVERTED TO PO',
+        convertedPoNumber: poNumber,
+        convertedPoType: poType,
+        convertedSupplier: supplier || pr.recommendedSupplier,
+        convertedAt: new Date().toISOString()
+      };
+    }
+    return pr;
+  });
+  if (found) {
+    await savePurchaseRequests(updated);
+  }
+  return { success: found };
+};
+
+// ==========================================
+// LOCAL SALES (Penjualan & Trading Emas Lokal IDR)
+// ==========================================
+
+export const getDefaultLocalSales = () => [
+  {
+    id: 'LS-2026-001',
+    invoiceNo: 'INV-LOKAL-2026-001',
+    soNumber: 'SO-LOKAL-2026-001',
+    doNumber: 'SJ-LOKAL-2026-001',
+    customerPONumber: 'PO-CUST-TGB-881',
+    date: '2026-08-16',
+    customerId: 'CUST-LOKAL-01',
+    customerName: 'Toko Emas Gadjah Berlian (Surabaya)',
+    customerPhone: '0812-3456-7890',
+    customerAddress: 'Jl. Pasar Atom Mall No. 12, Surabaya',
+    paymentMode: 'cash', // 'cash' (Tunai/Transfer Lunas) | 'credit' (Tempo) | 'dp'
+    paymentTerms: 'LUNAS (Transfer BCA)',
+    paymentSourceAccount: '1111-IDR',
+    paymentSourceAccountName: 'Bank BCA IDR (Akun 1111-IDR)',
+    itemCode: 'LM-ANTAM-1000G',
+    itemName: 'Emas Batangan Antam 1kg (999.9)',
+    sourceVault: '1157',
+    sourceVaultName: 'Vault Utama PT TAN (Akun 1157)',
+    quantityGrams: 1000,
+    unitPriceIDR: 1380000,
+    totalAmountIDR: 1380000000,
+    barSerialNumbers: 'ANTAM-998812',
+    deliveryMethod: 'KURIR_INTERNAL', // 'COUNTER' | 'KURIR_INTERNAL' | 'EXPEDITION'
+    courierName: 'Bpk. Budi (Kurir Internal PT TAN)',
+    recipientName: 'Bpk. Hendra (Owner Toko Emas Gadjah)',
+    paymentStatus: 'PAID', // 'PAID' | 'UNPAID' | 'PARTIAL'
+    deliveryStatus: 'DELIVERED', // 'DELIVERED' | 'PENDING'
+    cogsAmountIDR: 1300000000,
+    grossProfitIDR: 80000000,
+    ownerApprovedBy: 'Direktur Utama / Pemilik PT TAN',
+    ownerApproved: true,
+    notes: 'Penjualan 1 Batang Emas Antam 1kg Tunai Lunas via Transfer BCA ke Toko Emas Gadjah Berlian',
+    createdAt: '2026-08-16T10:00:00.000Z'
+  }
+];
+
+export const getLocalSales = () => {
+  const stored = getStorage(KEYS.LOCAL_SALES);
+  const list = (Array.isArray(stored) && stored.length > 0) ? stored : getDefaultLocalSales();
+  return LocalSaleDTO.fromStorageList(list);
+};
+
+export const saveLocalSales = async (list) => {
+  const clean = Array.isArray(list) ? list.map(s => LocalSaleDTO.toStorage(s)) : [];
+  return await setStorage(KEYS.LOCAL_SALES, clean);
+};
+
+export const saveLocalSale = async (sale) => {
+  const list = getLocalSales();
+  const cleanItem = LocalSaleDTO.toStorage(sale);
+  const existingIdx = list.findIndex(item => item.id === cleanItem.id || (cleanItem.invoiceNo && item.invoiceNo === cleanItem.invoiceNo));
+  if (existingIdx !== -1) {
+    list[existingIdx] = { ...list[existingIdx], ...cleanItem, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift({ ...cleanItem, createdAt: cleanItem.createdAt || new Date().toISOString() });
+  }
+  return await saveLocalSales(list);
+};
+
+export const recordLocalSaleTransaction = async (saleData) => {
+  const list = getLocalSales();
+  const dateStr = saleData.date || new Date().toISOString().split('T')[0];
+  const invoiceNo = saleData.invoiceNo || await getNextReferenceNumber('invoice');
+  const soNumber = saleData.soNumber || `SO-LOKAL-${Date.now().toString().slice(-6)}`;
+  const doNumber = saleData.doNumber || `SJ-LOKAL-${Date.now().toString().slice(-6)}`;
+
+  const quantityGrams = Number(saleData.quantityGrams || 0);
+  const unitPriceIDR = Number(saleData.unitPriceIDR || 0);
+  const totalAmountIDR = Number(saleData.totalAmountIDR || (quantityGrams * unitPriceIDR));
+  const estimatedCostPerGram = Number(saleData.estimatedCostPerGram || 1300000);
+  const cogsAmountIDR = Number(saleData.cogsAmountIDR || (quantityGrams * estimatedCostPerGram));
+  const grossProfitIDR = totalAmountIDR - cogsAmountIDR;
+
+  const paymentMode = saleData.paymentMode || 'cash'; // 'cash' | 'credit' | 'dp'
+  const isCash = paymentMode === 'cash';
+  const isDP = paymentMode === 'dp';
+  const isCredit = paymentMode === 'credit';
+
+  const debitAccountSales = isCash
+    ? (saleData.paymentSourceAccount || '1111-IDR')
+    : isCredit
+    ? '1130' // Piutang Usaha Lokal
+    : '1111-IDR'; // DP Masuk Bank
+
+  const creditAccountSales = isDP ? '2116-1' : (saleData.revenueAccount || '4111'); // 4111 Penjualan Gold Bar / 2116-1 Uang Muka
+
+  const sourceVault = saleData.sourceVault || '1157';
+  const sourceVaultName = saleData.sourceVaultName || 'Vault Utama PT TAN (Akun 1157)';
+
+  const newSale = {
+    id: `LS-${Date.now().toString().slice(-6)}`,
+    invoiceNo,
+    soNumber,
+    doNumber,
+    customerPONumber: saleData.customerPONumber || '-',
+    date: dateStr,
+    customerId: saleData.customerId || 'CUST-LOKAL',
+    customerName: saleData.customerName || 'Customer Emas Lokal',
+    customerPhone: saleData.customerPhone || '-',
+    customerAddress: saleData.customerAddress || '-',
+    paymentMode,
+    paymentTerms: saleData.paymentTerms || (isCash ? 'LUNAS' : isCredit ? 'NET 30' : 'UANG MUKA (DP)'),
+    paymentSourceAccount: debitAccountSales,
+    paymentSourceAccountName: saleData.paymentSourceAccountName || (isCash ? 'Bank BCA IDR' : 'Piutang Usaha Lokal'),
+    itemCode: saleData.itemCode || 'LM-ANTAM-1000G',
+    itemName: saleData.itemName || 'Emas Batangan Antam 1kg (999.9)',
+    sourceVault,
+    sourceVaultName,
+    quantityGrams,
+    unitPriceIDR,
+    totalAmountIDR,
+    barSerialNumbers: saleData.barSerialNumbers || '-',
+    deliveryMethod: saleData.deliveryMethod || 'COUNTER',
+    courierName: saleData.courierName || 'Serah Terima di Vault PT TAN',
+    recipientName: saleData.recipientName || saleData.customerName,
+    paymentStatus: isCash ? 'PAID' : isCredit ? 'UNPAID' : 'PARTIAL',
+    deliveryStatus: 'DELIVERED',
+    cogsAmountIDR,
+    grossProfitIDR,
+    ownerApprovedBy: saleData.ownerApprovedBy || 'Direktur Utama / Pemilik PT TAN',
+    ownerApproved: Boolean(saleData.ownerApproved),
+    notes: saleData.notes || 'Penjualan Logam Mulia Lokal IDR',
+    createdAt: new Date().toISOString()
+  };
+
+  list.unshift(newSale);
+  await saveLocalSales(list);
+
+  // Single Source of Truth: Pastikan SO juga tersimpan ke koleksi LOCAL_SALES_ORDERS
+  if (newSale.soNumber) {
+    try {
+      await saveLocalSalesOrder({
+        id: newSale.soNumber,
+        soNumber: newSale.soNumber,
+        customerPONumber: newSale.customerPONumber || '',
+        date: newSale.date,
+        customerId: newSale.customerId,
+        customerName: newSale.customerName,
+        customerPhone: newSale.customerPhone,
+        customerAddress: newSale.customerAddress,
+        recipientName: newSale.recipientName,
+        itemCode: newSale.itemCode,
+        itemName: newSale.itemName,
+        sourceVault: newSale.sourceVault,
+        sourceVaultName: newSale.sourceVaultName,
+        quantityGrams: newSale.quantityGrams,
+        unitPriceIDR: newSale.unitPriceIDR,
+        totalAmountIDR: newSale.totalAmountIDR,
+        status: newSale.deliveryStatus === 'DELIVERED' ? 'SHIPPED' : 'CONFIRMED',
+        paymentTerms: newSale.paymentTerms,
+        notes: newSale.notes,
+        createdAt: newSale.createdAt
+      });
+    } catch (e) {
+      console.warn('Gagal sync SO dari penjualan lokal:', e.message);
+    }
+  }
+
+  // AUTO-JURNAL SAK EMKM:
+  // 1. Jurnal Pengakuan Pendapatan & Penerimaan Kas/Piutang
+  const journals = getJournalEntries();
+  const entryNum1 = await getNextReferenceNumber('journal');
+  const revenueAccName = isDP
+    ? 'Uang Muka Penjualan Emas Lokal (Akun 2116-1)'
+    : (newSale.itemName.includes('Perhiasan') ? 'Penjualan Perhiasan Lokal' : 'Penjualan Gold Bar (Akun 4111)');
+
+  const debitAccName = isCash
+    ? (newSale.paymentSourceAccountName || 'Bank BCA IDR')
+    : isCredit
+    ? 'Piutang Usaha Lokal (Akun 1130)'
+    : 'Bank BCA IDR (Uang Muka)';
+
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum1,
+    date: newSale.date,
+    description: `[PENJUALAN-LOKAL] ${newSale.invoiceNo} - ${newSale.customerName} (${quantityGrams}g ${newSale.itemName} @ Rp ${unitPriceIDR.toLocaleString()}) - ${newSale.paymentTerms}`,
+    lines: [
+      { accountCode: debitAccountSales, accountName: debitAccName, debit: totalAmountIDR, credit: 0 },
+      { accountCode: creditAccountSales, accountName: revenueAccName, debit: 0, credit: totalAmountIDR }
+    ],
+    createdAt: new Date().toISOString()
+  });
+
+  // 2. Jurnal Pengakuan HPP & Pengurangan Persediaan Vault Fisik
+  if (!isDP && cogsAmountIDR > 0) {
+    const entryNum2 = await getNextReferenceNumber('journal');
+    journals.unshift({
+      id: Date.now() + 1,
+      entryNumber: entryNum2,
+      date: newSale.date,
+      description: `[HPP-PENJUALAN-LOKAL] HPP ${newSale.invoiceNo} (${quantityGrams}g ${newSale.itemName} keluar dari ${sourceVaultName})`,
+      lines: [
+        { accountCode: '5110', accountName: 'Harga Pokok Penjualan (HPP)', debit: cogsAmountIDR, credit: 0 },
+        { accountCode: sourceVault, accountName: sourceVaultName, debit: 0, credit: cogsAmountIDR }
+      ],
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  await saveJournalEntries(journals);
+  return { success: true, sale: newSale };
+};
+
+// ==========================================
+// LOCAL SALES ORDERS (SO Emas Lokal & Price Fixing IDR)
+// ==========================================
+export const getDefaultLocalSalesOrders = () => [
+  {
+    id: 'SO-LOKAL-2026-001',
+    soNumber: 'SO-LOKAL-2026-001',
+    customerPONumber: 'PO-CUST-TGB-881',
+    date: '2026-08-16',
+    customerId: 'CUST-LOKAL-01',
+    customerName: 'Toko Emas Gadjah Berlian (Surabaya)',
+    customerPhone: '0812-3456-7890',
+    customerAddress: 'Jl. Pasar Atom Mall No. 12, Surabaya',
+    itemCode: 'LM-ANTAM-1000G',
+    itemName: 'Emas Batangan Antam 1kg (999.9)',
+    sourceVault: '1157',
+    sourceVaultName: 'Vault Utama PT TAN (Akun 1157)',
+    quantityGrams: 1000,
+    unitPriceIDR: 1380000,
+    totalAmountIDR: 1380000000,
+    status: 'CONFIRMED',
+    paymentTerms: 'LUNAS (Transfer BCA)',
+    notes: 'Penjualan Logam Mulia Emas Batangan 1kg Tunai Lunas via Transfer BCA',
+    createdAt: '2026-08-16T09:30:00.000Z'
+  }
+];
+
+export const getLocalSalesOrders = () => {
+  const stored = getStorage(KEYS.LOCAL_SALES_ORDERS);
+  const list = Array.isArray(stored) && stored.length > 0 ? [...stored] : [...getDefaultLocalSalesOrders()];
+
+  // Single Source of Truth: Gabungkan juga SO dari penjualan lokal (KEYS.LOCAL_SALES)
+  const sales = getStorage(KEYS.LOCAL_SALES) || [];
+  sales.forEach(sale => {
+    if (sale.soNumber && !list.some(so => so.soNumber === sale.soNumber || so.id === sale.soNumber)) {
+      list.push({
+        id: sale.soNumber,
+        soNumber: sale.soNumber,
+        customerPONumber: sale.customerPONumber || '',
+        date: sale.date,
+        customerId: sale.customerId || '',
+        customerName: sale.customerName || '',
+        customerPhone: sale.customerPhone || '',
+        customerAddress: sale.customerAddress || '',
+        recipientName: sale.recipientName || sale.customerName || '',
+        itemCode: sale.itemCode || '',
+        itemName: sale.itemName || '',
+        sourceVault: sale.sourceVault || '1157',
+        sourceVaultName: sale.sourceVaultName || 'Vault Utama PT TAN (Akun 1157)',
+        quantityGrams: Number(sale.quantityGrams || 0),
+        unitPriceIDR: Number(sale.unitPriceIDR || 0),
+        totalAmountIDR: Number(sale.totalAmountIDR || 0),
+        status: sale.deliveryStatus === 'DELIVERED' ? 'SHIPPED' : 'CONFIRMED',
+        paymentTerms: sale.paymentTerms || 'LUNAS',
+        notes: sale.notes || '',
+        createdAt: sale.createdAt || new Date().toISOString()
+      });
+    }
+  });
+
+  return list;
+};
+
+export const saveLocalSalesOrders = async (list) => {
+  return await setStorage(KEYS.LOCAL_SALES_ORDERS, list);
+};
+
+export const saveLocalSalesOrder = async (so) => {
+  const list = getLocalSalesOrders();
+  const idx = list.findIndex(i => i.id === so.id || i.soNumber === so.soNumber);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...so, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift(so);
+  }
+  return await saveLocalSalesOrders(list);
+};
+
+// ==========================================
+// LOCAL DELIVERY ORDERS (Surat Jalan & Pengeluaran Vault Lokal)
+// ==========================================
+export const getDefaultLocalDeliveryOrders = () => [
+  {
+    id: 'SJ-LOKAL-2026-001',
+    doNumber: 'SJ-LOKAL-2026-001',
+    invoiceNo: 'INV-LOKAL-2026-001',
+    soNumber: 'SO-LOKAL-2026-001',
+    customerPONumber: 'PO-CUST-TGB-881',
+    date: '2026-08-16',
+    customerId: 'CUST-LOKAL-01',
+    customerName: 'Toko Emas Gadjah Berlian (Surabaya)',
+    customerPhone: '0812-3456-7890',
+    customerAddress: 'Jl. Pasar Atom Mall No. 12, Surabaya',
+    itemCode: 'LM-ANTAM-1000G',
+    itemName: 'Emas Batangan Antam 1kg (999.9)',
+    sourceVault: '1157',
+    sourceVaultName: 'Vault Utama PT TAN (Akun 1157)',
+    netWeightGram: 1000,
+    grossWeightGram: 1150,
+    barSerialNumbers: 'ANTAM-998812',
+    securitySealNo: 'SEAL-VAULT-88912',
+    boxCount: 1,
+    deliveryMethod: 'KURIR_INTERNAL',
+    courierName: 'Bpk. Budi (Kurir Internal PT TAN)',
+    recipientName: 'Bpk. Hendra (Owner Toko Emas Gadjah)',
+    status: 'DELIVERED',
+    cogsAmountIDR: 1300000000,
+    notes: 'Pengeluaran fisik emas batangan Antam 1kg dari Vault Utama PT TAN',
+    createdAt: '2026-08-16T10:30:00.000Z'
+  }
+];
+
+export const getLocalDeliveryOrders = () => {
+  const stored = getStorage(KEYS.LOCAL_DELIVERY_ORDERS);
+  const list = (Array.isArray(stored) && stored.length > 0) ? stored : getDefaultLocalDeliveryOrders();
+  return LocalDeliveryOrderDTO.fromStorageList(list);
+};
+
+export const saveLocalDeliveryOrders = async (list) => {
+  const clean = Array.isArray(list) ? list.map(d => LocalDeliveryOrderDTO.toStorage(d)) : [];
+  return await setStorage(KEYS.LOCAL_DELIVERY_ORDERS, clean);
+};
+
+export const saveLocalDeliveryOrder = async (doItem) => {
+  const list = getLocalDeliveryOrders();
+  const cleanItem = LocalDeliveryOrderDTO.toStorage(doItem);
+  const idx = list.findIndex(i => i.id === cleanItem.id || i.doNumber === cleanItem.doNumber);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...cleanItem, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift(cleanItem);
+  }
+  return await saveLocalDeliveryOrders(list);
+};
+
+// ==========================================
+// LOCAL INVOICES (Faktur Penjualan Emas Lokal IDR - PMK 48/2023)
+// ==========================================
+export const getDefaultLocalInvoices = () => [
+  {
+    id: 'INV-LOKAL-2026-001',
+    invoiceNo: 'INV-LOKAL-2026-001',
+    soNumber: 'SO-LOKAL-2026-001',
+    doNumber: 'SJ-LOKAL-2026-001',
+    customerPONumber: 'PO-CUST-TGB-881',
+    date: '2026-08-16',
+    dueDate: '2026-08-16',
+    customerId: 'CUST-LOKAL-01',
+    customerName: 'Toko Emas Gadjah Berlian (Surabaya)',
+    customerPhone: '0812-3456-7890',
+    customerAddress: 'Jl. Pasar Atom Mall No. 12, Surabaya',
+    itemCode: 'LM-ANTAM-1000G',
+    itemName: 'Emas Batangan Antam 1kg (999.9)',
+    quantityGrams: 1000,
+    unitPriceIDR: 1380000,
+    subtotalIDR: 1380000000,
+    downPaymentIDR: 0,
+    taxFacility: 'BEBAS PPN PMK 48/2023',
+    taxAmountIDR: 0,
+    totalAmountIDR: 1380000000,
+    paymentMode: 'cash',
+    paymentSourceAccount: '1111-IDR',
+    paymentSourceAccountName: 'Bank BCA IDR (Akun 1111-IDR)',
+    paymentStatus: 'PAID',
+    barSerialNumbers: 'ANTAM-998812',
+    ownerApproved: true,
+    ownerApprovedBy: 'Direktur Utama / Pemilik PT TAN',
+    notes: 'Faktur Penjualan Emas Batangan 1kg Tunai Lunas via BCA IDR',
+    createdAt: '2026-08-16T10:00:00.000Z'
+  }
+];
+
+export const getLocalInvoices = () => {
+  const stored = getStorage(KEYS.LOCAL_INVOICES);
+  const list = (Array.isArray(stored) && stored.length > 0) ? stored : getDefaultLocalInvoices();
+  return LocalInvoiceDTO.fromStorageList(list);
+};
+
+export const saveLocalInvoices = async (list) => {
+  const clean = Array.isArray(list) ? list.map(inv => LocalInvoiceDTO.toStorage(inv)) : [];
+  return await setStorage(KEYS.LOCAL_INVOICES, clean);
+};
+
+export const saveLocalInvoice = async (inv) => {
+  const list = getLocalInvoices();
+  const cleanItem = LocalInvoiceDTO.toStorage(inv);
+  const idx = list.findIndex(i => i.id === cleanItem.id || i.invoiceNo === cleanItem.invoiceNo);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...cleanItem, updatedAt: new Date().toISOString() };
+  } else {
+    list.unshift(cleanItem);
+  }
+  return await saveLocalInvoices(list);
+};
+
+// ==========================================
+// EXPORT SALES (SO, Invoices, DO)
+// ==========================================
+
+export const getExportSalesOrders = () => {
+  return ExportSalesOrderDTO.fromStorageList(getStorage(KEYS.EXPORT_SALES_ORDERS, []));
+};
+
+export const saveExportSalesOrders = async (list) => {
+  const clean = Array.isArray(list) ? list.map(so => ExportSalesOrderDTO.toStorage(so)) : [];
+  return await setStorage(KEYS.EXPORT_SALES_ORDERS, clean);
+};
+
+export const saveExportSalesOrder = async (so) => {
+  const list = getExportSalesOrders();
+  list.unshift(ExportSalesOrderDTO.toStorage(so));
+  return await saveExportSalesOrders(list);
+};
+
+export const getExportInvoices = () => {
+  return ExportInvoiceDTO.fromStorageList(getStorage(KEYS.EXPORT_INVOICES, []));
+};
+
+export const saveExportInvoices = async (list) => {
+  const clean = Array.isArray(list) ? list.map(inv => ExportInvoiceDTO.toStorage(inv)) : [];
+  return await setStorage(KEYS.EXPORT_INVOICES, clean);
+};
+
+export const saveExportInvoice = async (inv) => {
+  const list = getExportInvoices();
+  list.unshift(ExportInvoiceDTO.toStorage(inv));
+  return await saveExportInvoices(list);
+};
+
+export const getExportDeliveryOrders = () => {
+  const raw = getStorage(KEYS.EXPORT_DELIVERY_ORDERS, [
+    {
+      id: 'DO-EXP-2026-001',
+      doNumber: 'DO-EXP-2026-001',
+      customerPONumber: 'PO-DMCC-2026-8899',
+      invoiceNo: 'INV-EXP-2026-001',
+      soNumber: 'SO-EXP-2026-001',
+      goldCertificateNo: 'CERT-FINEGOLD-998812',
+      purityCertificateNo: 'ASSAY-KARAT-750-0012',
+      date: '2026-08-15',
+      buyerName: 'Dubai Gold & Jewelry Wholesalers DMCC',
+      country: 'United Arab Emirates (UAE)',
+      courierName: 'Brinks Global Secured Transport',
+      awbNumber: 'AWB-FEDEX-99881122',
+      pebNumber: 'PEB-2026-088912',
+      securitySealNo: 'SEAL-GOLD-998812',
+      boxCount: 2,
+      itemDescription: 'Fine Gold Jewelry 750 (18K) Dubai Casting Ring',
+      netWeightGram: 450,
+      grossWeightGram: 560,
+      status: 'SHIPPED / IN TRANSIT'
+    }
+  ]);
+  return ExportDeliveryOrderDTO.fromStorageList(raw);
+};
+
+export const saveExportDeliveryOrders = async (list) => {
+  const clean = Array.isArray(list) ? list.map(doItem => ExportDeliveryOrderDTO.toStorage(doItem)) : [];
+  return await setStorage(KEYS.EXPORT_DELIVERY_ORDERS, clean);
+};
+
+export const saveExportDeliveryOrder = async (doItem) => {
+  const list = getExportDeliveryOrders();
+  list.unshift(ExportDeliveryOrderDTO.toStorage(doItem));
+  return await saveExportDeliveryOrders(list);
+};
+
+// ==========================================
+// JEWELRY PRODUCTION (SPK & Settlement)
+// ==========================================
+
+export const getProductionSPK = () => {
+  const raw = getStorage(KEYS.PRODUCTION_SPK, [
+    {
+      id: 'SPK-2026-001',
+      spkNo: 'SPK-PROD-2026-001',
+      date: '2026-08-12',
+      buyerName: 'Dubai Gold & Jewelry DMCC',
+      jewelryType: 'Cincin & Kalung Emas 18K',
+      targetKarat: '750',
+      grossWeight: 500,
+      fineGoldNeeded: 381.65,
+      masterAlloyNeeded: 124.00,
+      status: 'IN_WIP',
+      notes: 'Pengeluaran bahan baku emas murni ke Brankas WIP'
+    }
+  ]);
+  return ProductionSPKDTO.fromStorageList(raw);
+};
+
+export const saveProductionSPKList = async (list) => {
+  const clean = Array.isArray(list) ? list.map(spk => ProductionSPKDTO.toStorage(spk)) : [];
+  return await setStorage(KEYS.PRODUCTION_SPK, clean);
+};
+
+export const saveProductionSPK = async (spk) => {
+  const list = getProductionSPK();
+  list.unshift(ProductionSPKDTO.toStorage(spk));
+  return await saveProductionSPKList(list);
+};
+
+export const updateProductionSPKStatus = async (spkNoOrId, newStatus) => {
+  const list = getProductionSPK();
+  const updated = list.map(item => {
+    if (item.spkNo === spkNoOrId || item.id === spkNoOrId) {
+      return { ...item, status: newStatus, updatedAt: new Date().toISOString() };
+    }
+    return item;
+  });
+  return await saveProductionSPKList(updated);
+};
+
+export const getProductionSettlements = () => {
+  const raw = getStorage(KEYS.PRODUCTION_SETTLEMENTS, [
+    {
+      id: 'JO-2026-001',
+      joNumber: 'JO-2026-001',
+      date: '2026-08-14',
+      jewelryOutputWeight: 490,
+      scrapReturnWeight: 8,
+      goldLossWeight: 2,
+      laborFeeIDR: 7500000,
+      karat: '750',
+      status: 'COMPLETED'
+    }
+  ]);
+  return ProductionSettlementDTO.fromStorageList(raw);
+};
+
+export const saveProductionSettlements = async (list) => {
+  const clean = Array.isArray(list) ? list.map(s => ProductionSettlementDTO.toStorage(s)) : [];
+  return await setStorage(KEYS.PRODUCTION_SETTLEMENTS, clean);
+};
+
+export const saveProductionSettlement = async (settlement) => {
+  const list = getProductionSettlements();
+  list.unshift(ProductionSettlementDTO.toStorage(settlement));
+  return await saveProductionSettlements(list);
+};
+
+// ==========================================
+// CHEQUE & VOUCHER MANAGEMENT
+// ==========================================
+
+export const getChequeBooks = () => {
+  return getStorage(KEYS.CHEQUE_BOOKS, [
+    {
+      id: 'BOOK-BCA-2026A',
+      bookNumber: 'BOOK-BCA-2026A',
+      bankCode: 'BCA-001',
+      bankName: 'Bank BCA (KCU Thamrin)',
+      accountNumber: '889-012-3456',
+      currency: 'IDR',
+      seriesPrefix: 'BG-BCA-',
+      startNumber: 998801,
+      endNumber: 998825,
+      totalLeaves: 25,
+      maxLimitPerCheque: 500000000,
+      totalBookLimit: 5000000000,
+      issuedDate: '2026-08-01',
+      leaves: [
+        { checkNumber: 'BG-BCA-998801', status: 'USED', voucherNo: 'BCK-000101', payee: 'PT Antam Tbk', amount: 150000000, dueDate: '2026-08-15', isCleared: true },
+        { checkNumber: 'BG-BCA-998802', status: 'USED', voucherNo: 'BCK-000102', payee: 'Pegadaian Jakarta', amount: 350000000, dueDate: '2026-08-20', isCleared: false },
+        { checkNumber: 'BG-BCA-998803', status: 'VOID', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false, notes: 'Salah Tulis / Batal' },
+        { checkNumber: 'BG-BCA-998804', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998805', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998806', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998807', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998808', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998809', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false },
+        { checkNumber: 'BG-BCA-998810', status: 'AVAILABLE', voucherNo: '-', payee: '-', amount: 0, dueDate: '-', isCleared: false }
+      ]
+    }
+  ]);
+};
+
+export const saveChequeBooks = async (books) => {
+  return await setStorage(KEYS.CHEQUE_BOOKS, books);
+};
+
+export const getCheques = getChequeBooks;
+export const saveCheques = saveChequeBooks;
+
+export const getVouchers = () => {
+  return VoucherDTO.fromStorageList(getStorage(KEYS.VOUCHERS, []));
+};
+
+export const saveVouchers = async (vouchers) => {
+  const clean = Array.isArray(vouchers) ? vouchers.map(v => VoucherDTO.toStorage(v)) : [];
+  return await setStorage(KEYS.VOUCHERS, clean);
+};
+
+export const saveVoucher = async (voucher) => {
+  const list = getVouchers();
+  list.unshift(VoucherDTO.toStorage(voucher));
+  return await saveVouchers(list);
+};
+
+// ==========================================
+// SYSTEM SETTINGS, PROFILE & BACKUPS
+// ==========================================
+
+export const getCompanyProfile = () => {
+  return getStorage(KEYS.COMPANY_PROFILE, {
+    companyName: 'PT. Triliun Anugrah Nusantara (PT TAN)',
+    logoUrl: '/logo/logo-tan.png',
+    address: 'Sentra Niaga Puri Indah Blok T2 No. 12, Kembangan, Jakarta Barat 11610',
+    phone: '(021) 5830-1988 / 0811-9876-5432',
+    email: 'procurement@tan-gold.co.id',
+    npwp: '01.234.567.8-035.000',
+    nibPeb: '1234567890123 (NIB Ekspor PPN 0%)',
+    currencyDefault: 'USD'
+  });
+};
+
+export const saveCompanyProfile = async (profile) => {
+  return await setStorage(KEYS.COMPANY_PROFILE, profile);
+};
+
+export const getAllSystemData = () => {
+  return {
+    app: 'PT TAN ERP',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    chartOfAccounts: getCOA(),
+    items: getMasterItems(),
+    customers: getCustomers(),
+    suppliers: getSuppliers(),
+    purchaseOrders: getPurchaseOrders(),
+    paymentVouchers: getVouchers(),
+    receiptVouchers: getVouchers(),
+    journals: getJournalEntries(),
+    companyProfile: getCompanyProfile(),
+    goodsReceipts: getGoodsReceipts(),
+    localPurchases: getLocalPurchases(),
+    scrapPurchases: getScrapPurchases(),
+    productionSPK: getProductionSPK(),
+    productionSettlements: getProductionSettlements(),
+    exportSalesOrders: getExportSalesOrders(),
+    exportInvoices: getExportInvoices(),
+    exportDeliveryOrders: getExportDeliveryOrders(),
+    localSales: getLocalSales(),
+    localSalesOrders: getLocalSalesOrders(),
+    localDeliveryOrders: getLocalDeliveryOrders(),
+    localInvoices: getLocalInvoices(),
+    purchaseRequests: getPurchaseRequests(),
+    chequeBooks: getChequeBooks()
+  };
+};
+
+export const restoreSystemData = async (data) => {
+  if (data.chartOfAccounts) await saveCOA(data.chartOfAccounts);
+  if (data.items) await saveMasterItems(data.items);
+  if (data.customers) await saveCustomers(data.customers);
+  if (data.suppliers) await saveSuppliers(data.suppliers);
+  if (data.purchaseOrders) await savePurchaseOrders(data.purchaseOrders);
+  if (data.journals) await saveJournalEntries(data.journals);
+  if (data.paymentVouchers) await saveVouchers(data.paymentVouchers);
+  if (data.companyProfile) await saveCompanyProfile(data.companyProfile);
+  if (data.goodsReceipts) await saveGoodsReceipts(data.goodsReceipts);
+  if (data.localPurchases) await saveLocalPurchases(data.localPurchases);
+  if (data.scrapPurchases) await saveScrapPurchases(data.scrapPurchases);
+  if (data.productionSPK) await saveProductionSPKList(data.productionSPK);
+  if (data.productionSettlements) await saveProductionSettlements(data.productionSettlements);
+  if (data.exportSalesOrders) await saveExportSalesOrders(data.exportSalesOrders);
+  if (data.exportInvoices) await saveExportInvoices(data.exportInvoices);
+  if (data.exportDeliveryOrders) await saveExportDeliveryOrders(data.exportDeliveryOrders);
+  if (data.localSales) await saveLocalSales(data.localSales);
+  if (data.localSalesOrders) await saveLocalSalesOrders(data.localSalesOrders);
+  if (data.localDeliveryOrders) await saveLocalDeliveryOrders(data.localDeliveryOrders);
+  if (data.localInvoices) await saveLocalInvoices(data.localInvoices);
+  if (data.purchaseRequests) await savePurchaseRequests(data.purchaseRequests);
+  if (data.chequeBooks) await saveChequeBooks(data.chequeBooks);
+  return { success: true };
+};
+
+export const clearAllSystemTransactions = async () => {
+  const transactionKeys = [
+    KEYS.JOURNAL_ENTRIES,
+    KEYS.PURCHASE_ORDERS,
+    KEYS.VOUCHERS,
+    KEYS.GOODS_RECEIPTS,
+    KEYS.LOCAL_PURCHASES,
+    KEYS.SCRAP_PURCHASES,
+    KEYS.PRODUCTION_SPK,
+    KEYS.PRODUCTION_SETTLEMENTS,
+    KEYS.EXPORT_SALES_ORDERS,
+    KEYS.EXPORT_INVOICES,
+    KEYS.EXPORT_DELIVERY_ORDERS,
+    KEYS.LOCAL_SALES,
+    KEYS.LOCAL_SALES_ORDERS,
+    KEYS.LOCAL_DELIVERY_ORDERS,
+    KEYS.LOCAL_INVOICES,
+    KEYS.PURCHASE_REQUESTS,
+    KEYS.VAULT_TRANSFERS,
+    'payment_vouchers',
+    'receipt_vouchers',
+    'checks_giro',
+    'stock_cards',
+    'erp_warehouse_stock_movements',
+    'deleted_records'
+  ];
+
+  for (const key of transactionKeys) {
+    await setStorage(key, [], true);
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    transactionKeys.forEach(k => {
+      try {
+        window.localStorage.setItem(k, JSON.stringify([]));
+      } catch (e) {}
+    });
+  }
+
+  return { success: true };
+};
+
+// ==========================================
+// VAULT & WAREHOUSE STOCK SERVICE METHODS
+// ==========================================
+
+export const getDefaultWarehouses = () => [
+  { id: 'WH-VAULT-01', name: 'Vault Utama PT TAN', code: 'VAULT-PRI', location: 'Lantai 2 Safe Room', manager: 'Budi Santoso', status: 'Active', account: '1157', accountName: 'Persediaan Emas Murni 999.9 (LM Utama)' },
+  { id: 'WH-VAULT-02', name: 'Vault Emas Impor Transit', code: 'VAULT-IMP', location: 'Lantai 2 Customs Safe', manager: 'Siti Aminah', status: 'Active', account: '1158', accountName: 'Persediaan Logam Mulia Impor' },
+  { id: 'WH-VAULT-04', name: 'Vault Emas WIP (Produksi Perhiasan)', code: 'VAULT-WIP', location: 'Lantai 2 Manufacturing Vault', manager: 'Hendra (Head of Production)', status: 'Active', account: '11502', accountName: 'Persediaan Emas WIP (Produksi)' },
+  { id: 'WH-VAULT-03', name: 'Vault Perhiasan Siap Ekspor', code: 'VAULT-EXP', location: 'Lantai 3 Dispatch Vault', manager: 'Ahmad Hidayat', status: 'Active', account: '1160', accountName: 'Persediaan Perhiasan Siap Ekspor' },
+  { id: 'WH-VAULT-05', name: 'Vault Pecahan Scrap & Leburan', code: 'VAULT-SCRAP', location: 'Lantai 2 Smelting Room', manager: 'Rian (Assay Master)', status: 'Active', account: '1152', accountName: 'Persediaan Emas Scrap & Leburan' },
+  { id: 'WH-VAULT-06', name: 'Vault Perak & Logam Alloy (Silver Vault)', code: 'VAULT-SILVER', location: 'Lantai 2 Smelting & Alloy Room', manager: 'Rian (Assay Master)', status: 'Active', account: '1153', accountName: 'Persediaan Silver & Logam Mulia Lain' }
+];
+
+export const getWarehouses = () => {
+  const stored = getStorage('pttan_warehouses') || getStorage(KEYS.WAREHOUSES);
+  if (Array.isArray(stored) && stored.length > 0) {
+    // Ensure WH-VAULT-06 (1153) is present if missing
+    if (!stored.some(w => w.account === '1153' || w.id === 'WH-VAULT-06')) {
+      const defaultWh = getDefaultWarehouses();
+      const silverWh = defaultWh.find(w => w.account === '1153');
+      if (silverWh) stored.push(silverWh);
+    }
+    return stored;
+  }
+  return getDefaultWarehouses();
+};
+
+export const getVaultTransfers = () => {
+  return getStorage(KEYS.VAULT_TRANSFERS, []);
+};
+
+export const saveVaultTransfers = async (list) => {
+  return await setStorage(KEYS.VAULT_TRANSFERS, list);
+};
+
+export const recordVaultTransfer = async (transferData) => {
+  const list = getVaultTransfers();
+  const newTransfer = {
+    id: `TRF-${Date.now().toString().slice(-6)}`,
+    date: transferData.date || new Date().toISOString().split('T')[0],
+    fromVaultId: transferData.fromVaultId,
+    fromVaultName: transferData.fromVaultName,
+    fromAccount: transferData.fromAccount,
+    toVaultId: transferData.toVaultId,
+    toVaultName: transferData.toVaultName,
+    toAccount: transferData.toAccount,
+    itemCode: transferData.itemCode || 'GOLD-GENERIC',
+    itemName: transferData.itemName || 'Logam Mulia Emas',
+    quantityGrams: Number(transferData.quantityGrams || 0),
+    estimatedValueIDR: Number(transferData.estimatedValueIDR || 0),
+    transferNotes: transferData.transferNotes || 'Transfer internal brankas vault',
+    createdAt: new Date().toISOString()
+  };
+
+  list.unshift(newTransfer);
+  await saveVaultTransfers(list);
+
+  // Auto-Post Journal Entry for Vault Transfer
+  const journals = getJournalEntries();
+  const entryNum = await getNextReferenceNumber('journal');
+  const journalValue = newTransfer.estimatedValueIDR > 0
+    ? newTransfer.estimatedValueIDR
+    : newTransfer.quantityGrams * 1300000;
+
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum,
+    date: newTransfer.date,
+    description: `Transfer Mutasi Antar-Vault: ${newTransfer.quantityGrams}g ${newTransfer.itemName} [${newTransfer.fromVaultName} (${newTransfer.fromAccount}) -> ${newTransfer.toVaultName} (${newTransfer.toAccount})] - ${newTransfer.transferNotes}`,
+    lines: [
+      { accountCode: newTransfer.toAccount, accountName: newTransfer.toVaultName, debit: journalValue, credit: 0 },
+      { accountCode: newTransfer.fromAccount, accountName: newTransfer.fromVaultName, debit: 0, credit: journalValue }
+    ],
+    createdAt: new Date().toISOString()
+  });
+
+  await saveJournalEntries(journals);
+  return { success: true, transfer: newTransfer };
+};
+
+// ==========================================
+// SILVER (PERAK) INVENTORY & ALLOY SERVICE
+// ==========================================
+
+export const getDefaultSilverTransactions = () => [
+  {
+    id: 'SLV-REC-000101',
+    transactionType: 'RECEIPT',
+    date: '2026-08-01',
+    supplierName: 'PT Antam Tbk / Divisi Logam Mulia',
+    docNo: 'NOTA-SLV-0801',
+    itemName: 'Granul Perak Murni 99.9% (Fine Silver Grain)',
+    purity: 99.9,
+    weightGrams: 5000,
+    pricePerGram: 16500,
+    totalValueIDR: 82500000,
+    sourceAccount: '1111-IDR',
+    targetVaultAccount: '1153',
+    notes: 'Penerimaan persediaan stok awal perak murni untuk bahan paduan alloy',
+    operatorName: 'Rian (Assay Master)',
+    createdAt: '2026-08-01T08:30:00.000Z'
+  }
+];
+
+export const getSilverTransactions = () => {
+  const stored = getStorage(KEYS.SILVER_TRANSACTIONS);
+  if (Array.isArray(stored) && stored.length > 0) return stored;
+  return getDefaultSilverTransactions();
+};
+
+export const saveSilverTransactions = async (list) => {
+  return await setStorage(KEYS.SILVER_TRANSACTIONS, list);
+};
+
+export const recordSilverReceipt = async (receiptData) => {
+  const list = getSilverTransactions();
+  const receiptNo = `SLV-REC-${Date.now().toString().slice(-6)}`;
+  const weightGrams = Number(receiptData.weightGrams || 0);
+  const pricePerGram = Number(receiptData.pricePerGram || 16500);
+  const totalValueIDR = Number(receiptData.totalValueIDR || (weightGrams * pricePerGram));
+  const sourceAccount = receiptData.sourceAccount || '1111-IDR';
+
+  const newReceipt = {
+    id: receiptNo,
+    transactionType: 'RECEIPT',
+    date: receiptData.date || new Date().toISOString().split('T')[0],
+    supplierName: receiptData.supplierName || 'PT Antam / Supplier Perak',
+    docNo: receiptData.docNo || receiptNo,
+    itemName: receiptData.itemName || 'Granul Perak Murni 99.9% (Fine Silver Grain)',
+    purity: Number(receiptData.purity || 99.9),
+    weightGrams,
+    pricePerGram,
+    totalValueIDR,
+    sourceAccount,
+    targetVaultAccount: '1153',
+    notes: receiptData.notes || 'Penerimaan persediaan perak murni untuk bahan alloy',
+    operatorName: receiptData.operatorName || 'Petugas Vault',
+    createdAt: new Date().toISOString()
+  };
+
+  list.unshift(newReceipt);
+  await saveSilverTransactions(list);
+
+  // Auto-Post Journal Entry: Debet 1153 (Persediaan Perak), Kredit Source Account
+  const journals = getJournalEntries();
+  const entryNum = await getNextReferenceNumber('journal');
+  const sourceAccountName = sourceAccount === '1111-IDR'
+    ? 'Bank BCA IDR (Operasional & Beli Lokal)'
+    : sourceAccount === '2111'
+    ? 'Hutang Usaha'
+    : 'Kas';
+
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum,
+    date: newReceipt.date,
+    description: `[PENERIMAAN-PERAK] Penerimaan ${weightGrams}g ${newReceipt.itemName} (${newReceipt.supplierName}) | Debet: 1153 | Kredit: ${sourceAccount}`,
+    lines: [
+      { accountCode: '1153', accountName: 'Silver & Logam Mulia Lain', debit: totalValueIDR, credit: 0 },
+      { accountCode: sourceAccount, accountName: sourceAccountName, debit: 0, credit: totalValueIDR }
+    ],
+    createdAt: new Date().toISOString()
+  });
+
+  await saveJournalEntries(journals);
+  return { success: true, transaction: newReceipt };
+};
+
+export const recordSilverAdditionToGold = async (additionData) => {
+  const list = getSilverTransactions();
+
+  // Hitung saldo stok perak yang tersedia di Akun 1153
+  const totalSilverIn = list
+    .filter(t => t.transactionType === 'RECEIPT')
+    .reduce((sum, t) => sum + Number(t.weightGrams || 0), 0);
+  const totalSilverOut = list
+    .filter(t => t.transactionType === 'ALLOY_ADDITION')
+    .reduce((sum, t) => sum + Number(t.silverWeightGram || 0), 0);
+  const availableSilver = totalSilverIn - totalSilverOut;
+
+  const silverWeightGram = Number(additionData.silverWeightGram || 0);
+  if (silverWeightGram <= 0) {
+    return { success: false, message: 'Berat perak yang ditambahkan harus lebih besar dari 0 gram.' };
+  }
+
+  if (silverWeightGram > availableSilver) {
+    return {
+      success: false,
+      message: `Saldo stok perak tidak mencukupi. Tersedia: ${availableSilver.toLocaleString()} gram, diminta: ${silverWeightGram.toLocaleString()} gram.`
+    };
+  }
+
+  const additionId = `ALLOY-SLV-${Date.now().toString().slice(-6)}`;
+  const goldInitialWeightGram = Number(additionData.goldInitialWeightGram || 0);
+  const goldPurityInitial = Number(additionData.goldPurityInitial || 99.99);
+  const silverPricePerGram = Number(additionData.silverPricePerGram || 16500);
+  const totalSilverValueIDR = Number(additionData.totalSilverValueIDR || (silverWeightGram * silverPricePerGram));
+  const targetVaultId = additionData.targetVaultId || 'WH-VAULT-01';
+  const targetVaultName = additionData.targetVaultName || 'Vault Utama PT TAN';
+  const targetAccount = additionData.targetAccount || '1157';
+  const goldBarRef = additionData.goldBarRef || 'Emas Batangan';
+  const totalFinalWeightGram = goldInitialWeightGram + silverWeightGram;
+
+  // Rumus kadar akhir paduan emas-perak
+  const fineGoldWeight = goldInitialWeightGram * (goldPurityInitial / 100);
+  const finalEstimatedPurity = totalFinalWeightGram > 0
+    ? (fineGoldWeight / totalFinalWeightGram) * 100
+    : goldPurityInitial;
+
+  const newAddition = {
+    id: additionId,
+    transactionType: 'ALLOY_ADDITION',
+    date: additionData.date || new Date().toISOString().split('T')[0],
+    targetVaultId,
+    targetVaultName,
+    targetAccount,
+    goldBarRef,
+    goldInitialWeightGram,
+    goldPurityInitial,
+    silverWeightGram,
+    silverPurity: Number(additionData.silverPurity || 99.9),
+    silverPricePerGram,
+    totalSilverValueIDR,
+    totalFinalWeightGram,
+    finalEstimatedPurity: Number(finalEstimatedPurity.toFixed(2)),
+    notes: additionData.notes || `Penambahan perak alloy ${silverWeightGram}g ke ${goldBarRef}`,
+    operatorName: additionData.operatorName || 'Rian (Assay Master)',
+    createdAt: new Date().toISOString()
+  };
+
+  list.unshift(newAddition);
+  await saveSilverTransactions(list);
+
+  // Auto-Journal SAK EMKM: Debet Target Gold Account (1157/11502), Kredit Persediaan Perak (1153)
+  const journals = getJournalEntries();
+  const entryNum = await getNextReferenceNumber('journal');
+  journals.unshift({
+    id: Date.now(),
+    entryNumber: entryNum,
+    date: newAddition.date,
+    description: `[ALLOY-PERAK] Penambahan ${silverWeightGram}g Perak ke ${goldBarRef} [${targetVaultName} (${targetAccount})] | Debet: ${targetAccount} | Kredit: 1153 - ${newAddition.notes}`,
+    lines: [
+      { accountCode: targetAccount, accountName: targetVaultName, debit: totalSilverValueIDR, credit: 0 },
+      { accountCode: '1153', accountName: 'Silver & Logam Mulia Lain', debit: 0, credit: totalSilverValueIDR }
+    ],
+    createdAt: new Date().toISOString()
+  });
+
+  await saveJournalEntries(journals);
+  return { success: true, transaction: newAddition };
+};
+
+// Compute Dynamic Vault Stock Positions & Movement Cards
+export const calculateVaultStockPosition = () => {
+  const warehouses = getWarehouses();
+  const grns = getGoodsReceipts();
+  const localPurchases = getLocalPurchases();
+  const scrapPurchases = getScrapPurchases();
+  const spkList = getProductionSPK();
+  const settlements = getProductionSettlements();
+  const deliveryOrders = getExportDeliveryOrders();
+  const localDeliveryOrders = getLocalDeliveryOrders();
+  const localSales = getLocalSales();
+  const transfers = getVaultTransfers();
+
+  // Initialize Balances map per account/vault
+  const vaultBalances = {};
+  warehouses.forEach(w => {
+    vaultBalances[w.account] = {
+      id: w.id,
+      name: w.name,
+      code: w.code,
+      account: w.account,
+      location: w.location,
+      manager: w.manager,
+      status: w.status,
+      totalInGrams: 0,
+      totalOutGrams: 0,
+      balanceGrams: 0,
+      totalValueIDR: 0
+    };
+  });
+
+  const allMovements = [];
+
+  // 1. Goods Receipts (TTB Impor / Lokal) -> IN
+  const receiptPOs = getAllPurchaseOrdersForReceipt() || [];
+  grns.forEach(grn => {
+    const derived = resolveGoodsReceiptPO(grn, receiptPOs);
+    const acc = derived.targetVault || '1158';
+    const weight = Number(grn.receivedWeightGram || 0);
+    const val = derived.totalValueIDR;
+    if (vaultBalances[acc]) {
+      vaultBalances[acc].totalInGrams += weight;
+      vaultBalances[acc].balanceGrams += weight;
+      vaultBalances[acc].totalValueIDR += val;
+    }
+    allMovements.push({
+      id: `GRN-${grn.id || grn.grnNumber}`,
+      date: grn.date || '2026-08-10',
+      docType: 'TTB / GRN',
+      docNo: grn.grnNumber || grn.id,
+      refNo: grn.poNumber || '-',
+      itemCode: 'LM-IMPORT-LBMA',
+      itemName: derived.itemDescription || 'Emas Batangan Impor 999.9',
+      warehouseAccount: acc,
+      warehouseName: vaultBalances[acc]?.name || 'Vault Impor (1158)',
+      inQty: weight,
+      outQty: 0,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: grn.barSerialNumbers || grn.assayCertificateNo || 'Sertifikat Pabean'
+    });
+  });
+
+  // 2. Local Purchases (Emas Lokal yang sudah tiba di vault) -> IN ke 1157
+  localPurchases.forEach(lp => {
+    if (lp.isVaultReceived || lp.status?.includes('RECEIVED') || lp.status?.includes('VAULT')) {
+      const acc = '1157';
+      const weight = Number(lp.quantityGrams || 0);
+      const val = Number(lp.totalAmount || (weight * 1300000));
+      if (vaultBalances[acc]) {
+        vaultBalances[acc].totalInGrams += weight;
+        vaultBalances[acc].balanceGrams += weight;
+        vaultBalances[acc].totalValueIDR += val;
+      }
+      allMovements.push({
+        id: `LOK-${lp.id || lp.receiptNo}`,
+        date: lp.orderDate || lp.vaultReceivedAt?.split('T')[0] || '2026-08-11',
+        docType: 'PO / NOTA LOKAL',
+        docNo: lp.receiptNo || lp.poNumber || 'NOTA-LOKAL',
+        refNo: lp.poNumber || lp.receiptNo || '-',
+        itemCode: 'LM-ANTAM-9999',
+        itemName: lp.itemName || 'Emas Batangan Antam / Lokal 999.9',
+        warehouseAccount: acc,
+        warehouseName: vaultBalances[acc]?.name || 'Vault Utama (1157)',
+        inQty: weight,
+        outQty: 0,
+        unit: 'gram',
+        valueIDR: val,
+        serialNo: lp.barSerialNumbers || `Kurir: ${lp.courierName || 'Internal'}`
+      });
+    }
+  });
+
+  // 2b. Scrap Purchases -> IN ke 1152 (atau target vault yang dipilih)
+  scrapPurchases.forEach(sc => {
+    const acc = sc.targetVault || '1152';
+    const weight = Number(sc.grossWeight || sc.estimatedFineGold || 0);
+    const val = Number(sc.totalAmount || (weight * 1200000));
+    if (vaultBalances[acc]) {
+      vaultBalances[acc].totalInGrams += weight;
+      vaultBalances[acc].balanceGrams += weight;
+      vaultBalances[acc].totalValueIDR += val;
+    }
+    allMovements.push({
+      id: `SCRAP-BUY-${sc.id || sc.receiptNo}`,
+      date: sc.date || '2026-08-11',
+      docType: 'NOTA BELI SCRAP',
+      docNo: sc.receiptNo || sc.id,
+      refNo: `SPK: ${sc.spkMeltingNo || '-'} | XRF: ${sc.xrfPurity || 0}%`,
+      itemCode: 'SCRAP-MIX',
+      itemName: sc.itemDescription || `Scrap Emas Kadar ${sc.xrfPurity}%`,
+      warehouseAccount: acc,
+      warehouseName: vaultBalances[acc]?.name || 'Vault Scrap (1152)',
+      inQty: weight,
+      outQty: 0,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: `Toko: ${sc.supplierName} | Fine Gold: ${sc.estimatedFineGold}g`
+    });
+  });
+
+  // 3. SPK Issue to WIP Produksi -> OUT dari 1157, IN ke 11502
+  spkList.forEach(spk => {
+    const fineWeight = Number(spk.fineGoldNeeded || 0);
+    const val = fineWeight * 1300000;
+
+    // OUT dari 1157
+    if (vaultBalances['1157']) {
+      vaultBalances['1157'].totalOutGrams += fineWeight;
+      vaultBalances['1157'].balanceGrams -= fineWeight;
+      vaultBalances['1157'].totalValueIDR -= val;
+    }
+    allMovements.push({
+      id: `SPK-OUT-${spk.id || spk.spkNo}`,
+      date: spk.date || '2026-08-12',
+      docType: 'SPK PENGELUARAN WIP',
+      docNo: spk.spkNo || spk.id,
+      refNo: spk.buyerName || 'Workshop Produksi',
+      itemCode: 'GOLD-RAW-9999',
+      itemName: `Bahan Emas Murni (${spk.jewelryType || 'Perhiasan'})`,
+      warehouseAccount: '1157',
+      warehouseName: vaultBalances['1157']?.name || 'Vault Utama (1157)',
+      inQty: 0,
+      outQty: fineWeight,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: `SPK: ${spk.spkNo} (Target Karat ${spk.targetKarat || '750'})`
+    });
+
+    // IN ke 11502
+    if (vaultBalances['11502']) {
+      vaultBalances['11502'].totalInGrams += fineWeight;
+      vaultBalances['11502'].balanceGrams += fineWeight;
+      vaultBalances['11502'].totalValueIDR += val;
+    }
+    allMovements.push({
+      id: `SPK-IN-${spk.id || spk.spkNo}`,
+      date: spk.date || '2026-08-12',
+      docType: 'SPK PENERIMAAN WIP',
+      docNo: spk.spkNo || spk.id,
+      refNo: spk.buyerName || 'Workshop Produksi',
+      itemCode: 'GOLD-WIP-KARAT',
+      itemName: `Emas WIP Dalam Proses Karat ${spk.targetKarat || '750'}`,
+      warehouseAccount: '11502',
+      warehouseName: vaultBalances['11502']?.name || 'Vault Emas WIP (11502)',
+      inQty: fineWeight,
+      outQty: 0,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: `WIP SPK ${spk.spkNo}`
+    });
+  });
+
+  // 4. Production Settlement -> OUT dari 11502, IN ke 1160 (Perhiasan Jadi) & 1152 (Scrap Retur)
+  settlements.forEach(st => {
+    const outJewelry = Number(st.jewelryOutputWeight || 0);
+    const scrapRet = Number(st.scrapReturnWeight || 0);
+    const goldLoss = Number(st.goldLossWeight || 0);
+    const totalDeductedWIP = outJewelry + scrapRet + goldLoss;
+    const valJewelry = (outJewelry * 1350000) + Number(st.laborFeeIDR || 0);
+
+    // OUT dari 11502
+    if (vaultBalances['11502']) {
+      vaultBalances['11502'].totalOutGrams += totalDeductedWIP;
+      vaultBalances['11502'].balanceGrams -= totalDeductedWIP;
+      vaultBalances['11502'].totalValueIDR -= (totalDeductedWIP * 1300000);
+    }
+    allMovements.push({
+      id: `SETTLE-OUT-${st.id || st.joNumber}`,
+      date: st.date || '2026-08-14',
+      docType: 'SETTLEMENT WORKSHOP',
+      docNo: st.joNumber || st.id,
+      refNo: `Hasil Jadi ${outJewelry}g | Loss ${goldLoss}g`,
+      itemCode: 'GOLD-WIP-KARAT',
+      itemName: 'Pelunasan Bahan Emas WIP Karat',
+      warehouseAccount: '11502',
+      warehouseName: vaultBalances['11502']?.name || 'Vault Emas WIP (11502)',
+      inQty: 0,
+      outQty: totalDeductedWIP,
+      unit: 'gram',
+      valueIDR: totalDeductedWIP * 1300000,
+      serialNo: `Settle SPK: ${st.joNumber}`
+    });
+
+    // IN ke 1160 (Perhiasan Siap Ekspor)
+    if (vaultBalances['1160']) {
+      vaultBalances['1160'].totalInGrams += outJewelry;
+      vaultBalances['1160'].balanceGrams += outJewelry;
+      vaultBalances['1160'].totalValueIDR += valJewelry;
+    }
+    allMovements.push({
+      id: `SETTLE-IN-EXP-${st.id || st.joNumber}`,
+      date: st.date || '2026-08-14',
+      docType: 'FINISH GOODS RECEIPT',
+      docNo: st.joNumber || st.id,
+      refNo: `Labor Fee: Rp ${(st.laborFeeIDR || 0).toLocaleString()}`,
+      itemCode: 'JEWELRY-EXP-750',
+      itemName: `Perhiasan Emas Karat ${st.karat || '750'} Siap Ekspor`,
+      warehouseAccount: '1160',
+      warehouseName: vaultBalances['1160']?.name || 'Vault Perhiasan Siap Ekspor (1160)',
+      inQty: outJewelry,
+      outQty: 0,
+      unit: 'gram',
+      valueIDR: valJewelry,
+      serialNo: `Batch FG: ${st.joNumber}`
+    });
+
+    // IN ke 1152 (Scrap Retur jika ada)
+    if (scrapRet > 0 && vaultBalances['1152']) {
+      vaultBalances['1152'].totalInGrams += scrapRet;
+      vaultBalances['1152'].balanceGrams += scrapRet;
+      vaultBalances['1152'].totalValueIDR += (scrapRet * 1200000);
+      allMovements.push({
+        id: `SCRAP-RET-${st.id || st.joNumber}`,
+        date: st.date || '2026-08-14',
+        docType: 'SCRAP RETUR LEBURAN',
+        docNo: st.joNumber || st.id,
+        refNo: 'Sisa Leburan Workshop',
+        itemCode: 'SCRAP-RETURN',
+        itemName: 'Emas Scrap Retur / Sisa Leburan',
+        warehouseAccount: '1152',
+        warehouseName: vaultBalances['1152']?.name || 'Vault Scrap (1152)',
+        inQty: scrapRet,
+        outQty: 0,
+        unit: 'gram',
+        valueIDR: scrapRet * 1200000,
+        serialNo: `Retur JO ${st.joNumber}`
+      });
+    }
+  });
+
+  // 5. Export Delivery Orders (DO) -> OUT dari 1160
+  deliveryOrders.forEach(doItem => {
+    const weight = Number(doItem.netWeightGram || 0);
+    const val = weight * 1380000;
+    if (vaultBalances['1160']) {
+      vaultBalances['1160'].totalOutGrams += weight;
+      vaultBalances['1160'].balanceGrams -= weight;
+      vaultBalances['1160'].totalValueIDR -= val;
+    }
+    allMovements.push({
+      id: `DO-EXP-${doItem.id || doItem.doNumber}`,
+      date: doItem.date || '2026-08-15',
+      docType: 'SURAT JALAN EKSPOR',
+      docNo: doItem.doNumber || doItem.id,
+      refNo: doItem.soNumber || doItem.customerPONumber || '-',
+      itemCode: 'JEWELRY-EXP-750',
+      itemName: doItem.itemDescription || 'Fine Gold Jewelry 750 (18K)',
+      warehouseAccount: '1160',
+      warehouseName: vaultBalances['1160']?.name || 'Vault Perhiasan Siap Ekspor (1160)',
+      inQty: 0,
+      outQty: weight,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: `${doItem.goldCertificateNo || 'Cert'} | AWB: ${doItem.awbNumber || '-'}`
+    });
+  });
+
+  // 6. Internal Vault Transfers
+  transfers.forEach(trf => {
+    const weight = Number(trf.quantityGrams || 0);
+    const val = Number(trf.estimatedValueIDR || (weight * 1300000));
+    const fromAcc = trf.fromAccount;
+    const toAcc = trf.toAccount;
+
+    // Deduct from Source
+    if (vaultBalances[fromAcc]) {
+      vaultBalances[fromAcc].totalOutGrams += weight;
+      vaultBalances[fromAcc].balanceGrams -= weight;
+      vaultBalances[fromAcc].totalValueIDR -= val;
+    }
+    allMovements.push({
+      id: `TRF-OUT-${trf.id}`,
+      date: trf.date || '2026-08-16',
+      docType: 'TRANSFER ANTAR-VAULT (OUT)',
+      docNo: trf.id,
+      refNo: `Transfer ke ${trf.toVaultName}`,
+      itemCode: trf.itemCode,
+      itemName: trf.itemName,
+      warehouseAccount: fromAcc,
+      warehouseName: trf.fromVaultName,
+      inQty: 0,
+      outQty: weight,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: trf.transferNotes || 'Transfer Antar Brankas'
+    });
+
+    // Add to Destination
+    if (vaultBalances[toAcc]) {
+      vaultBalances[toAcc].totalInGrams += weight;
+      vaultBalances[toAcc].balanceGrams += weight;
+      vaultBalances[toAcc].totalValueIDR += val;
+    }
+    allMovements.push({
+      id: `TRF-IN-${trf.id}`,
+      date: trf.date || '2026-08-16',
+      docType: 'TRANSFER ANTAR-VAULT (IN)',
+      docNo: trf.id,
+      refNo: `Diterima dari ${trf.fromVaultName}`,
+      itemCode: trf.itemCode,
+      itemName: trf.itemName,
+      warehouseAccount: toAcc,
+      warehouseName: trf.toVaultName,
+      inQty: weight,
+      outQty: 0,
+      unit: 'gram',
+      valueIDR: val,
+      serialNo: trf.transferNotes || 'Penerimaan Transfer Brankas'
+    });
+  });
+
+  // 7. Silver Receipts & Silver Additions to Gold (Alloy)
+  const silverTransactions = getSilverTransactions();
+  silverTransactions.forEach(st => {
+    if (st.transactionType === 'RECEIPT') {
+      const weight = Number(st.weightGrams || 0);
+      const val = Number(st.totalValueIDR || (weight * (st.pricePerGram || 16500)));
+      if (vaultBalances['1153']) {
+        vaultBalances['1153'].totalInGrams += weight;
+        vaultBalances['1153'].balanceGrams += weight;
+        vaultBalances['1153'].totalValueIDR += val;
+      }
+      allMovements.push({
+        id: `SLV-IN-${st.id}`,
+        date: st.date || '2026-08-01',
+        docType: 'PENERIMAAN PERAK',
+        docNo: st.docNo || st.id,
+        refNo: st.supplierName || 'Penerimaan Perak',
+        itemCode: 'SILVER-GRAIN-999',
+        itemName: st.itemName || 'Granul Perak Murni 99.9%',
+        warehouseAccount: '1153',
+        warehouseName: vaultBalances['1153']?.name || 'Vault Perak & Alloy (1153)',
+        inQty: weight,
+        outQty: 0,
+        unit: 'gram',
+        valueIDR: val,
+        serialNo: `Purity: ${st.purity || 99.9}% | @Rp ${(st.pricePerGram || 16500).toLocaleString()}/g`
+      });
+    } else if (st.transactionType === 'ALLOY_ADDITION') {
+      const silverWeight = Number(st.silverWeightGram || 0);
+      const val = Number(st.totalSilverValueIDR || (silverWeight * (st.silverPricePerGram || 16500)));
+      const targetAcc = st.targetAccount || '1157';
+
+      // Deduct from Silver Vault (1153)
+      if (vaultBalances['1153']) {
+        vaultBalances['1153'].totalOutGrams += silverWeight;
+        vaultBalances['1153'].balanceGrams -= silverWeight;
+        vaultBalances['1153'].totalValueIDR -= val;
+      }
+      allMovements.push({
+        id: `SLV-OUT-${st.id}`,
+        date: st.date || '2026-08-16',
+        docType: 'ALLOY / KELUAR PERAK',
+        docNo: st.id,
+        refNo: `Alloy ke ${st.goldBarRef || 'Emas Batangan'} (${st.targetVaultName})`,
+        itemCode: 'SILVER-ALLOY-OUT',
+        itemName: `Perak Paduan Alloy (${silverWeight}g)`,
+        warehouseAccount: '1153',
+        warehouseName: vaultBalances['1153']?.name || 'Vault Perak & Alloy (1153)',
+        inQty: 0,
+        outQty: silverWeight,
+        unit: 'gram',
+        valueIDR: val,
+        serialNo: `Kredit 1153 -> Debet ${targetAcc} | Operator: ${st.operatorName || 'Assay Master'}`
+      });
+
+      // Add alloy silver mass & value into Target Gold Vault (1157 / 11502)
+      if (vaultBalances[targetAcc]) {
+        vaultBalances[targetAcc].totalInGrams += silverWeight;
+        vaultBalances[targetAcc].balanceGrams += silverWeight;
+        vaultBalances[targetAcc].totalValueIDR += val;
+      }
+      allMovements.push({
+        id: `ALLOY-IN-${st.id}`,
+        date: st.date || '2026-08-16',
+        docType: 'ALLOY / TAMBAH PERAK',
+        docNo: st.id,
+        refNo: `Ref: ${st.goldBarRef || 'Batangan Emas'}`,
+        itemCode: 'GOLD-ALLOYED-BAR',
+        itemName: `Emas Batangan + Perak Alloy (+${silverWeight}g)`,
+        warehouseAccount: targetAcc,
+        warehouseName: vaultBalances[targetAcc]?.name || st.targetVaultName,
+        inQty: silverWeight,
+        outQty: 0,
+        unit: 'gram',
+        valueIDR: val,
+        serialNo: `Emas: ${st.goldInitialWeightGram}g + Perak: ${silverWeight}g = ${st.totalFinalWeightGram}g (Kadar: ${st.finalEstimatedPurity}%)`
+      });
+    }
+  });
+
+  // 8. Local Delivery Orders (Surat Jalan Pengeluaran Vault Lokal) -> OUT dari Vault Asal (1157, 1160, 1152)
+  const processedSalesDONumbers = new Set();
+  localDeliveryOrders.forEach(doItem => {
+    if (doItem.status === 'DELIVERED' || doItem.status?.includes('DELIVERED') || doItem.status === 'SHIPPED') {
+      const acc = doItem.sourceVault || '1157';
+      const weight = Number(doItem.netWeightGram || doItem.quantityGrams || 0);
+      const cogsVal = Number(doItem.cogsAmountIDR || (weight * 1300000));
+      if (vaultBalances[acc]) {
+        vaultBalances[acc].totalOutGrams += weight;
+        vaultBalances[acc].balanceGrams -= weight;
+        vaultBalances[acc].totalValueIDR -= cogsVal;
+      }
+      if (doItem.doNumber) processedSalesDONumbers.add(doItem.doNumber);
+      if (doItem.invoiceNo) processedSalesDONumbers.add(doItem.invoiceNo);
+
+      allMovements.push({
+        id: `DO-LOK-${doItem.id || doItem.doNumber}`,
+        date: doItem.date || '2026-08-16',
+        docType: 'SURAT JALAN LOKAL',
+        docNo: doItem.doNumber || doItem.id,
+        refNo: `${doItem.customerName || '-'} | Ref: ${doItem.soNumber || doItem.customerPONumber || '-'}`,
+        itemCode: doItem.itemCode || 'LM-LOKAL',
+        itemName: doItem.itemName || 'Pengeluaran Fisik Emas Lokal',
+        warehouseAccount: acc,
+        warehouseName: vaultBalances[acc]?.name || 'Vault Utama (1157)',
+        inQty: 0,
+        outQty: weight,
+        unit: 'gram',
+        valueIDR: cogsVal,
+        serialNo: `${doItem.barSerialNumbers || 'Seri Bar'} | Kurir: ${doItem.courierName || 'Internal'}`
+      });
+    }
+  });
+
+  // 8b. Direct Local Sales (Bila ada penjualan langsung yang belum ada DO terpisah)
+  localSales.forEach(sale => {
+    if ((sale.deliveryStatus === 'DELIVERED' || sale.paymentStatus === 'PAID') &&
+        !processedSalesDONumbers.has(sale.doNumber) &&
+        !processedSalesDONumbers.has(sale.invoiceNo)) {
+      const acc = sale.sourceVault || '1157';
+      const weight = Number(sale.quantityGrams || 0);
+      const cogsVal = Number(sale.cogsAmountIDR || (weight * 1300000));
+      if (vaultBalances[acc]) {
+        vaultBalances[acc].totalOutGrams += weight;
+        vaultBalances[acc].balanceGrams -= weight;
+        vaultBalances[acc].totalValueIDR -= cogsVal;
+      }
+      allMovements.push({
+        id: `LS-OUT-${sale.id || sale.invoiceNo}`,
+        date: sale.date || '2026-08-16',
+        docType: 'PENJUALAN LOKAL',
+        docNo: sale.invoiceNo || sale.id,
+        refNo: `${sale.customerName || '-'} | Ref: ${sale.doNumber || sale.soNumber || '-'}`,
+        itemCode: sale.itemCode || 'LM-LOKAL-SALE',
+        itemName: sale.itemName || 'Penjualan Logam Mulia Lokal',
+        warehouseAccount: acc,
+        warehouseName: vaultBalances[acc]?.name || 'Vault Utama (1157)',
+        inQty: 0,
+        outQty: weight,
+        unit: 'gram',
+        valueIDR: cogsVal,
+        serialNo: `${sale.barSerialNumbers || 'Seri Bar'} | Kurir: ${sale.courierName || 'Counter'}`
+      });
+    }
+  });
+
+  // Calculate Running Balances chronologically
+  allMovements.sort((a, b) => new Date(a.date) - new Date(b.date));
+  const accountRunningTotals = {};
+  const enrichedMovements = allMovements.map(m => {
+    if (!accountRunningTotals[m.warehouseAccount]) {
+      accountRunningTotals[m.warehouseAccount] = 0;
+    }
+    accountRunningTotals[m.warehouseAccount] += (m.inQty - m.outQty);
+    return {
+      ...m,
+      balanceQty: accountRunningTotals[m.warehouseAccount]
+    };
+  });
+
+  // Reverse so newest appears first on UI table
+  enrichedMovements.reverse();
+
+  // Summary Metrics
+  const lmMainGrams = Math.max(0, vaultBalances['1157']?.balanceGrams || 0);
+  const lmImportGrams = Math.max(0, vaultBalances['1158']?.balanceGrams || 0);
+  const totalLMGrams = lmMainGrams + lmImportGrams;
+  const wipGrams = Math.max(0, vaultBalances['11502']?.balanceGrams || 0);
+  const exportGrams = Math.max(0, vaultBalances['1160']?.balanceGrams || 0);
+  const scrapGrams = Math.max(0, vaultBalances['1152']?.balanceGrams || 0);
+  const silverGrams = Math.max(0, vaultBalances['1153']?.balanceGrams || 0);
+  const totalVaultGrams = totalLMGrams + wipGrams + exportGrams + scrapGrams + silverGrams;
+
+  let grandTotalValueIDR = 0;
+  Object.values(vaultBalances).forEach(vb => {
+    grandTotalValueIDR += Math.max(0, vb.totalValueIDR || 0);
+  });
+
+  return {
+    vaults: Object.values(vaultBalances),
+    movements: enrichedMovements,
+    summary: {
+      totalLMGrams,
+      lmMainGrams,
+      lmImportGrams,
+      wipGrams,
+      exportGrams,
+      scrapGrams,
+      silverGrams,
+      totalVaultGrams,
+      grandTotalValueIDR
+    }
+  };
+};

@@ -66,7 +66,11 @@ const FirebaseSync = {
         'erp_master_shifts': 'masterShifts',
         'erp_work_calendar': 'workCalendar',
         'production_details': 'productionDetails',
-        'erp_production_logs': 'productionLogs'
+        'erp_production_logs': 'productionLogs',
+        'pttan_local_sales': 'localSales',
+        'pttan_local_sales_orders': 'localSalesOrders',
+        'pttan_local_delivery_orders': 'localDeliveryOrders',
+        'pttan_local_invoices': 'localInvoices'
     },
 
     // Track errors shown to user to prevent spam

@@ -108,6 +108,30 @@ model JournalEntry {
   referenceType String?
   referenceId   String?
 
+  /// Foreign key ke dokumen PO (PurchaseOrder)
+  purchaseId String?
+  purchase   PurchaseOrder? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen TTB / Penerimaan Barang (GoodsReceipt)
+  deliveryId String?
+  delivery   GoodsReceipt? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen Kas / Bank (CashVoucher)
+  cashVoucherId String?
+  cashVoucher   CashVoucher? @relation(fields: [cashVoucherId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen SO (SalesOrder)
+  salesOrderId String?
+  salesOrder   SalesOrder? @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen Surat Jalan (SalesDelivery)
+  salesDeliveryId String?
+  salesDelivery   SalesDelivery? @relation(fields: [salesDeliveryId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen Faktur Penjualan (SalesInvoice)
+  salesInvoiceId String?
+  salesInvoice   SalesInvoice? @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+
   status     JournalStatus @default(DRAFT)
   postedAt   DateTime?
   voidedAt   DateTime?
@@ -130,6 +154,12 @@ model JournalEntry {
   @@index([status])
   @@index([source])
   @@index([referenceType, referenceId])
+  @@index([purchaseId])
+  @@index([deliveryId])
+  @@index([cashVoucherId])
+  @@index([salesOrderId])
+  @@index([salesDeliveryId])
+  @@index([salesInvoiceId])
   @@map("journal_entries")
 }
 

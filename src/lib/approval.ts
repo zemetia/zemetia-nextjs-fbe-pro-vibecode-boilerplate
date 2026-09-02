@@ -20,26 +20,37 @@ import type { ApprovalKindDTO, ApprovalStatusDTO } from '@/types/dtos';
  * persetujuan tanpa menjawab izinnya harus gagal saat compile.
  */
 export const APPROVAL_KIND_PERMISSION: Record<ApprovalKindDTO, PermissionKey> = {
+  METAL_PURCHASE_CONFIRM: 'local-purchases:confirm',
+  METAL_PURCHASE_DELIVERY_CONFIRM: 'goods-receipts:confirm',
   CASH_VOUCHER_APPROVE: 'cash-vouchers:approve',
   PRODUCTION_ORDER_RELEASE: 'production-orders:release',
 };
 
 export const APPROVAL_KIND_REQUEST_PERMISSION: Record<ApprovalKindDTO, PermissionKey> = {
+  METAL_PURCHASE_CONFIRM: 'local-purchases:update',
+  METAL_PURCHASE_DELIVERY_CONFIRM: 'goods-receipts:update',
   CASH_VOUCHER_APPROVE: 'cash-vouchers:submit',
   PRODUCTION_ORDER_RELEASE: 'production-orders:update',
 };
 
 export const APPROVAL_KIND_LABELS: Record<ApprovalKindDTO, string> = {
+  METAL_PURCHASE_CONFIRM: 'Konfirmasi PO Pembelian Logam',
+  METAL_PURCHASE_DELIVERY_CONFIRM: 'Konfirmasi Penerimaan Barang (TTB)',
   CASH_VOUCHER_APPROVE: 'Persetujuan Voucher',
   PRODUCTION_ORDER_RELEASE: 'Rilis SPK Produksi',
 };
 
 export const APPROVAL_KIND_MODULE_LABELS: Record<ApprovalKindDTO, string> = {
+  METAL_PURCHASE_CONFIRM: 'Pembelian',
+  METAL_PURCHASE_DELIVERY_CONFIRM: 'Pembelian',
   CASH_VOUCHER_APPROVE: 'Keuangan',
   PRODUCTION_ORDER_RELEASE: 'Produksi',
 };
 
 export const APPROVAL_KIND_EFFECTS: Record<ApprovalKindDTO, string> = {
+  METAL_PURCHASE_CONFIRM: 'PO/kuitansi terkunci dan siap menerima TTB.',
+  METAL_PURCHASE_DELIVERY_CONFIRM:
+    'Barang dinyatakan diterima fisik di vault — lot, mutasi stok, dan jurnal buku besar lahir sekaligus.',
   CASH_VOUCHER_APPROVE:
     'Voucher disetujui. Bila dokumennya ditandai auto-posting, jurnalnya sekalian masuk buku besar.',
   PRODUCTION_ORDER_RELEASE:

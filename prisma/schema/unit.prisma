@@ -1,0 +1,44 @@
+/// Master Tipe Satuan (Unit Category) & Satuan Pengukuran (Unit of Measure).
+///
+/// Setiap Tipe Satuan (WEIGHT, UNIT, VOLUME, LENGTH) memiliki tepat 1 Satuan Anchor.
+/// Seluruh satuan di dalam tipe yang sama mendefinisikan faktor konversinya
+/// terhadap Satuan Anchor tersebut (1 Unit = conversionFactor * Anchor).
+
+model UnitCategory {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  units Unit[]
+
+  @@index([isActive])
+  @@map("unit_categories")
+}
+
+model Unit {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  symbol           String
+  categoryId       String
+  isAnchor         Boolean  @default(false)
+  /// Nilai 1 unit ini dalam satuan Anchor (misal: 1 kg = 1000 gram -> factor 1000; 1 cg = 0.01 gram -> factor 0.01)
+  conversionFactor Decimal  @db.Decimal(18, 8)
+  isActive         Boolean  @default(true)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  category UnitCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  purchaseRequestItems PurchaseRequestItem[]
+
+  @@index([categoryId])
+  @@index([isAnchor])
+  @@index([isActive])
+  @@map("units")
+}

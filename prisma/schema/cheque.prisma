@@ -1,0 +1,78 @@
+/// Cheque segment — buku cek / bilyet giro (`pttan_cheque_books`).
+///
+/// Cermin relasional `MasterChequePage`: satu buku = satu model, lembar-lembar
+/// di dalamnya = baris tabel (`ChequeLeaf`). Siklus hidup lembar legacy
+/// (AVAILABLE → USED / VOID, `isCleared` saat kliring cair) dipertahankan apa
+/// adanya. Terpisah dari `CashVoucher`: voucher memakai cek sebagai metode
+/// pembayaran, buku cek adalah master instrumennya — dua hal berbeda yang di
+/// legacy hidup di dua tempat berbeda pula.
+
+/// Status satu lembar cek/BG — persis nilai legacy.
+enum ChequeLeafStatus {
+  AVAILABLE
+  USED
+  VOID
+}
+
+model ChequeBook {
+  id String @id @default(cuid())
+
+  /// `BOOK-BCA-2026A`.
+  bookNumber    String  @unique
+  bankCode      String?
+  bankName      String
+  accountNumber String?
+  currency      String  @default("IDR")
+
+  /// Prefiks nomor lembar, mis. `BG-BCA-`.
+  seriesPrefix String
+  /// Rentang nomor lembar [startNumber .. endNumber], termasuk keduanya.
+  startNumber  Int
+  endNumber    Int
+  /// `endNumber - startNumber + 1`.
+  totalLeaves  Int
+
+  /// Batas nominal per lembar dan per buku — guard-rail legacy.
+  maxLimitPerCheque Decimal @db.Decimal(18, 2)
+  totalBookLimit    Decimal @db.Decimal(18, 2)
+
+  issuedDate DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leaves ChequeLeaf[]
+
+  @@map("cheque_books")
+}
+
+/// Satu lembar cek/BG di dalam buku.
+model ChequeLeaf {
+  id     String @id @default(cuid())
+  bookId String
+
+  /// `BG-BCA-998801` — nomor tercetak di lembar.
+  checkNumber String           @unique
+  status      ChequeLeafStatus @default(AVAILABLE)
+
+  /// Terisi saat USED — voucher yang memakainya (legacy: 'BCK-000101').
+  voucherNo String?
+  payee     String?
+  amount    Decimal?  @db.Decimal(18, 2)
+  dueDate   DateTime? @db.Date
+  /// `true` = sudah kliring/cair (jurnal eliminasi cek beredar diterbitkan).
+  isCleared Boolean   @default(false)
+
+  /// Alasan VOID — legacy: 'Salah Tulis / Batal'.
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  book ChequeBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, checkNumber])
+  @@index([bookId])
+  @@index([status])
+  @@map("cheque_leaves")
+}

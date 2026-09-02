@@ -6,7 +6,7 @@ import type { SeededAccountCode } from './data/accounts';
 /**
  * Barang yang ada di hari pertama. Diseed karena baris dokumen pembelian
  * menunjuk `Product` — master yang kosong berarti dokumen pertama tidak punya
- * apa pun untuk dibeli.
+ * apa pun untuk dipilih.
  *
  * Mengikuti konvensi data acuan, bukan konvensi izin: **tidak pernah memangkas**
  * dan **tidak pernah menyentuh `isActive`**, karena sebuah barang bisa sudah
@@ -17,6 +17,13 @@ import type { SeededAccountCode } from './data/accounts';
  * terbaca oleh manusia, sementara cuid-nya berbeda di tiap database (pelajaran
  * key-vs-id di `PermissionMatrix`, LEARN 2026-08-10). Tipenya `SeededAccountCode`
  * sehingga salah ketik kode akun gagal saat compile, bukan gagal di tengah seed.
+ *
+ * Kode akun disesuaikan dengan COA operasional PT TAN (erp-tan-felix):
+ * - `1157` Persediaan Logam Mulia Antam (Gold Bar) — vault emas utama
+ * - `1158` Persediaan Logam Mulia Valcambi/LBMA (Import) — vault emas impor
+ * - `1159` Persediaan Emas Dalam Perjalanan Kurir (Transit)
+ * - `1152` Scrap Gold
+ * - `1153` Silver & Logam Mulia Lain
  *
  * Wajib jalan **sesudah** `seedAccounts()` — akunnya harus sudah ada barisnya.
  */
@@ -29,8 +36,8 @@ const DEFAULT_PRODUCTS = [
     defaultPurityPercent: GOLD_BULLION_PURITY_PERCENT,
     purityLocked: true,
     requiresCertificate: true,
-    inventoryAccountCode: '11541',
-    transitAccountCode: '11551',
+    inventoryAccountCode: '1157' as SeededAccountCode,  // Persediaan Logam Mulia Antam (Gold Bar)
+    transitAccountCode: '1159' as SeededAccountCode,    // Persediaan Emas Dalam Perjalanan Kurir
     notes: 'Batangan bersertifikat — tiap keping bernomor seri.',
   },
   {
@@ -41,8 +48,8 @@ const DEFAULT_PRODUCTS = [
     defaultPurityPercent: SILVER_BULLION_PURITY_PERCENT,
     purityLocked: true,
     requiresCertificate: true,
-    inventoryAccountCode: '11542',
-    transitAccountCode: '11552',
+    inventoryAccountCode: '1153' as SeededAccountCode,  // Silver & Logam Mulia Lain
+    transitAccountCode: '1159' as SeededAccountCode,    // Persediaan Emas Dalam Perjalanan Kurir
     notes: 'Batangan bersertifikat — tiap keping bernomor seri.',
   },
   {
@@ -53,8 +60,8 @@ const DEFAULT_PRODUCTS = [
     defaultPurityPercent: null,
     purityLocked: false,
     requiresCertificate: false,
-    inventoryAccountCode: '11516',
-    transitAccountCode: '11551',
+    inventoryAccountCode: '1157' as SeededAccountCode,  // Persediaan Logam Mulia Antam (Gold Bar)
+    transitAccountCode: '1159' as SeededAccountCode,    // Persediaan Emas Dalam Perjalanan Kurir
     notes: 'Perhiasan jadi — kadarnya diuji dan diketik per dokumen.',
   },
   {
@@ -65,8 +72,8 @@ const DEFAULT_PRODUCTS = [
     defaultPurityPercent: null,
     purityLocked: false,
     requiresCertificate: false,
-    inventoryAccountCode: '11512',
-    transitAccountCode: '11551',
+    inventoryAccountCode: '1152' as SeededAccountCode,  // Scrap Gold
+    transitAccountCode: '1159' as SeededAccountCode,    // Persediaan Emas Dalam Perjalanan Kurir
     notes: 'Barang tua atau rusak untuk dilebur — kadar hasil uji.',
   },
   // Granul: kadarnya dipatok seperti batangan, tapi **tanpa sertifikat per
@@ -81,8 +88,8 @@ const DEFAULT_PRODUCTS = [
     defaultPurityPercent: GOLD_BULLION_PURITY_PERCENT,
     purityLocked: true,
     requiresCertificate: false,
-    inventoryAccountCode: '11543',
-    transitAccountCode: '11551',
+    inventoryAccountCode: '1157' as SeededAccountCode,  // Persediaan Logam Mulia Antam (Gold Bar)
+    transitAccountCode: '1159' as SeededAccountCode,    // Persediaan Emas Dalam Perjalanan Kurir
     notes: 'Butiran emas murni — ditakar per gram, tanpa nomor seri.',
   },
   {
@@ -93,11 +100,11 @@ const DEFAULT_PRODUCTS = [
     defaultPurityPercent: SILVER_BULLION_PURITY_PERCENT,
     purityLocked: true,
     requiresCertificate: false,
-    inventoryAccountCode: '11544',
-    transitAccountCode: '11552',
+    inventoryAccountCode: '1153' as SeededAccountCode,  // Silver & Logam Mulia Lain
+    transitAccountCode: '1159' as SeededAccountCode,    // Persediaan Emas Dalam Perjalanan Kurir
     notes: 'Butiran perak murni — ditakar per gram, tanpa nomor seri.',
   },
-] as const satisfies readonly {
+] satisfies readonly {
   code: string;
   name: string;
   metal: 'GOLD' | 'SILVER';

@@ -22,10 +22,9 @@ export default async function PartnersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Typography variant="h2">Mitra Usaha</Typography>
+        <Typography variant="h2">Master Supplier</Typography>
         <Typography variant="muted">
-          Semua lawan transaksi dalam satu daftar — badan usaha maupun perorangan, yang kita beli
-          darinya, yang kita jual kepadanya, atau keduanya.
+          Direktori mitra usaha — supplier, customer, dan kurir.
         </Typography>
       </div>
       <PartnersTable />

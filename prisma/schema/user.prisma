@@ -23,6 +23,10 @@ model User {
 
   metalLotsCreated MetalLot[] @relation("MetalLotCreatedBy")
 
+  metalMovementsCreated MetalMovement[] @relation("MetalMovementCreatedBy")
+  metalMovementsPosted  MetalMovement[] @relation("MetalMovementPostedBy")
+  metalMovementsVoided  MetalMovement[] @relation("MetalMovementVoidedBy")
+
   cashVouchersCreated  CashVoucher[] @relation("CashVoucherCreatedBy")
   cashVouchersReviewed CashVoucher[] @relation("CashVoucherReviewedBy")
   cashVouchersPosted   CashVoucher[] @relation("CashVoucherPostedBy")
@@ -39,6 +43,32 @@ model User {
   purchaseRequestsCreated  PurchaseRequest[] @relation("PurchaseRequestCreatedBy")
   purchaseRequestsApproved PurchaseRequest[] @relation("PurchaseRequestApprovedBy")
   purchaseRequestsVoided   PurchaseRequest[] @relation("PurchaseRequestVoidedBy")
+
+  purchasesCreated          PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
+  purchasesConfirmed        PurchaseOrder[] @relation("PurchaseOrderConfirmedBy")
+  purchasesDirectorApproved PurchaseOrder[] @relation("PurchaseOrderDirectorApprovedBy")
+  purchasesVoided           PurchaseOrder[] @relation("PurchaseOrderVoidedBy")
+
+  purchaseDeliveriesCreated      GoodsReceipt[] @relation("GoodsReceiptCreatedBy")
+  purchaseDeliveriesShipped      GoodsReceipt[] @relation("GoodsReceiptShippedBy")
+  purchaseDeliveriesConfirmed    GoodsReceipt[] @relation("GoodsReceiptConfirmedBy")
+  purchaseDeliveriesReceived     GoodsReceipt[] @relation("GoodsReceiptReceivedBy")
+  purchaseDeliveriesVaultOfficer GoodsReceipt[] @relation("GoodsReceiptVaultOfficer")
+  purchaseDeliveriesDirector     GoodsReceipt[] @relation("GoodsReceiptDirector")
+  purchaseDeliveriesVoided       GoodsReceipt[] @relation("GoodsReceiptVoidedBy")
+
+  salesOrdersCreated          SalesOrder[] @relation("SalesOrderCreatedBy")
+  salesOrdersConfirmed        SalesOrder[] @relation("SalesOrderConfirmedBy")
+  salesOrdersDirectorApproved SalesOrder[] @relation("SalesOrderDirectorApprovedBy")
+  salesOrdersVoided           SalesOrder[] @relation("SalesOrderVoidedBy")
+
+  salesDeliveriesCreated   SalesDelivery[] @relation("SalesDeliveryCreatedBy")
+  salesDeliveriesConfirmed SalesDelivery[] @relation("SalesDeliveryConfirmedBy")
+  salesDeliveriesVoided    SalesDelivery[] @relation("SalesDeliveryVoidedBy")
+
+  salesInvoicesDirectorApproved SalesInvoice[] @relation("SalesInvoiceDirectorApprovedBy")
+  salesInvoicesCreated          SalesInvoice[] @relation("SalesInvoiceCreatedBy")
+  salesInvoicesVoided           SalesInvoice[] @relation("SalesInvoiceVoidedBy")
 
   @@map("users")
 }

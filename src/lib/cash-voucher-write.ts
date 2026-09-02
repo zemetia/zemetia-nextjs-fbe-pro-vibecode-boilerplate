@@ -75,6 +75,8 @@ export async function assertPartnerUsable(partnerId: string | null): Promise<voi
 export interface VoucherReference {
   referenceType: string | null;
   referenceId: string | null;
+  purchaseId: string | null;
+  deliveryId: string | null;
   referenceCurrencyCode: string | null;
   referenceExchangeRate: number | null;
 }
@@ -82,6 +84,8 @@ export interface VoucherReference {
 const NO_REFERENCE: VoucherReference = {
   referenceType: null,
   referenceId: null,
+  purchaseId: null,
+  deliveryId: null,
   referenceCurrencyCode: null,
   referenceExchangeRate: null,
 };
@@ -104,9 +108,42 @@ export async function resolveVoucherReference(
 ): Promise<VoucherReference> {
   if (!referenceType || !referenceId) return NO_REFERENCE;
 
+  let purchaseId: string | null = null;
+  let deliveryId: string | null = null;
+  const normalizedType = referenceType.toLowerCase();
+
+  if (normalizedType.includes('purchase') || normalizedType === 'po') {
+    const purchase = await prisma.purchaseOrder.findFirst({
+      where: { OR: [{ id: referenceId }, { number: referenceId }] },
+      select: { id: true, currencyCode: true, exchangeRate: true },
+    });
+    if (purchase) {
+      purchaseId = purchase.id;
+      return {
+        referenceType,
+        referenceId,
+        purchaseId,
+        deliveryId: null,
+        referenceCurrencyCode: purchase.currencyCode,
+        referenceExchangeRate: purchase.exchangeRate ? Number(purchase.exchangeRate) : null,
+      };
+    }
+  } else if (normalizedType.includes('delivery') || normalizedType === 'ttb') {
+    const delivery = await prisma.goodsReceipt.findFirst({
+      where: { OR: [{ id: referenceId }, { number: referenceId }] },
+      select: { id: true, purchaseId: true },
+    });
+    if (delivery) {
+      deliveryId = delivery.id;
+      purchaseId = delivery.purchaseId;
+    }
+  }
+
   return {
     referenceType,
     referenceId,
+    purchaseId,
+    deliveryId,
     referenceCurrencyCode: null,
     referenceExchangeRate: null,
   };

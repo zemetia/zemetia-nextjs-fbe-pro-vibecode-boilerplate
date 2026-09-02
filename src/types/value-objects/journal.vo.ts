@@ -48,10 +48,20 @@ export interface JournalEntryVO {
   sourceLabel: string;
   referenceType?: string;
   referenceId?: string;
+  /** Kunci pengelompokan "per transaksi" (BKK/BBK/TTB/PEMBELIAN_LOCAL/dst). */
+  groupKey: string;
+  groupLabel: string;
+  /** Nomor dokumen sumber (voucher/TTB/PO) — jatuh ke `number` bila tak ada. */
+  documentNumber: string;
   totalAmount: number;
   totalAmountLabel: string;
   lineCount: number;
   lineCountLabel: string;
+  lines?: JournalLineVO[];
+  totalDebit?: number;
+  totalDebitLabel?: string;
+  totalCredit?: number;
+  totalCreditLabel?: string;
   isEditable: boolean;
   isPostable: boolean;
   isVoidable: boolean;

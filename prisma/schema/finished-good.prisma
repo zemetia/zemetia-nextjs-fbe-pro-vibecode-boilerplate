@@ -1,0 +1,43 @@
+/// Finished goods segment — master perhiasan jadi (`pttan_master_finished_goods`).
+///
+/// Terpisah dari `Product` karena barang jadi perhiasan di legacy membawa
+/// kosakata sendiri (karat, warna emas, berat standar, ongkos kerja per gram,
+/// HS code ekspor) yang tidak punya arti untuk batangan/scrap. `Product` tetap
+/// menjadi master barang logam mentah; `FinishedGood` adalah master barang jadi
+/// yang dikeluarkan modul produksi dan diekspor.
+model FinishedGood {
+  id String @id @default(cuid())
+
+  /// `JWL-RNG-750-001` — identitas manusiawi, unik.
+  sku  String @unique
+  name String
+
+  /// Jenis perhiasan — legacy: 'Cincin (Ring)' | 'Kalung (Necklace)' | dst.
+  type      String?
+  /// Kadar karat — legacy: '750' | '700' | '375'.
+  karat     String?
+  /// Kadar dalam persen — legacy: 75.0 untuk 750.
+  purity    Decimal? @db.Decimal(7, 4)
+  /// Warna emas — legacy: 'Yellow Gold' | 'Rose Gold' | 'White Gold'.
+  goldColor String?
+
+  /// Berat standar satu keping (gram) — dipakai estimasi produksi.
+  stdWeightGram      Decimal? @db.Decimal(14, 4)
+  /// Ongkos kerja per gram (IDR) — komponen nilai produksi.
+  laborFeeIdrPerGram Decimal? @db.Decimal(18, 2)
+
+  /// HS Code ekspor — legacy: '7113.19.90'.
+  hsCode           String?
+  /// Akun persediaan saat jadi — legacy: '1160' Perhiasan Siap Ekspor.
+  inventoryAccount String?
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@map("finished_goods")
+}

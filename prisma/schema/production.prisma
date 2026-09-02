@@ -77,3 +77,50 @@ model ProductionOrder {
   @@index([date])
   @@map("production_orders")
 }
+
+/// ==========================================
+/// SETTLEMENT PRODUKSI (`pttan_production_settlements`)
+/// ==========================================
+/// Cermin relasional settlement legacy (JO — Job Order): pertanggungjawaban
+/// fisik hasil produksi sebuah SPK. Invarian konservasi massa legacy:
+/// `jewelryOutputWeight + scrapReturnWeight + goldLossWeight = totalWipDeducted`
+/// (bahan awal), dan jurnalnya: WIP `11502` → perhiasan jadi `1160` + retur
+/// scrap `1152` + susut `5141` + ongkos kerja.
+model ProductionSettlement {
+  id String @id @default(cuid())
+
+  /// `JO-2026-001`.
+  joNumber  String  @unique
+  /// SPK asal — nomor legacy (`SPK-PROD-2026-001`); rantai disambung lewat
+  /// nomor, persis legacy.
+  spkNo     String
+  buyerName String?
+
+  date DateTime @db.Date
+
+  /// Berat hasil jadi (gram) → akun `1160` Perhiasan Siap Ekspor.
+  jewelryOutputWeight Decimal  @db.Decimal(14, 4)
+  /// Retur scrap workshop (gram) → akun `1152`.
+  scrapReturnWeight   Decimal  @db.Decimal(14, 4)
+  /// Susut lebur (gram) → akun `5141` Susut Produksi Normal.
+  goldLossWeight      Decimal  @db.Decimal(14, 4)
+  /// Total bahan WIP yang dipertanggungjawabkan — legacy: berat yang ditarik
+  /// dari `11502`. Invarian: output + scrap + loss = angka ini.
+  totalWipDeducted    Decimal? @db.Decimal(14, 4)
+
+  /// Ongkos kerja workshop (IDR) → kredit kas/bank.
+  laborFeeIdr Decimal @default(0) @db.Decimal(18, 2)
+
+  karat String?
+
+  /// Legacy: 'COMPLETED'. Teks bebas.
+  status String?
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([spkNo])
+  @@index([date])
+  @@map("production_settlements")
+}

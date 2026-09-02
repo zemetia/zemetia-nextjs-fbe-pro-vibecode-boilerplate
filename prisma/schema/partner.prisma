@@ -9,7 +9,7 @@
 /// dan tidak ada satu pun query yang bisa menjawab posisi total dengan mereka.
 ///
 /// **Peran menentukan kolom mana yang wajib, dan itu ditegakkan Zod, bukan
-/// skema** (`src/lib/validations/partner.ts`) — sama seperti `MetalPurchase` yang
+/// skema** (`src/lib/validations/partner.ts`) — sama seperti `PurchaseOrder` yang
 /// satu tabel untuk tiga bentuk dokumen. Postgres hanya menjamin minimal satu
 /// peran menyala lewat check constraint; sisanya di boundary API.
 ///
@@ -182,13 +182,17 @@ model Partner {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  country                 Country           @relation(fields: [countryId], references: [id], onDelete: Restrict)
-  contactCountry          Country?          @relation("PartnerContactNationality", fields: [contactCountryId], references: [id], onDelete: Restrict)
-  currency                Currency          @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
-  verificationRequestedBy User?             @relation("PartnerVerificationRequestedBy", fields: [verificationRequestedById], references: [id], onDelete: Restrict)
-  verificationReviewedBy  User?             @relation("PartnerVerificationReviewedBy", fields: [verificationReviewedById], references: [id], onDelete: Restrict)
-  suggestedInRequests     PurchaseRequest[] @relation("PurchaseRequestSuggestedPartner")
-  cashVouchers            CashVoucher[]
+  country                   Country           @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  contactCountry            Country?          @relation("PartnerContactNationality", fields: [contactCountryId], references: [id], onDelete: Restrict)
+  currency                  Currency          @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  verificationRequestedBy   User?             @relation("PartnerVerificationRequestedBy", fields: [verificationRequestedById], references: [id], onDelete: Restrict)
+  verificationReviewedBy    User?             @relation("PartnerVerificationReviewedBy", fields: [verificationReviewedById], references: [id], onDelete: Restrict)
+  suggestedInRequests       PurchaseRequest[] @relation("PurchaseRequestSuggestedPartner")
+  cashVouchers              CashVoucher[]
+  purchases                 PurchaseOrder[]
+  purchaseDeliveriesCouried GoodsReceipt[]    @relation("GoodsReceiptCourier")
+  salesOrders               SalesOrder[]
+  storageLocations          StorageLocation[]
 
   @@index([type])
   @@index([isSupplier])

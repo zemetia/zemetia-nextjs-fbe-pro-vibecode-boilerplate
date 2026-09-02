@@ -1611,10 +1611,6 @@ const Storage = {
             { code: 'DEP', name: 'Depreciation', description: 'Monthly depreciation entries' },
             { code: 'CLS', name: 'Closing', description: 'Month/year-end closing entries' },
             { code: 'S', name: 'Direct Swap', description: 'Direct swap transactions' },
-            { code: 'VCH', name: 'Voucher Kas/Bank', description: 'Voucher BKK/BBK/BCK/BKM/BBM' },
-            { code: 'PRQ', name: 'Purchase Request', description: 'Permintaan pembelian (PR)' },
-            { code: 'GRN', name: 'Goods Receipt', description: 'Tanda terima barang (TTB/GRN)' },
-            { code: 'SPK', name: 'SPK Produksi', description: 'Surat perintah kerja produksi perhiasan' },
         ];
     },
 
@@ -1713,8 +1709,7 @@ const Storage = {
             'JRN': 'JRN', 'CSH': 'CSH', 'BNK': 'BNK',
             'SAL': 'SAL', 'PUR': 'PUR', 'PMT': 'PMT',
             'RCP': 'RCP', 'ADJ': 'ADJ', 'DEP': 'DEP', 'CLS': 'CLS',
-            'S': 'S', 'BKK': 'BKK', 'BBK': 'BBK', 'BBM': 'BBM',
-            'VCH': 'VCH', 'PRQ': 'PRQ', 'GRN': 'GRN', 'SPK': 'SPK'
+            'S': 'S', 'BKK': 'BKK', 'BBK': 'BBK', 'BBM': 'BBM'
         };
 
         // Track max numbers found
@@ -1722,13 +1717,11 @@ const Storage = {
 
         // 1. Scan Journal Entries
         entries.forEach(entry => {
-            const ref = entry.reference || entry.entryNumber;
-            if (!ref) return;
-            const parts = String(ref).split('-');
+            if (!entry.reference) return;
+            const parts = entry.reference.split('-');
             if (parts.length < 2) return;
             const prefix = parts[0];
-            // Mendukung dua pola: JRN-000018 dan JRN-2026-0018 (nomor selalu di segmen terakhir)
-            const num = parseInt(parts[parts.length - 1], 10);
+            const num = parseInt(parts[1], 10);
             if (!isNaN(num) && typeMap[prefix]) {
                 const type = typeMap[prefix];
                 if (!maxNumbers[type] || num > maxNumbers[type]) maxNumbers[type] = num;
@@ -1823,34 +1816,6 @@ const Storage = {
                     "code": "1120",
                     "name": "Bank",
                     "type": "header",
-                    "category": "aset",
-                    "balance": 0
-          },
-          {
-                    "code": "1111",
-                    "name": "Bank (Header)",
-                    "type": "header",
-                    "category": "aset",
-                    "balance": 0
-          },
-          {
-                    "code": "1111-IDR",
-                    "name": "Bank BCA IDR (Operasional & Beli Lokal)",
-                    "type": "detail",
-                    "category": "aset",
-                    "balance": 0
-          },
-          {
-                    "code": "1111-USD",
-                    "name": "Bank BCA Devisa USD",
-                    "type": "detail",
-                    "category": "aset",
-                    "balance": 0
-          },
-          {
-                    "code": "1111-SGD",
-                    "name": "Bank BCA Devisa SGD",
-                    "type": "detail",
                     "category": "aset",
                     "balance": 0
           },
@@ -2046,13 +2011,6 @@ const Storage = {
           {
                     "code": "1159",
                     "name": "Persediaan Emas Dalam Perjalanan Kurir (Transit)",
-                    "type": "detail",
-                    "category": "aset",
-                    "balance": 0
-          },
-          {
-                    "code": "1160",
-                    "name": "Persediaan Perhiasan Emas Siap Ekspor",
                     "type": "detail",
                     "category": "aset",
                     "balance": 0
@@ -2751,13 +2709,6 @@ const Storage = {
                     "balance": 0
           },
           {
-                    "code": "2115",
-                    "name": "Hutang Cek / Bilyet Giro Beredar",
-                    "type": "detail",
-                    "category": "kewajiban",
-                    "balance": 0
-          },
-          {
                     "code": "2120",
                     "name": "Hutang Bank Jangka Pendek",
                     "type": "detail",
@@ -2963,13 +2914,6 @@ const Storage = {
           {
                     "code": "4115",
                     "name": "Penjualan Emas Digital",
-                    "type": "detail",
-                    "category": "pendapatan",
-                    "balance": 0
-          },
-          {
-                    "code": "4116",
-                    "name": "Penjualan Perhiasan Emas Ekspor (PPN 0%)",
                     "type": "detail",
                     "category": "pendapatan",
                     "balance": 0

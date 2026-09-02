@@ -1,0 +1,60 @@
+/// Scrap segment — pembelian pecahan emas untuk dilebur (`pttan_scrap_purchases`).
+///
+/// Cermin relasional dokumen legacy. Satu dokumen scrap = satu model, field
+/// persis bentuk `src/dto/scrapPurchase.dto.js`. Berbeda dari `PurchaseOrder`
+/// karena semantiknya berbeda: harga dihitung dari **fine gold** (berat kotor ×
+/// kadar XRF), ada nomor SPK lebur, dan vault tujuannya selalu scrap (`1152`).
+/// Memaksanya masuk `PurchaseOrder` akan memaksa kolom XRF/purity/SPK menumpang
+/// di tabel yang tidak dirancang untuk itu.
+
+/// Cara pembayaran scrap — `paymentMethod` di legacy: 'CASH' | 'TRANSFER' | dst.
+enum ScrapPaymentMethod {
+  CASH
+  TRANSFER
+  CHEQUE
+  GIRO
+  OTHER
+}
+
+model ScrapPurchase {
+  id String @id @default(cuid())
+
+  /// `NOTA-SCRAP-2026-001`.
+  receiptNo    String   @unique
+  /// `SPK-MLT-2026-001` — nomor SPK peleburan, di legacy dibuat otomatis.
+  spkMeltingNo String?
+  date         DateTime @db.Date
+
+  supplierId   String?
+  supplierName String
+
+  itemDescription String?
+
+  /// Berat kotor yang ditimbang (gram).
+  grossWeight       Decimal @db.Decimal(14, 4)
+  /// Kadar hasil uji XRF (persen, mis. 75.5).
+  xrfPurity         Decimal @db.Decimal(7, 4)
+  /// `grossWeight × xrfPurity / 100` — berat emas murni yang dibayar.
+  estimatedFineGold Decimal @db.Decimal(14, 4)
+  /// Harga per gram FINE gold (bukan per gram kotor).
+  pricePerFineGram  Decimal @db.Decimal(18, 2)
+  totalAmount       Decimal @db.Decimal(18, 2)
+
+  paymentMethod     ScrapPaymentMethod @default(CASH)
+  /// Akun kas/bank yang dikredit (legacy: '1110' kas kecil / '1111-IDR').
+  creditAccount     String?
+  creditAccountName String?
+  /// Vault tujuan — legacy: '1152' Vault Pecahan Scrap & Leburan.
+  targetVault       String?
+  targetVaultName   String?
+
+  /// Legacy: 'RECEIVED & STORED IN SCRAP VAULT'. Teks bebas.
+  status String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([supplierName])
+  @@map("scrap_purchases")
+}

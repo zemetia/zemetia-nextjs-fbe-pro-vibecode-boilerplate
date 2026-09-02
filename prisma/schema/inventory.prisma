@@ -44,6 +44,7 @@ model MetalLot {
   grossWeightGram Decimal @db.Decimal(14, 4)
   fineWeightGram  Decimal @db.Decimal(14, 4)
 
+  sourcePurchaseId        String?
   sourceProductionOrderId String?
 
   notes     String?
@@ -52,14 +53,287 @@ model MetalLot {
 
   createdById String
 
-  product               Product?         @relation(fields: [productId], references: [id], onDelete: Restrict)
-  sourceProductionOrder ProductionOrder? @relation("MetalLotProductionOrder", fields: [sourceProductionOrderId], references: [id], onDelete: Restrict)
-  createdBy             User             @relation("MetalLotCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  product               Product?                      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sourcePurchase        PurchaseOrder?                @relation(fields: [sourcePurchaseId], references: [id], onDelete: Restrict)
+  sourceProductionOrder ProductionOrder?              @relation("MetalLotProductionOrder", fields: [sourceProductionOrderId], references: [id], onDelete: Restrict)
+  createdBy             User                          @relation("MetalLotCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  sourceCertificate     PurchaseOrderItemCertificate?
+  movementLines         MetalMovementLine[]
+  /// Baris surat jalan yang mengeluarkan lot ini.
+  saleLines             SalesDeliveryLine[]
 
   @@index([form])
   @@index([metal])
   @@index([productId])
+  @@index([sourcePurchaseId])
   @@index([sourceProductionOrderId])
   @@index([balStage])
   @@map("metal_lots")
+}
+
+/// Bentuk fisik satu lokasi penyimpanan.
+enum StorageLocationType {
+  VAULT
+  SORTING
+  PRODUCTION
+  STORE
+  REFINERY
+  TRANSIT
+}
+
+/// Tempat fisik satu lot bisa berada — brankas, ruang sortir, area produksi, dst.
+///
+/// **Tidak menyimpan kode akun.** Akun buku besar yang dijurnal saat barang
+/// masuk/keluar diturunkan dari kombinasi (`MetalPurchase.type`, bentuk produk),
+/// bukan dari lokasi yang dipilih petugas — supaya lokasi yang salah pilih tidak
+/// pernah bisa membuat jurnal salah akun (`resolveReceiptAccount()` di
+/// `src/lib/metal-purchase.ts`).
+model StorageLocation {
+  id   String              @id @default(cuid())
+  code String              @unique
+  name String
+  type StorageLocationType
+
+  /// Brankas milik pihak ketiga (mis. refiner yang menahan stok konsinyasi).
+  /// `null` untuk lokasi milik sendiri.
+  partnerId String?
+
+  /// --- Pemetaan akun gaya legacy (`erp_warehouses`) ---
+  /// Legacy menyimpan kode akun langsung di master vault (`1157`, `1158`,
+  /// `11502`, `1160`, `1152`, `1153`) dan operator memilih vault → akun ikut.
+  /// Kolom ini mempertahankan fakta itu sebagai data (untuk migrasi & laporan),
+  /// sementara penjurnalan modul baru tetap boleh memakai turunan
+  /// `resolveReceiptAccount()` bila sudah ada.
+  accountCode  String?
+  accountName  String?
+  /// Nama fisik lokasi & penanggung jawab — field legacy `location`/`manager`.
+  locationName String?
+  manager      String?
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partner   Partner?            @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  lines     MetalMovementLine[]
+  /// Baris surat jalan yang mengeluarkan barang dari lokasi ini.
+  saleLines SalesDeliveryLine[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("storage_locations")
+}
+
+/// Jenis peristiwa yang menggerakkan logam. Cuma `RECEIPT` yang punya gerbang
+/// tulis di tahap ini (penerimaan pembelian) — nilai lain sudah dianggarkan di
+/// enum supaya modul produksi/penjualan berikutnya tidak perlu migration baru
+/// hanya untuk menambah jenis mutasi, tapi belum satu pun jalur menulisnya.
+enum MetalMovementType {
+  RECEIPT
+  SORT
+  TRANSFER
+  REFINE_OUT
+  REFINE_IN
+  PRODUCTION
+  ISSUE
+  ADJUSTMENT
+}
+
+/// DRAFT  — belum menggerakkan stok (tidak dipakai jalur RECEIPT; disiapkan
+///          untuk mutasi masa depan yang butuh draft, mis. penyesuaian).
+/// POSTED — sudah menggerakkan stok; inilah yang dihitung `metal-stock.ts`.
+/// VOID   — dibatalkan; barisnya tetap disimpan, berhenti dihitung.
+enum MetalMovementStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+enum MetalMovementDirection {
+  IN
+  OUT
+}
+
+/// Satu peristiwa mutasi logam — kepala dokumennya. Baris (`MetalMovementLine`)
+/// yang menyimpan lot, lokasi, dan beratnya; header cuma menjawab kapan, jenis
+/// apa, dan dari dokumen sumber mana.
+///
+/// **Sisa stok tiap lot adalah turunan dari sini** (`Σ IN − Σ OUT` pada baris
+/// `POSTED`), bukan kolom di `MetalLot` — lihat `src/lib/metal-stock.ts`. Untuk
+/// `RECEIPT`, lotnya baru lahir di movement yang sama, jadi turunannya persis
+/// sama dengan berat lot itu sendiri sampai ada mutasi `OUT` pertamanya.
+model MetalMovement {
+  id     String              @id @default(cuid())
+  /// `MOV-202608-0001`, direset tiap bulan.
+  number String              @unique
+  type   MetalMovementType
+  status MetalMovementStatus @default(DRAFT)
+  date   DateTime            @db.Date
+
+  /// Dokumen sumber yang melahirkan mutasi ini, mis. `metal_purchase_delivery` +
+  /// id-nya. Sengaja tanpa FK — pola yang sama dengan `JournalEntry` — supaya
+  /// buku mutasi berdiri sendiri dan tidak bisa ikut terhapus saat dokumen
+  /// sumbernya dihapus.
+  referenceType String?
+  referenceId   String?
+
+  /// Susut/tambahan campuran pada mutasi peleburan — `0` untuk `RECEIPT`.
+  lossFineGram Decimal @default(0) @db.Decimal(14, 4)
+  alloyGram    Decimal @default(0) @db.Decimal(14, 4)
+
+  notes String?
+
+  createdById String
+  postedById  String?
+  postedAt    DateTime?
+  voidedById  String?
+  voidedAt    DateTime?
+  voidReason  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User  @relation("MetalMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  postedBy  User? @relation("MetalMovementPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  voidedBy  User? @relation("MetalMovementVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  lines MetalMovementLine[]
+
+  @@index([type])
+  @@index([status])
+  @@index([date])
+  @@index([referenceType, referenceId])
+  @@map("metal_movements")
+}
+
+/// Satu baris mutasi — satu lot, satu lokasi, satu arah.
+model MetalMovementLine {
+  id         String                 @id @default(cuid())
+  movementId String
+  direction  MetalMovementDirection
+  lotId      String
+  locationId String
+
+  pieceCount      Int     @default(0)
+  grossWeightGram Decimal @db.Decimal(14, 4)
+  purityPercent   Decimal @db.Decimal(7, 4)
+  fineWeightGram  Decimal @db.Decimal(14, 4)
+
+  note String?
+
+  movement MetalMovement   @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  lot      MetalLot        @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  location StorageLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@index([movementId])
+  @@index([lotId])
+  @@index([locationId])
+  @@map("metal_movement_lines")
+}
+
+/// ==========================================
+/// TRANSFER ANTAR-VAULT (`pttan_vault_transfers`)
+/// ==========================================
+/// Cermin relasional dokumen transfer legacy: operator memilih brankas asal &
+/// tujuan, akun COA mengikuti vault (dipetakan otomatis di belakang layar),
+/// lalu sistem menulis jurnal Debet vault tujuan / Kredit vault asal.
+model VaultTransfer {
+  id String @id @default(cuid())
+
+  /// `TRF-2026-001`.
+  transferNumber String?  @unique
+  date           DateTime @db.Date
+
+  /// Vault asal & tujuan — kode master (`WH-VAULT-01` dst.) + akun COA yang
+  /// mengikutinya, persis legacy.
+  fromVaultId   String?
+  fromVaultName String?
+  fromAccount   String?
+  toVaultId     String?
+  toVaultName   String?
+  toAccount     String?
+
+  itemCode String?
+  itemName String
+
+  quantityGrams     Decimal  @db.Decimal(14, 4)
+  estimatedValueIdr Decimal? @db.Decimal(18, 2)
+
+  transferNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([fromVaultId])
+  @@index([toVaultId])
+  @@map("vault_transfers")
+}
+
+/// ==========================================
+/// PERAK & ALLOY (`pttan_silver_transactions`)
+/// ==========================================
+/// Dua jenis transaksi perak di legacy: RECEIPT (penerimaan granul perak murni
+/// ke vault `1153`) dan ALLOY_ADDITION (penambahan perak ke emas batangan,
+/// dengan hitung kadar akhir paduan). Satu model, `transactionType` yang
+/// membedakan — persis legacy.
+enum SilverTransactionType {
+  RECEIPT
+  ALLOY_ADDITION
+}
+
+model SilverTransaction {
+  id String @id @default(cuid())
+
+  transactionType SilverTransactionType
+  /// `SLV-REC-000101` / `ALLOY-SLV-000101`.
+  docNo           String?               @unique
+  date            DateTime              @db.Date
+
+  // ── RECEIPT ────────────────────────────────────────────────────────────────
+  supplierName String?
+  itemName     String?
+  /// Kadar perak — legacy: 99.9.
+  purity       Decimal? @db.Decimal(7, 4)
+
+  weightGrams   Decimal  @db.Decimal(14, 4)
+  pricePerGram  Decimal? @db.Decimal(18, 2)
+  totalValueIdr Decimal? @db.Decimal(18, 2)
+
+  /// Akun kas/bank sumber dana — legacy: '1111-IDR'.
+  sourceAccount      String?
+  /// Vault tujuan — legacy: '1153' Silver & Logam Mulia Lain.
+  targetVaultAccount String?
+
+  // ── ALLOY_ADDITION ─────────────────────────────────────────────────────────
+  /// Vault emas tujuan — legacy: 'WH-VAULT-01' → akun '1157' / '11502'.
+  targetVaultId   String?
+  targetVaultName String?
+  targetAccount   String?
+  /// Referensi batangan emas yang dicampur.
+  goldBarRef      String?
+
+  goldInitialWeightGram Decimal? @db.Decimal(14, 4)
+  goldPurityInitial     Decimal? @db.Decimal(7, 4)
+
+  silverWeightGram    Decimal? @db.Decimal(14, 4)
+  silverPurity        Decimal? @db.Decimal(7, 4)
+  silverPricePerGram  Decimal? @db.Decimal(18, 2)
+  totalSilverValueIdr Decimal? @db.Decimal(18, 2)
+
+  totalFinalWeightGram Decimal? @db.Decimal(14, 4)
+  /// Kadar akhir paduan — `fineGold / totalFinal × 100`, dibulatkan 2 desimal.
+  finalEstimatedPurity Decimal? @db.Decimal(7, 4)
+
+  operatorName String?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([transactionType])
+  @@index([date])
+  @@map("silver_transactions")
 }

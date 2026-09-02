@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import type { Route } from 'next';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { CheckCircle2, Clock, FileText, Plus, Search, ShoppingCart } from 'lucide-react';
@@ -26,8 +24,8 @@ import type {
   PurchaseRequestPriority,
   PurchaseRequestStatus,
 } from '@/types/value-objects';
+import { PurchaseRequestForm } from './PurchaseRequestForm';
 import { PurchaseRequestsTable } from './PurchaseRequestsTable';
-import { requestNewHref } from './routes';
 
 const PAGE_SIZE = 20;
 const ALL = 'all';
@@ -55,6 +53,8 @@ export function PurchaseRequestsView() {
   const [status, setStatus] = useState(ALL);
   const [priority, setPriority] = useState(ALL);
   const [page, setPage] = useState(1);
+  // Mode legacy: form input ditampilkan inline di halaman yang sama.
+  const [showForm, setShowForm] = useState(false);
 
   const permissions = new Set(session?.user.permissions ?? []);
   const can = (key: PermissionKey) => permissions.has(key);
@@ -200,13 +200,29 @@ export function PurchaseRequestsView() {
         </div>
 
         {can('purchase-requests:create') && (
-          <Link href={requestNewHref() as Route}>
-            <Button leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}>
-              Buat Permintaan
-            </Button>
-          </Link>
+          <Button
+            leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
+            onClick={() => setShowForm((visible) => !visible)}
+          >
+            {showForm ? 'Tutup Form' : 'Buat Permintaan'}
+          </Button>
         )}
       </div>
+
+      {/* Form input inline (mode legacy) */}
+      {showForm && (
+        <Card>
+          <CardContent className="pt-6">
+            <PurchaseRequestForm
+              onSaved={() => {
+                setShowForm(false);
+                void refetch();
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Table */}
       <PurchaseRequestsTable

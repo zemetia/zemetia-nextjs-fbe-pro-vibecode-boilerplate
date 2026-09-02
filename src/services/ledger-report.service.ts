@@ -65,7 +65,7 @@ function toRowVO(dto: GeneralLedgerRowDTO): GeneralLedgerRowVO {
     dateLabel: formatDateShort(dto.date),
     description: dto.description,
     source: dto.source,
-    sourceLabel: JOURNAL_SOURCE_LABELS[dto.source],
+    sourceLabel: JOURNAL_SOURCE_LABELS[dto.source] ?? dto.source,
     memo: dto.memo ?? EMPTY,
     debit: dto.debit,
     credit: dto.credit,

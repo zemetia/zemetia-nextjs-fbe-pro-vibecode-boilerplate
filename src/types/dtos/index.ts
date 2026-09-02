@@ -18,4 +18,5 @@ export type * from './ledger-report.dto';
 export type * from './supply.dto';
 export type * from './purchase-request.dto';
 export type * from './metal-purchase.dto';
-export type * from './sales-order.dto';
+export type * from './sales.dto';
+export type * from './unit.dto';

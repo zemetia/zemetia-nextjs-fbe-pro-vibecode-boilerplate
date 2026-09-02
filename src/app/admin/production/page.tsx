@@ -1,34 +1,28 @@
-import { redirect } from 'next/navigation';
-import type { Metadata } from 'next';
+﻿'use client';
 
-import { requirePermission } from '@/lib/rbac';
-import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { Typography } from '@/components/ui/Typography';
-import { ProductionOrdersView } from './_components/ProductionOrdersView';
+import dynamic from 'next/dynamic';
+import { AdminPageWrapper } from '@/components/layout/AdminPageWrapper';
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-};
+interface PageViewProps {
+  setActivePage: (pageId: string) => void;
+}
 
-export default async function ProductionOrdersPage() {
-  try {
-    await requirePermission('production-orders:list');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) redirect('/sign-in');
-    if (error instanceof ForbiddenError) redirect('/');
-    throw error;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <Typography variant="h2">SPK Produksi</Typography>
-        <Typography variant="muted">
-          Rencana pengerjaan perhiasan — berapa emas yang diminta, berapa yang sudah jadi barang, dan
-          berapa yang masih di tangan produksi.
-        </Typography>
+const View = dynamic<PageViewProps>(() => import('@/views/JewelryProduction'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center">
+      <div className="flex items-center gap-2 text-fg-soft font-medium">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+        <span>Memuat modul...</span>
       </div>
-      <ProductionOrdersView />
     </div>
+  ),
+});
+
+export default function Page() {
+  return (
+    <AdminPageWrapper>
+      {({ setActivePage }) => <View setActivePage={setActivePage} />}
+    </AdminPageWrapper>
   );
 }

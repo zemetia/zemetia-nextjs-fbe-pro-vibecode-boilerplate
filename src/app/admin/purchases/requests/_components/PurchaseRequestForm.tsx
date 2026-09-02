@@ -59,9 +59,19 @@ const PRIORITY_TABS: SegmentedOption<PurchaseRequestPriority>[] = [
 export interface PurchaseRequestFormProps {
   requestId?: string;
   initialForm?: PurchaseRequestFormState;
+  /** Dipakai saat form dirender inline di halaman list (mode legacy):
+   *  setelah tersimpan, halaman tidak pindah ke detail — callback dipanggil
+   *  supaya list di-refresh dan form ditutup. */
+  onSaved?: (saved: { id: string; number: string }) => void;
+  onCancel?: () => void;
 }
 
-export function PurchaseRequestForm({ requestId, initialForm }: PurchaseRequestFormProps) {
+export function PurchaseRequestForm({
+  requestId,
+  initialForm,
+  onSaved,
+  onCancel,
+}: PurchaseRequestFormProps) {
   const isEdit = requestId !== undefined;
   const router = useRouter();
   const toast = useToast();
@@ -89,7 +99,11 @@ export function PurchaseRequestForm({ requestId, initialForm }: PurchaseRequestF
           ? `Permintaan ${saved.number} berhasil diperbarui.`
           : `Permintaan ${saved.number} berhasil diajukan sebagai draft.`,
       );
-      router.push(requestDetailHref(saved.id) as Route);
+      if (onSaved) {
+        onSaved(saved);
+      } else {
+        router.push(requestDetailHref(saved.id) as Route);
+      }
     },
     onError: (err) => toast.apiError(err, 'Permintaan pembelian gagal disimpan.'),
   });
@@ -100,7 +114,7 @@ export function PurchaseRequestForm({ requestId, initialForm }: PurchaseRequestF
       ...prev,
       category: nextCategory,
       currencyCode: nextCategory === 'GOLD_IMPORT' ? 'USD' : 'IDR',
-      items: [emptyItem(nextCategory)],
+      items: [emptyItem()],
     }));
   }
 
@@ -257,9 +271,15 @@ export function PurchaseRequestForm({ requestId, initialForm }: PurchaseRequestF
       <FormActionBar
         submitLabel={isEdit ? 'Simpan Perubahan' : 'Ajukan Permintaan (Draft)'}
         isSubmitting={mutation.isPending}
-        onCancel={() =>
-          router.push((isEdit ? requestDetailHref(requestId) : requestListHref()) as Route)
-        }
+        onCancel={() => {
+          if (onCancel) {
+            onCancel();
+          } else {
+            router.push(
+              (isEdit ? requestDetailHref(requestId) : requestListHref()) as Route,
+            );
+          }
+        }}
       />
     </form>
   );

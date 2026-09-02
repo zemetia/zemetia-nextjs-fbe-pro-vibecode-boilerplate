@@ -6,11 +6,112 @@ import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/cn"
 
-function Select({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+export interface NativeSelectProps
+  extends React.SelectHTMLAttributes<HTMLSelectElement> {
+  error?: string | boolean;
+  helperText?: React.ReactNode;
+  wrapperClassName?: string;
 }
+
+const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
+  function NativeSelect(
+    {
+      className,
+      wrapperClassName,
+      children,
+      error,
+      helperText,
+      disabled,
+      ...props
+    },
+    ref
+  ) {
+    const hasError = Boolean(error);
+    const errorMessage = typeof error === 'string' ? error : null;
+
+    // Detect if className specifies width constraints (e.g. max-w-[180px], w-48)
+    const widthMatch = className?.match(/(?:^|\s)(max-w-\S+|w-\S+)/g);
+    const wrapperWidthClass = widthMatch ? widthMatch.join(' ') : 'w-full';
+
+    return (
+      <div className={cn('relative', wrapperWidthClass, wrapperClassName)}>
+        <select
+          ref={ref}
+          disabled={disabled}
+          className={cn(
+            'flex h-10 w-full appearance-none rounded-sm border border-line bg-field px-3.5 py-2 pr-10 text-sm text-fg outline-none transition-all duration-150 cursor-pointer',
+            'focus:border-gold focus:ring-1 focus:ring-gold/30',
+            'disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-field/40',
+            '[&>option]:bg-surface [&>option]:text-fg',
+            hasError && 'border-danger focus:border-danger focus:ring-danger/30',
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </select>
+        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-fg-muted">
+          <ChevronDownIcon className="h-4 w-4 opacity-70" />
+        </div>
+        {errorMessage && (
+          <p className="mt-1.5 text-xs text-danger-light">{errorMessage}</p>
+        )}
+        {!errorMessage && helperText && (
+          <p className="mt-1.5 text-xs text-fg-muted">{helperText}</p>
+        )}
+      </div>
+    );
+  }
+);
+NativeSelect.displayName = 'NativeSelect';
+
+export interface SelectProps
+  extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
+  error?: string | boolean;
+  helperText?: React.ReactNode;
+  wrapperClassName?: string;
+  onValueChange?: (value: string) => void;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  dir?: 'ltr' | 'rtl';
+}
+
+const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
+  function Select(props, ref) {
+    const { children, ...rest } = props;
+
+    // Detect native select usage: presence of onChange, name, or <option>/<optgroup> children
+    const isNative =
+      'onChange' in rest ||
+      'name' in rest ||
+      Boolean(
+        React.Children.toArray(children).some(
+          (child) =>
+            React.isValidElement(child) &&
+            (child.type === 'option' || child.type === 'optgroup')
+        )
+      );
+
+    if (isNative) {
+      return (
+        <NativeSelect ref={ref} {...props}>
+          {children}
+        </NativeSelect>
+      );
+    }
+
+    return (
+      <SelectPrimitive.Root
+        data-slot="select"
+        {...(rest as unknown as React.ComponentProps<typeof SelectPrimitive.Root>)}
+      >
+        {children}
+      </SelectPrimitive.Root>
+    );
+  }
+);
+Select.displayName = 'Select';
 
 function SelectGroup({
   ...props
@@ -178,6 +279,7 @@ function SelectScrollDownButton({
 
 export {
   Select,
+  NativeSelect,
   SelectContent,
   SelectGroup,
   SelectItem,

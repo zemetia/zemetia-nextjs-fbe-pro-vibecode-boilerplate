@@ -1,33 +1,28 @@
-import { redirect } from 'next/navigation';
-import type { Metadata } from 'next';
+'use client';
 
-import { requirePermission } from '@/lib/rbac';
-import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { Typography } from '@/components/ui/Typography';
-import { PurchaseRequestsView } from './_components/PurchaseRequestsView';
+import dynamic from 'next/dynamic';
+import { AdminPageWrapper } from '@/components/layout/AdminPageWrapper';
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-};
+interface PageViewProps {
+  setActivePage: (pageId: string) => void;
+}
 
-export default async function PurchaseRequestsPage() {
-  try {
-    await requirePermission('purchase-requests:list');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) redirect('/sign-in');
-    if (error instanceof ForbiddenError) redirect('/');
-    throw error;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <Typography variant="h2">Permintaan Pembelian (PR)</Typography>
-        <Typography variant="muted">
-          Pengajuan kebutuhan barang logam mulia &amp; operasional divisi sebelum diterbitkan menjadi Purchase Order.
-        </Typography>
+const View = dynamic<PageViewProps>(() => import('@/views/PurchaseRequestPage'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center">
+      <div className="flex items-center gap-2 text-fg-soft font-medium">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+        <span>Memuat modul...</span>
       </div>
-      <PurchaseRequestsView />
     </div>
+  ),
+});
+
+export default function Page() {
+  return (
+    <AdminPageWrapper>
+      {({ setActivePage }) => <View setActivePage={setActivePage} />}
+    </AdminPageWrapper>
   );
 }

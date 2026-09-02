@@ -1,34 +1,28 @@
-import { redirect } from 'next/navigation';
-import type { Metadata } from 'next';
+﻿'use client';
 
-import { requirePermission } from '@/lib/rbac';
-import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { Typography } from '@/components/ui/Typography';
-import { MasterChequeView } from './_components/MasterChequeView';
+import dynamic from 'next/dynamic';
+import { AdminPageWrapper } from '@/components/layout/AdminPageWrapper';
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false },
-};
+interface PageViewProps {
+  setActivePage: (pageId: string) => void;
+}
 
-export default async function MasterChequePage() {
-  try {
-    await requirePermission('cash-vouchers:list');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) redirect('/sign-in');
-    if (error instanceof ForbiddenError) redirect('/admin');
-    throw error;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <Typography variant="h2">Master Buku Cek / Bilyet Giro</Typography>
-        <Typography variant="muted">
-          Registrasi buku cek/BG bank, kontrol batas plafon per lembar, dan pemantauan status
-          lembar cek siap pakai atau menunggu kliring (Akun 2115).
-        </Typography>
+const View = dynamic<PageViewProps>(() => import('@/views/MasterChequePage'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center">
+      <div className="flex items-center gap-2 text-fg-soft font-medium">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+        <span>Memuat modul...</span>
       </div>
-      <MasterChequeView />
     </div>
+  ),
+});
+
+export default function Page() {
+  return (
+    <AdminPageWrapper>
+      {({ setActivePage }) => <View setActivePage={setActivePage} />}
+    </AdminPageWrapper>
   );
 }

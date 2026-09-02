@@ -47,12 +47,35 @@ enum VoucherStatus {
   VOID
 }
 
+/// Menyatakan fase pembayaran terhadap dokumen pembelian.
+///
+/// `PRE_RECEIPT` = uang muka / pembayaran sebelum TTB / barang datang. Dalam
+/// flow legacy, ini masuk ke akun uang muka pembelian (`1121-1` / `1121-2` /
+/// `1135`) dan boleh punya `purchaseId` tanpa `deliveryId`.
+/// `POST_RECEIPT` = pelunasan / pembayaran setelah barang diterima dan TTB
+/// sudah jelas.
+enum VoucherPaymentStage {
+  PRE_RECEIPT
+  POST_RECEIPT
+  OTHER
+}
+
 /// Untuk siapa uangnya. Menentukan sumber pilihan "Pay to / Receive from" di
 /// layar dan akun default baris pertama — bukan sekadar label pelaporan.
 enum VoucherCategory {
   GENERAL_EXPENSE
   EMPLOYEE
   SUPPLIER
+
+  /// --- Kategori pembayaran PO legacy (`paymentCategory` di
+  /// `VoucherManagement` legacy) ---
+  /// Menentukan akun default & pengaruh ke sisa hutang komersial PO.
+  /// `PO_PRINCIPAL` mengurangi sisa hutang; `CUSTOMS_DUTY_PPH22` (PPh 22 impor
+  /// 0,25%), `LOGISTICS_HANDLING`, dan `OTHER_EXPENSE` dicatat terpisah.
+  PO_PRINCIPAL
+  CUSTOMS_DUTY_PPH22
+  LOGISTICS_HANDLING
+  OTHER_EXPENSE
 }
 
 /// Cara uangnya berpindah. Tidak semua metode sah untuk setiap `fund` — aturannya
@@ -113,10 +136,14 @@ enum VoucherTransferChannel {
 /// `MetalMovement` — jurnal adalah buku yang berdiri sendiri, dan dokumen sumber
 /// tidak boleh bisa menariknya ikut terhapus.
 model CashVoucher {
-  id     String        @id @default(cuid())
+  id           String              @id @default(cuid())
   /// `BKK-202608-0042` / `BKM-` / `BBK-` / `BBM-` / `BM-`, direset tiap bulan.
-  number String        @unique
-  status VoucherStatus @default(DRAFT)
+  number       String              @unique
+  status       VoucherStatus       @default(DRAFT)
+  /// Fase pembayaran terhadap pembelian. Ini membuat flow uang muka sebelum
+  /// penerimaan barang jadi pertama-class di database, bukan hanya implikasi
+  /// dari akun jurnal.
+  paymentStage VoucherPaymentStage @default(PRE_RECEIPT)
 
   fund      VoucherFund
   direction VoucherDirection
@@ -205,17 +232,42 @@ model CashVoucher {
   postedBy   User?    @relation("CashVoucherPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
   voidedBy   User?    @relation("CashVoucherVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
 
+  /// Foreign key ke dokumen PO (PurchaseOrder) jika voucher ini membayar pembelian logam
+  purchaseId String?
+  purchase   PurchaseOrder? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen TTB / Penerimaan Barang (GoodsReceipt)
+  deliveryId String?
+  delivery   GoodsReceipt? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen SO (SalesOrder) — DP dari customer yang menempel
+  /// pada ordernya.
+  salesOrderId String?
+  salesOrder   SalesOrder? @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+
+  /// Foreign key ke dokumen Faktur Penjualan (SalesInvoice) — pelunasan yang
+  /// menunjuk fakturnya.
+  salesInvoiceId String?
+  salesInvoice   SalesInvoice? @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+
   /// Dari rekening mana uangnya keluar (atau ke mana ia masuk).
-  funds CashVoucherFundLine[]
-  lines CashVoucherLine[]
+  funds          CashVoucherFundLine[]
+  lines          CashVoucherLine[]
+  journalEntries JournalEntry[]
 
   @@index([status])
   @@index([date])
   @@index([fund, direction])
   @@index([category])
+  @@index([paymentStage])
   @@index([paymentMethod])
   @@index([partnerId])
   @@index([referenceType, referenceId])
+  @@index([purchaseId])
+  @@index([purchaseId, paymentStage])
+  @@index([deliveryId])
+  @@index([salesOrderId])
+  @@index([salesInvoiceId])
   /// Cek/giro yang belum cair dicari lewat kolom ini.
   @@index([dueDate])
   @@map("cash_vouchers")

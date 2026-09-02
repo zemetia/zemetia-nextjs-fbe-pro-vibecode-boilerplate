@@ -1,247 +1,139 @@
 @import "tailwindcss";
 
-/* Dark mode is driven by a `dark` class on <html>, set server-side from the
-   `zst_app` cookie — not by the OS media query. Without this, Tailwind v4's
-   stock `dark:` variant fires on `prefers-color-scheme` while our tokens stay
-   light, which is what made shadcn surfaces unreadable. */
+/* PT TAN ERP — Tailwind v4 Theme & Dark System
+   Aplikasi ini gelap-saja: tema gelap adalah palet dasar.
+   color-scheme: dark di @layer base membuat kontrol browser ikut gelap. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* ─── Typography ─────────────────────────────────────────────── */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* ─── Tipografi ─────────────────────────────────────────────── */
+  --font-sans: var(--font-inter), 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-outfit), 'Outfit', sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "Cascadia Code", monospace;
 
-  /* ─── Brand / Semantic Colors (oklch for wide-gamut) ───────────
-     Light theme only. Elevation in light mode goes *lighter* as it
-     rises, and leans on shadow rather than on a lighter fill.      */
+  /* ─── Permukaan Dasar PT TAN ────────────────────────────────── */
+  --color-canvas: #0b0f19;
+  --color-surface: #131b2e;
+  --color-surface-raised: #1e293b;
+  --color-surface-overlay: #1e293b;
+  --color-surface-sunken: #080c14;
+  --color-card: rgba(23, 32, 54, 0.75);
+  --color-card-hover: rgba(30, 42, 70, 0.85);
+  --color-field: rgba(15, 23, 42, 0.7);
+  --color-ink: #0f172a;
 
-  /* Surface */
-  --color-background: oklch(0.975 0.004 264);
-  --color-surface: oklch(1 0 0);
-  --color-surface-raised: oklch(0.968 0.005 264);
-  --color-surface-overlay: oklch(1 0 0);
-  --color-surface-sunken: oklch(0.955 0.006 264);
+  /* ─── Teks & Garis ───────────────────────────────────────────── */
+  --color-fg: #f8fafc;
+  --color-fg-soft: #94a3b8;
+  --color-fg-muted: #64748b;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-hover: rgba(245, 158, 11, 0.3);
 
-  /* Text */
-  --color-foreground: oklch(0.24 0.024 264);
-  --color-foreground-muted: oklch(0.5 0.021 264);
-  --color-foreground-subtle: oklch(0.64 0.017 264);
+  /* ─── 5 Warna Resmi PT TAN (Gold, Emerald, Sky/Blue, Orange, Danger) ─ */
+  --color-gold: #f59e0b;
+  --color-gold-light: #fbbf24;
+  --color-gold-dark: #d97706;
+  --color-gold-glow: rgba(245, 158, 11, 0.2);
 
-  /* Border */
-  --color-border: oklch(0.918 0.007 264);
-  --color-border-strong: oklch(0.848 0.011 264);
-  --color-input: oklch(0.898 0.009 264);
+  --color-emerald: #10b981;
+  --color-emerald-light: #34d399;
+  --color-emerald-dark: #059669;
 
-  /* Primary — indigo */
-  --color-primary: oklch(0.518 0.195 265);
-  --color-primary-hover: oklch(0.462 0.192 265);
-  --color-primary-active: oklch(0.412 0.176 265);
-  --color-primary-foreground: oklch(0.995 0.002 265);
-  --color-primary-subtle: oklch(0.518 0.195 265 / 0.1);
-  --color-primary-muted: oklch(0.518 0.195 265 / 0.18);
-  --color-primary-glow: oklch(0.518 0.195 265 / 0.28);
+  --color-blue: #3b82f6;
+  --color-sky: #0284c7;
+  --color-sky-dark: #0369a1;
+  --color-sky-light: #38bdf8;
 
-  /* Brand accent — gold (PT TAN, perhiasan) */
-  --color-brand: oklch(0.735 0.128 79);
-  --color-brand-hover: oklch(0.675 0.126 79);
-  --color-brand-foreground: oklch(0.28 0.05 79);
-  --color-brand-subtle: oklch(0.735 0.128 79 / 0.16);
+  --color-orange: #f97316;
+  --color-orange-light: #fb923c;
+  --color-orange-dark: #ea580c;
 
-  /* Destructive */
-  --color-destructive: oklch(0.552 0.222 27.3);
-  --color-destructive-hover: oklch(0.492 0.212 27.3);
-  --color-destructive-foreground: oklch(0.99 0.004 27.3);
-  --color-destructive-subtle: oklch(0.552 0.222 27.3 / 0.1);
+  --color-danger: #ef4444;
+  --color-danger-light: #f87171;
 
-  /* Success */
-  --color-success: oklch(0.548 0.135 158.3);
-  --color-success-hover: oklch(0.492 0.128 158.3);
-  --color-success-foreground: oklch(0.99 0.004 158.3);
-  --color-success-subtle: oklch(0.548 0.135 158.3 / 0.12);
+  /* ─── Brand & Semantic Tokens (Memetakan shadcn/ui ke PT TAN) ─── */
+  --color-background: #0b0f19;
+  --color-foreground: #f8fafc;
+  --color-foreground-muted: #94a3b8;
+  --color-foreground-subtle: #64748b;
 
-  /* Warning */
-  --color-warning: oklch(0.712 0.158 70.1);
-  --color-warning-hover: oklch(0.652 0.152 70.1);
-  --color-warning-foreground: oklch(0.26 0.05 70.1);
-  --color-warning-subtle: oklch(0.712 0.158 70.1 / 0.16);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-input: rgba(15, 23, 42, 0.7);
 
-  /* Info */
-  --color-info: oklch(0.558 0.146 233);
-  --color-info-hover: oklch(0.5 0.14 233);
-  --color-info-foreground: oklch(0.99 0.004 233);
-  --color-info-subtle: oklch(0.558 0.146 233 / 0.12);
+  --color-primary: #f59e0b;
+  --color-primary-hover: #fbbf24;
+  --color-primary-active: #d97706;
+  --color-primary-foreground: #ffffff;
+  --color-primary-subtle: rgba(245, 158, 11, 0.12);
+  --color-primary-muted: rgba(245, 158, 11, 0.2);
+  --color-primary-glow: rgba(245, 158, 11, 0.35);
 
-  /* Card */
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.24 0.024 264);
+  --color-brand: #f59e0b;
+  --color-brand-hover: #fbbf24;
+  --color-brand-foreground: #0b0f19;
+  --color-brand-subtle: rgba(245, 158, 11, 0.16);
 
-  /* Focus ring */
-  --color-ring: oklch(0.518 0.195 265);
+  --color-destructive: #ef4444;
+  --color-destructive-hover: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-destructive-subtle: rgba(239, 68, 68, 0.15);
 
-  /* ─── shadcn/ui semantic aliases ────────────────────────────────
-     These mirror the tokens above so shadcn-generated components
-     (popover, secondary, muted, accent, sidebar) work without
-     any extra configuration.                                       */
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-success-foreground: #ffffff;
+  --color-success-subtle: rgba(16, 185, 129, 0.15);
 
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.24 0.024 264);
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-foreground: #ffffff;
+  --color-warning-subtle: rgba(245, 158, 11, 0.15);
 
-  --color-secondary: oklch(0.968 0.005 264);
-  --color-secondary-foreground: oklch(0.24 0.024 264);
+  --color-info: #0284c7;
+  --color-info-hover: #0369a1;
+  --color-info-foreground: #ffffff;
+  --color-info-subtle: rgba(2, 132, 199, 0.15);
 
-  --color-muted: oklch(0.968 0.005 264);
-  --color-muted-foreground: oklch(0.5 0.021 264);
+  --color-card-foreground: #f8fafc;
+  --color-popover: #131b2e;
+  --color-popover-foreground: #f8fafc;
+  --color-secondary: rgba(255, 255, 255, 0.05);
+  --color-secondary-foreground: #f8fafc;
+  --color-muted: rgba(255, 255, 255, 0.05);
+  --color-muted-foreground: #94a3b8;
+  --color-accent: rgba(245, 158, 11, 0.12);
+  --color-accent-foreground: #fbbf24;
+  --color-ring: #f59e0b;
 
-  --color-accent: oklch(0.518 0.195 265 / 0.1);
-  --color-accent-foreground: oklch(0.412 0.176 265);
+  /* ─── Sidebar Tokens ─────────────────────────────────────────── */
+  --color-sidebar: #0f172a;
+  --color-sidebar-foreground: #f8fafc;
+  --color-sidebar-primary: #f59e0b;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: rgba(245, 158, 11, 0.12);
+  --color-sidebar-accent-foreground: #fbbf24;
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-sidebar-ring: #f59e0b;
 
-  --color-sidebar: oklch(1 0 0);
-  --color-sidebar-foreground: oklch(0.24 0.024 264);
-  --color-sidebar-primary: oklch(0.518 0.195 265);
-  --color-sidebar-primary-foreground: oklch(0.995 0.002 265);
-  --color-sidebar-accent: oklch(0.518 0.195 265 / 0.1);
-  --color-sidebar-accent-foreground: oklch(0.412 0.176 265);
-  --color-sidebar-border: oklch(0.918 0.007 264);
-  --color-sidebar-ring: oklch(0.518 0.195 265);
-
-  /* ─── Elevation ───────────────────────────────────────────────
-     Cool-tinted, layered shadows — the depth that keeps surfaces
-     from reading flat. Never use Tailwind's stock gray shadows.   */
-  --shadow-xs: 0 1px 2px 0 oklch(0.24 0.024 264 / 0.05);
-  --shadow-sm:
-    0 1px 2px -1px oklch(0.24 0.024 264 / 0.08),
-    0 1px 3px 0 oklch(0.24 0.024 264 / 0.06);
-  --shadow-md:
-    0 2px 4px -2px oklch(0.24 0.024 264 / 0.08),
-    0 4px 12px -2px oklch(0.24 0.024 264 / 0.08);
-  --shadow-lg:
-    0 4px 8px -4px oklch(0.24 0.024 264 / 0.1),
-    0 12px 24px -6px oklch(0.24 0.024 264 / 0.1);
-  --shadow-xl:
-    0 8px 16px -8px oklch(0.24 0.024 264 / 0.12),
-    0 24px 48px -12px oklch(0.24 0.024 264 / 0.14);
-
-  /* ─── Radius ──────────────────────────────────────────────────── */
-  --radius-xs: 0.25rem;
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
+  /* ─── Radius ─────────────────────────────────────────────────── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
-}
 
-/* ─── Dark Theme ──────────────────────────────────────────────────
-   Deliberately NOT pure black. The canvas sits at L≈0.20 (a deep
-   blue-slate) so surfaces can rise *lighter* as they elevate —
-   background 0.20 → sidebar 0.225 → card 0.245 → raised 0.285.
-   On a true #000 canvas there is nowhere below the card to go, and
-   every border/muted-text token collapses into the void. Accent hues
-   are lifted in lightness too: the light-mode primary (L 0.518) only
-   reaches ~2:1 against a dark canvas.                               */
-.dark {
-  color-scheme: dark;
+  /* ─── Shadows & Glow ─────────────────────────────────────────── */
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --shadow-popover: 0 18px 40px rgba(0, 0, 0, 0.55);
+  --shadow-gold: 0 4px 14px rgba(245, 158, 11, 0.2);
 
-  /* Surface */
-  --color-background: oklch(0.205 0.012 264);
-  --color-surface: oklch(0.245 0.014 264);
-  --color-surface-raised: oklch(0.285 0.016 264);
-  --color-surface-overlay: oklch(0.268 0.015 264);
-  --color-surface-sunken: oklch(0.172 0.011 264);
-
-  /* Foreground */
-  --color-foreground: oklch(0.965 0.005 264);
-  --color-foreground-muted: oklch(0.752 0.018 264);
-  --color-foreground-subtle: oklch(0.612 0.019 264);
-
-  /* Border — visible against the surfaces above without glowing. */
-  --color-border: oklch(0.328 0.016 264);
-  --color-border-strong: oklch(0.432 0.021 264);
-  --color-input: oklch(0.372 0.018 264);
-
-  /* Primary */
-  --color-primary: oklch(0.602 0.188 265);
-  --color-primary-hover: oklch(0.658 0.178 265);
-  --color-primary-active: oklch(0.702 0.162 265);
-  --color-primary-foreground: oklch(0.995 0.002 265);
-  --color-primary-subtle: oklch(0.658 0.178 265 / 0.16);
-  --color-primary-muted: oklch(0.658 0.178 265 / 0.26);
-  --color-primary-glow: oklch(0.658 0.178 265 / 0.4);
-
-  /* Brand */
-  --color-brand: oklch(0.782 0.132 79);
-  --color-brand-hover: oklch(0.832 0.122 79);
-  --color-brand-foreground: oklch(0.24 0.048 79);
-  --color-brand-subtle: oklch(0.782 0.132 79 / 0.18);
-
-  /* Destructive */
-  --color-destructive: oklch(0.632 0.208 27.3);
-  --color-destructive-hover: oklch(0.688 0.192 27.3);
-  --color-destructive-foreground: oklch(0.99 0.004 27.3);
-  --color-destructive-subtle: oklch(0.632 0.208 27.3 / 0.18);
-
-  /* Success */
-  --color-success: oklch(0.652 0.142 158.3);
-  --color-success-hover: oklch(0.706 0.132 158.3);
-  --color-success-foreground: oklch(0.18 0.04 158.3);
-  --color-success-subtle: oklch(0.652 0.142 158.3 / 0.18);
-
-  /* Warning */
-  --color-warning: oklch(0.792 0.152 70.1);
-  --color-warning-hover: oklch(0.842 0.142 70.1);
-  --color-warning-foreground: oklch(0.24 0.048 70.1);
-  --color-warning-subtle: oklch(0.792 0.152 70.1 / 0.18);
-
-  /* Info */
-  --color-info: oklch(0.668 0.132 233);
-  --color-info-hover: oklch(0.722 0.122 233);
-  --color-info-foreground: oklch(0.18 0.04 233);
-  --color-info-subtle: oklch(0.668 0.132 233 / 0.18);
-
-  /* Card */
-  --color-card: oklch(0.245 0.014 264);
-  --color-card-foreground: oklch(0.965 0.005 264);
-
-  /* Focus ring */
-  --color-ring: oklch(0.688 0.172 265);
-
-  /* shadcn/ui semantic aliases */
-  --color-popover: oklch(0.268 0.015 264);
-  --color-popover-foreground: oklch(0.965 0.005 264);
-
-  --color-secondary: oklch(0.285 0.016 264);
-  --color-secondary-foreground: oklch(0.965 0.005 264);
-
-  --color-muted: oklch(0.285 0.016 264);
-  --color-muted-foreground: oklch(0.752 0.018 264);
-
-  --color-accent: oklch(0.658 0.178 265 / 0.2);
-  --color-accent-foreground: oklch(0.842 0.098 265);
-
-  --color-sidebar: oklch(0.225 0.013 264);
-  --color-sidebar-foreground: oklch(0.965 0.005 264);
-  --color-sidebar-primary: oklch(0.602 0.188 265);
-  --color-sidebar-primary-foreground: oklch(0.995 0.002 265);
-  --color-sidebar-accent: oklch(0.658 0.178 265 / 0.2);
-  --color-sidebar-accent-foreground: oklch(0.842 0.098 265);
-  --color-sidebar-border: oklch(0.328 0.016 264);
-  --color-sidebar-ring: oklch(0.688 0.172 265);
-
-  /* Elevation — shadows alone can't read on a dark canvas, so they go
-     deeper and pair with the lighter fills above. */
-  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.4);
-  --shadow-sm:
-    0 1px 2px -1px oklch(0 0 0 / 0.5),
-    0 1px 3px 0 oklch(0 0 0 / 0.4);
-  --shadow-md:
-    0 2px 4px -2px oklch(0 0 0 / 0.5),
-    0 4px 12px -2px oklch(0 0 0 / 0.45);
-  --shadow-lg:
-    0 4px 8px -4px oklch(0 0 0 / 0.55),
-    0 12px 24px -6px oklch(0 0 0 / 0.5);
-  --shadow-xl:
-    0 8px 16px -8px oklch(0 0 0 / 0.6),
-    0 24px 48px -12px oklch(0 0 0 / 0.55);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 24px -6px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 24px 48px -12px rgba(0, 0, 0, 0.55);
 }
 
 /* ─── Base Styles ─────────────────────────────────────────────── */
@@ -249,24 +141,24 @@
   *,
   *::before,
   *::after {
-    border-color: var(--color-border);
+    border-color: var(--color-line);
   }
 
   html {
-    color-scheme: light;
+    color-scheme: dark;
     scroll-behavior: smooth;
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
-    font-family: var(--font-sans);
-    /* cv11: single-storey g · ss01: alternate digits — keeps Inter legible
-       at UI sizes. tnum: numbers line up column-to-column in tables. */
-    font-feature-settings: "cv11", "ss01";
+    @apply min-h-screen overflow-x-hidden bg-canvas font-sans leading-normal text-fg;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  h1 { @apply font-heading text-2xl font-bold tracking-[-0.02em]; }
+  h2 { @apply font-heading text-xl font-bold; }
+  h3 { @apply font-heading text-lg font-semibold; }
+  h4 { @apply font-heading text-base font-semibold; }
 
   table,
   input,
@@ -275,84 +167,163 @@
   }
 
   ::selection {
-    background-color: var(--color-primary-muted);
-    color: var(--color-foreground);
+    background-color: var(--color-gold-glow);
+    color: #ffffff;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-ring);
+    outline: 2px solid var(--color-gold);
     outline-offset: 2px;
   }
 }
 
-/* ─── Custom Utilities ────────────────────────────────────────── */
+/* ─── Components Layer: Primitif PT TAN ERP ───────────────────── */
+@layer components {
+  /* Panel Kaca */
+  .glass-panel {
+    @apply rounded-md border border-line bg-card shadow-glass backdrop-blur-[16px]
+           transition-all duration-200 hover:border-line-hover;
+  }
+
+  /* Kartu Statistik */
+  .stat-card { @apply flex items-start justify-between p-[22px]; }
+  .stat-val  { @apply my-1.5 font-heading text-[1.8rem] font-bold; }
+  .stat-lbl  { @apply text-[0.825rem] uppercase tracking-[0.05em] text-fg-soft; }
+
+  /* 5 Palet Badge Resmi */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-[14px] py-[6px]
+           text-xs font-semibold;
+  }
+  .badge-gold    { @apply border border-gold/30 bg-gold/15 text-gold-light; }
+  .badge-emerald { @apply border border-emerald/30 bg-emerald/15 text-emerald-light; }
+  .badge-rose    { @apply border border-danger/30 bg-danger/15 text-danger-light; }
+  .badge-blue    { @apply border border-sky-light/30 bg-sky-light/15 text-sky-light; }
+  .badge-sky     { @apply border border-sky/30 bg-sky/15 text-sky-light; }
+  .badge-orange  { @apply border border-orange/30 bg-orange/15 text-orange-light; }
+
+  /* Tombol */
+  .btn-primary {
+    @apply inline-flex cursor-pointer items-center gap-2 rounded-sm
+           bg-linear-135 from-gold to-gold-dark px-5 py-[10px]
+           text-sm font-semibold text-white
+           transition-[transform,box-shadow] duration-150
+           hover:-translate-y-px hover:shadow-gold;
+  }
+  .btn-ghost {
+    @apply cursor-pointer rounded-sm border border-line bg-transparent px-5 py-[10px]
+           font-sans text-sm font-semibold text-fg-soft
+           transition-colors duration-200 hover:border-line-hover hover:text-fg;
+  }
+
+  /* Form */
+  .form-grid  { @apply mb-5 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4; }
+  .form-group { @apply flex flex-col gap-1.5; }
+  .form-label { @apply text-[0.8rem] font-semibold text-fg-soft; }
+
+  .form-input,
+  .form-select {
+    @apply rounded-sm border border-line bg-field px-[14px] py-[10px]
+           text-[0.9rem] text-fg outline-none transition-colors duration-200
+           focus:border-gold focus:shadow-[0_0_0_2px_var(--color-gold-glow)];
+  }
+
+  /* Tabel Data */
+  .table-container {
+    @apply mt-4 overflow-x-auto rounded-md border border-line bg-surface/30 shadow-glass backdrop-blur-[12px];
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 158, 11, 0.3) transparent;
+  }
+  .table-container::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  .table-container::-webkit-scrollbar-track {
+    background: rgba(11, 15, 25, 0.5);
+  }
+  .table-container::-webkit-scrollbar-thumb {
+    background: rgba(245, 158, 11, 0.25);
+    border-radius: 3px;
+  }
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.5);
+  }
+
+  .custom-table {
+    @apply w-full border-collapse text-left text-sm tabular-nums;
+  }
+  .custom-table th {
+    @apply border-b border-gold/25 bg-surface/90 px-4 py-3.5
+           text-xs font-semibold uppercase tracking-[0.06em] text-fg-soft
+           whitespace-nowrap align-middle;
+  }
+  .custom-table td {
+    @apply border-b border-line px-4 py-3.5 text-fg align-middle;
+  }
+  .custom-table tbody tr {
+    @apply transition-colors duration-150;
+  }
+  .custom-table tbody tr:nth-child(even) {
+    @apply bg-white/[0.015];
+  }
+  .custom-table tbody tr:hover {
+    @apply bg-gold/[0.05];
+  }
+  .custom-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .custom-table tfoot tr {
+    @apply bg-surface/90 font-semibold;
+  }
+  .custom-table tfoot td {
+    @apply border-t-2 border-gold/30 px-4 py-3.5 text-fg;
+  }
+
+  /* Scrollbar Emas */
+  .scrollbar-gold {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 158, 11, 0.35) transparent;
+  }
+  .scrollbar-gold::-webkit-scrollbar { width: 6px; }
+  .scrollbar-gold::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-gold::-webkit-scrollbar-thumb {
+    background: rgba(245, 158, 11, 0.3);
+    border-radius: 3px;
+  }
+  .scrollbar-gold::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.55);
+  }
+}
+
+/* ─── Utilities Khusus PT TAN ─────────────────────────────────── */
 @layer utilities {
-  .container-page {
-    width: 100%;
-    max-width: 1280px;
-    margin-inline: auto;
-    padding-inline: 1.5rem;
-  }
-
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  .glow-primary {
-    box-shadow:
-      0 0 0 1px var(--color-primary-subtle),
-      0 8px 24px -8px var(--color-primary-glow);
-  }
-
-  /* Page canvas for the admin shell — a tinted wash so full-bleed
-     white cards read as raised instead of dissolving into the page. */
   .bg-app {
-    background-color: var(--color-background);
+    background-color: var(--color-canvas);
     background-image:
       radial-gradient(
         ellipse 80rem 40rem at 100% 0%,
-        var(--color-primary-subtle),
+        rgba(245, 158, 11, 0.05),
         transparent 60%
       ),
       radial-gradient(
         ellipse 60rem 30rem at 0% 100%,
-        var(--color-brand-subtle),
+        rgba(16, 185, 129, 0.03),
         transparent 55%
       );
     background-attachment: fixed;
   }
 
-  /* Top hairline in the brand gradient — used on page headers/cards. */
   .accent-bar {
     background-image: linear-gradient(
       90deg,
-      var(--color-primary),
-      oklch(0.6 0.16 220),
-      var(--color-brand)
+      var(--color-gold),
+      #fbbf24,
+      #d97706
     );
-  }
-
-  /* Inner top highlight — the 1px catch-light that stops filled
-     controls from reading as flat rectangles. */
-  .bevel {
-    box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.18);
-  }
-
-  .border-gradient {
-    border: 1px solid transparent;
-    background:
-      linear-gradient(var(--color-card), var(--color-card)) padding-box,
-      linear-gradient(135deg, var(--color-primary), var(--color-brand)) border-box;
   }
 }
 
-/* ─── Print ───────────────────────────────────────────────────────
-   Halaman cetak (nota pembelian, surat pernyataan, surat kuasa) adalah
-   halaman aplikasi biasa yang diberi aturan kertas — bukan PDF yang
-   dirakit di server. Perkakas layarnya disembunyikan lewat `print:hidden`
-   di komponennya; yang di sini adalah tiga hal yang tidak bisa ditulis
-   sebagai utility: ukuran kertas, latar halaman, dan izin mencetak
-   warna.                                                              */
+/* ─── Aturan Cetak (Print) ────────────────────────────────────── */
 @media print {
   @page {
     size: A4;
@@ -361,19 +332,15 @@
 
   html,
   body {
-    background-color: var(--color-surface);
+    background-color: #ffffff !important;
+    color: #000000 !important;
   }
 
-  /* Kanvas admin bergradien radial — di layar ia membuat kartu putih
-     terbaca terangkat, di kertas ia cuma menghabiskan tinta. */
   .bg-app {
-    background-image: none;
-    background-color: var(--color-surface);
+    background-image: none !important;
+    background-color: #ffffff !important;
   }
 
-  /* Peramban membuang latar dan border berwarna saat mencetak. Di dokumen
-     ini garis tabel dan cap "DIBATALKAN" justru membawa arti, jadi khusus
-     lembar dokumennya izin itu dikembalikan. */
   [data-print-sheet] {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
