@@ -36,6 +36,8 @@ const dateField = (label: string) =>
 
 const metalPurchaseItemSchema = z.object({
   product_id: idField('Produk'),
+  /** Baris PR asal, bila dokumen ini konversi dari Purchase Request. */
+  purchase_request_item_id: optionalText('Referensi baris PR', 50),
   weight_unit: z.enum(WEIGHT_UNITS, 'Satuan berat tidak dikenali').default('GRAM'),
   weight_gram: z.coerce
     .number('Berat wajib diisi')
@@ -81,10 +83,15 @@ const metalPurchaseShape = {
   mawb_number:         optionalText('Nomor MAWB', 100),
   courier_name:        optionalText('Nama kurir', 150),
   courier_mandate_number: optionalText('Nomor surat kuasa kurir', 100),
-  /// Referensi Purchase Request asal (konversi PR → PO). Opsional: PO boleh
-  /// lahir tanpa PR. Saat terisi, server mengunci PR-nya sebagai CONVERTED
-  /// (mengisi convertedPoNumber/conversionDate/convertedBy) — cermin
-  /// `markPRAsConverted` legacy.
+  /// Lokasi fisik pengambilan barang — dipakai rail lokal saat kurir internal
+  /// PT TAN yang berangkat ke tempat supplier. Opsional: banyak pembelian lokal
+  /// tetap diantar supplier ke brankas, bukan diambil.
+  pickup_location:     optionalText('Lokasi pengambilan', 200),
+  /// Referensi Purchase Request asal (konversi PR → PO) — opsional untuk
+  /// semua jenis pembelian, termasuk impor: banyak pembelian impor terjadi
+  /// tanpa PR yang diajukan lebih dulu. Saat terisi, server mengunci PR-nya
+  /// sebagai CONVERTED (mengisi convertedPoNumber/conversionDate/convertedBy)
+  /// — cermin `markPRAsConverted` legacy.
   purchase_request_id: optionalText('Referensi PR', 50),
   items: z
     .array(metalPurchaseItemSchema, 'Barang wajib diisi')

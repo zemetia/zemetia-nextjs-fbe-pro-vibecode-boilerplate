@@ -53,8 +53,11 @@ function toVO(dto: MetalPurchaseDTO): MetalPurchaseVO {
     mawbNumber: dto.mawb_number ?? '',
     courierName: dto.courier_name ?? '',
     courierMandateNumber: dto.courier_mandate_number ?? '',
+    pickupLocation: dto.pickup_location ?? '',
     goodsAmount: dto.goods_amount,
     goodsAmountLabel: formatCurrency(dto.goods_amount),
+    purchaseRequestId: dto.purchase_request_id,
+    purchaseRequestNumber: dto.purchase_request_number ?? '',
     notes: dto.notes ?? '',
     isEditable: editable,
     isVoidable: isMetalPurchaseVoidable(dto.status),
@@ -118,6 +121,8 @@ export type MetalPurchaseListParams = ListParams & {
 
 export interface MetalPurchaseItemPayload {
   product_id: string;
+  /** Baris PR asal, bila dokumen ini konversi dari Purchase Request. */
+  purchase_request_item_id?: string;
   weight_unit: 'GRAM' | 'TROY_OUNCE';
   weight_gram: number;
   purity_percent: number;
@@ -145,6 +150,10 @@ export interface MetalPurchaseWritePayload {
   mawb_number?: string | null;
   courier_name?: string | null;
   courier_mandate_number?: string | null;
+  /** Lokasi fisik pengambilan barang — khusus rail lokal. */
+  pickup_location?: string | null;
+  /** Purchase Request asal, bila dokumen ini konversi dari PR. */
+  purchase_request_id?: string;
   items: MetalPurchaseItemPayload[];
   charges: MetalPurchaseChargePayload[];
   notes?: string;

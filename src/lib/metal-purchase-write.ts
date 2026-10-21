@@ -69,6 +69,7 @@ export interface PreparedMetalPurchaseItem {
   pricePerUnit: number;
   amount: number;
   notes: string | null;
+  purchaseRequestItemId: string | null;
 }
 
 /**
@@ -77,9 +78,15 @@ export interface PreparedMetalPurchaseItem {
  * produk (batangan = GROSS, scrap/perhiasan = FINE) — tidak pernah dipilih
  * client, dan `amount` dihitung ulang di sini supaya nilainya tidak pernah
  * dikirim client.
+ *
+ * `requestItemProductById` datang dari `linkMetalPurchaseRequest()` — baris
+ * yang merujuk `purchase_request_item_id` wajib menunjuk baris PR yang benar
+ * ada pada PR yang sama dan memilih produk yang sama, atau ditolak di sini.
+ * Tanpanya, satu baris bisa "melunasi" sisa baris PR yang barangnya berbeda.
  */
 export async function prepareMetalPurchaseItems(
   items: CreateMetalPurchaseInput['items'],
+  requestItemProductById?: Map<string, string>,
 ): Promise<PreparedMetalPurchaseItem[]> {
   const products = await prisma.product.findMany({
     where: { id: { in: items.map((item) => item.product_id) } },
@@ -88,8 +95,28 @@ export async function prepareMetalPurchaseItems(
   const byId = new Map(products.map((product) => [product.id, product]));
 
   return items.map((item, index) => {
+    const lineNo = index + 1;
     const product = byId.get(item.product_id);
     if (!product) throw new NotFoundError('Ada barang pada pembelian ini yang sudah tidak terdaftar.');
+
+    let purchaseRequestItemId: string | null = null;
+    if (item.purchase_request_item_id) {
+      if (!requestItemProductById) {
+        throw new ValidationError(
+          `Baris ke-${lineNo} merujuk baris Purchase Request, padahal dokumen ini tidak menyebut PR asalnya.`,
+        );
+      }
+      const expectedProductId = requestItemProductById.get(item.purchase_request_item_id);
+      if (expectedProductId === undefined) {
+        throw new NotFoundError(`Baris ke-${lineNo} merujuk baris PR yang tidak ada pada PR ini.`);
+      }
+      if (expectedProductId !== item.product_id) {
+        throw new ValidationError(
+          `Baris ke-${lineNo} memilih barang yang berbeda dari baris PR yang dirujuknya.`,
+        );
+      }
+      purchaseRequestItemId = item.purchase_request_item_id;
+    }
 
     const purityPercent =
       product.purityLocked && product.defaultPurityPercent
@@ -108,7 +135,7 @@ export async function prepareMetalPurchaseItems(
     });
 
     return {
-      lineNo: index + 1,
+      lineNo,
       productId: item.product_id,
       weightUnit: item.weight_unit,
       weightGram: computed.weightGram,
@@ -118,6 +145,7 @@ export async function prepareMetalPurchaseItems(
       pricePerUnit: item.price_per_unit,
       amount: computed.amount,
       notes: item.notes,
+      purchaseRequestItemId,
     };
   });
 }
@@ -145,6 +173,7 @@ export function metalPurchaseColumns(body: CreateMetalPurchaseInput, goodsAmount
     mawbNumber: body.mawb_number,
     courierName: body.courier_name,
     courierMandateNumber: body.courier_mandate_number,
+    pickupLocation: body.pickup_location,
     goodsAmount,
     notes: body.notes,
   };
@@ -157,6 +186,8 @@ const PURCHASE_REQUEST_CATEGORY_BY_TYPE = {
 
 export interface LinkedPurchaseRequest {
   id: string;
+  /** Baris PR-nya: `requestItemId → productId`, dipakai memvalidasi rujukan baris PO. */
+  itemProductById: Map<string, string>;
 }
 
 /**
@@ -164,8 +195,9 @@ export interface LinkedPurchaseRequest {
  * PR wajib sudah APPROVED dan kategorinya harus cocok dengan tipe dokumen
  * (IMPORT → GOLD_IMPORT, LOCAL → GOLD_LOCAL) — cermin aturan konversi legacy
  * (hanya PR emas impor/lokal yang bisa jadi PO emas; non-logam lewat jalurnya
- * sendiri). Pemanggil menulis `purchaseRequestId` pada PO dan mengunci PR-nya
- * sebagai CONVERTED setelah nomor PO lahir.
+ * sendiri). Sisa PR-nya tidak dikunci di sini — ia hasil agregasi
+ * (`orderedQuantityByRequestItem()`), bukan status yang ditulis: satu PR
+ * boleh dikonversi berkali-kali sampai seluruh barisnya tertutup.
  */
 export async function linkMetalPurchaseRequest(
   purchaseRequestId: string,
@@ -173,7 +205,13 @@ export async function linkMetalPurchaseRequest(
 ): Promise<LinkedPurchaseRequest> {
   const request = await prisma.purchaseRequest.findUnique({
     where: { id: purchaseRequestId },
-    select: { id: true, number: true, status: true, category: true },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      category: true,
+      items: { select: { id: true, productId: true } },
+    },
   });
 
   if (!request) throw new NotFoundError('Purchase Request yang dirujuk tidak ditemukan.');
@@ -189,7 +227,13 @@ export async function linkMetalPurchaseRequest(
     );
   }
 
-  return { id: request.id };
+  const itemProductById = new Map(
+    request.items
+      .filter((item): item is { id: string; productId: string } => item.productId !== null)
+      .map((item) => [item.id, item.productId]),
+  );
+
+  return { id: request.id, itemProductById };
 }
 
 /** Hanya draft yang boleh dikonfirmasi atau dibatalkan lewat handler yang sesuai. */

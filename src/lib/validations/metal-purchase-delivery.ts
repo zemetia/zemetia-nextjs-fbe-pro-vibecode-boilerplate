@@ -70,6 +70,17 @@ const metalPurchaseDeliveryShape = {
   mawb_no: optionalText('Nomor MAWB', 100),
   /** Nomor sertifikat/seri keping batangan, dipisah koma — lahir dari `CertificatesInput`. */
   bar_serial_numbers: optionalText('Nomor sertifikat/seri batangan', 2000),
+  /** Nomor sertifikat assay kemurnian — dari lab uji kadar saat fisik tiba. */
+  assay_certificate_no: optionalText('Nomor sertifikat assay', 100),
+  /** Laci/slot brankas tujuan & nomor segel keamanan — input operator fisik saat TTB. */
+  safe_box_slot: optionalText('Lokasi laci/slot brankas', 150),
+  security_seal_no: optionalText('Nomor segel keamanan', 150),
+  /** Berat menurut surat jalan supplier — pembanding hasil timbang ulang di baris. */
+  document_weight_gram: z.coerce
+    .number('Berat menurut surat jalan tidak valid')
+    .positive('Berat menurut surat jalan harus lebih besar dari nol')
+    .max(MAX_WEIGHT_GRAM, 'Berat terlalu besar')
+    .optional(),
   lines: z
     .array(deliveryLineSchema, 'Barang yang diterima wajib diisi')
     .min(1, 'Penerimaan harus punya minimal satu barang')

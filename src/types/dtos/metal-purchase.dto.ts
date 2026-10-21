@@ -76,6 +76,7 @@ export interface MetalPurchaseDTO {
   mawb_number: string | null;
   courier_name: string | null;
   courier_mandate_number: string | null;
+  pickup_location: string | null;
   goods_amount: number;
   notes: string | null;
   /** Pelacakan pembayaran (cermin legacy `pttan_local_purchases`). */
@@ -144,6 +145,15 @@ export interface MetalPurchaseDeliveryDTO {
   mawb_no: string | null;
   /** Nomor sertifikat/seri keping batangan, dipisah koma — lahir dari `CertificatesInput`. */
   bar_serial_numbers: string | null;
+  /** Nomor sertifikat assay kemurnian — dari lab uji kadar saat fisik tiba. */
+  assay_certificate_no: string | null;
+  /** Laci/slot brankas tujuan & nomor segel keamanan — input operator fisik saat TTB. */
+  safe_box_slot: string | null;
+  security_seal_no: string | null;
+  /** Komparator timbangan: dokumen vs aktual, dan selisihnya. Dihitung server. */
+  document_weight_gram: number | null;
+  received_weight_gram: number | null;
+  weight_discrepancy_gram: number | null;
   notes: string | null;
   created_at: string;
 }

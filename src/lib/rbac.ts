@@ -39,8 +39,17 @@ export function hasPermission(
   return keys.some((k) => permissions.has(k));
 }
 
+/**
+ * Kill switch sementara: matikan enforcement RBAC tanpa mencabut login.
+ * Set `RBAC_DISABLED=true` untuk membiarkan semua user yang sudah login lewat
+ * setiap `requirePermission()`. Hapus/matikan flag ini begitu sistem role
+ * siap dipakai lagi.
+ */
+const RBAC_DISABLED = process.env.RBAC_DISABLED === 'true';
+
 export async function requirePermission(key: PermissionKey | PermissionKey[]): Promise<Session> {
   const session = await requireAuth();
+  if (RBAC_DISABLED) return session;
   const permissions = await getUserPermissions(session.user.id);
   if (!hasPermission(permissions, key)) {
     throw new ForbiddenError('Anda tidak punya izin untuk melakukan tindakan ini.');

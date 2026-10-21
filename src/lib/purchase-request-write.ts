@@ -66,10 +66,34 @@ export type PurchaseRequestDetailRow = Prisma.PurchaseRequestGetPayload<{
   include: typeof PURCHASE_REQUEST_DETAIL_INCLUDE;
 }>;
 
+/**
+ * Sisa tiap baris dihitung dari `PurchaseOrderItem.purchaseRequestItemId` —
+ * relasi yang skema sediakan justru untuk ini. `weightGram` sudah gram apa
+ * pun `weightUnit` barisnya, dan baris PR logam juga selalu gram (anchor
+ * kategori `WEIGHT`), jadi keduanya langsung dijumlah tanpa konversi. PO
+ * yang dibatalkan tidak ikut terhitung — barangnya tidak pernah datang.
+ */
 export async function orderedQuantityByRequestItem(
-  _requestItemIds: string[],
+  requestItemIds: string[],
 ): Promise<Map<string, number>> {
-  return new Map<string, number>();
+  if (requestItemIds.length === 0) return new Map();
+
+  const rows = await prisma.purchaseOrderItem.groupBy({
+    by: ['purchaseRequestItemId'],
+    where: {
+      purchaseRequestItemId: { in: requestItemIds },
+      purchase: { status: { not: 'VOID' } },
+    },
+    _sum: { weightGram: true },
+  });
+
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    if (row.purchaseRequestItemId) {
+      map.set(row.purchaseRequestItemId, Number(row._sum.weightGram ?? 0));
+    }
+  }
+  return map;
 }
 
 /**

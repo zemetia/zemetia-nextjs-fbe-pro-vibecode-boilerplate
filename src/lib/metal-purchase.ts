@@ -28,6 +28,16 @@ export const METAL_PURCHASE_PAYMENT_TYPE_LABELS: Record<string, string> = {
   DP: 'DP (Direct Payment)',
 };
 
+/**
+ * Label kolom nomor dokumen. Nomornya sendiri selalu dibuat sistem — yang
+ * berubah hanya sebutannya, karena dokumen DP diserahkan ke mitra sebagai
+ * kwitansi, bukan sebagai pesanan.
+ */
+export const METAL_PURCHASE_NUMBER_LABELS: Record<string, string> = {
+  PO: 'No. PO',
+  DP: 'No. Kwitansi',
+};
+
 export const METAL_PURCHASE_TYPE_OPTIONS = [
   { value: 'LOCAL', label: 'Lokal (IDR)' },
   { value: 'IMPORT', label: 'Impor (Valas)' },

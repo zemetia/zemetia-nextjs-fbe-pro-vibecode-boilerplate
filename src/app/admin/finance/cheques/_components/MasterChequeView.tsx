@@ -6,6 +6,7 @@ import {
   CreditCard,
   Filter,
   Lock,
+  MoreHorizontal,
   Plus,
   Search,
 } from 'lucide-react';
@@ -15,6 +16,12 @@ import { formatCurrency, formatNumber } from '@/lib/number';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { FormModal } from '@/components/ui/FormModal';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -361,7 +368,7 @@ export function MasterChequeView() {
                         <TableHead className="text-right">Nominal Digunakan</TableHead>
                         <TableHead>Jatuh Tempo Kliring</TableHead>
                         <TableHead>Status Pencairan</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
+                        <TableHead className="w-16 text-center">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -404,18 +411,34 @@ export function MasterChequeView() {
                               '—'
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
-                            {leaf.status === 'AVAILABLE' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleVoidLeaf(book.id, leaf.checkNumber)}
-                                className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 px-2 text-xs"
-                                leftIcon={<Ban className="h-3 w-3" aria-hidden="true" />}
-                              >
-                                Void
-                              </Button>
-                            )}
+                          <TableCell className="text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="h-8 w-8 p-0 text-foreground-muted hover:text-foreground hover:bg-surface-raised cursor-pointer mx-auto"
+                                  aria-label={`Aksi untuk lembar ${leaf.checkNumber}`}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 z-[1100]">
+                                {leaf.status === 'AVAILABLE' ? (
+                                  <DropdownMenuItem
+                                    onClick={() => handleVoidLeaf(book.id, leaf.checkNumber)}
+                                    className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                                  >
+                                    <Ban className="h-4 w-4" />
+                                    <span>Batalkan (Void)</span>
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem disabled>
+                                    <span className="text-foreground-subtle text-xs">Tidak ada aksi</span>
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       ))}

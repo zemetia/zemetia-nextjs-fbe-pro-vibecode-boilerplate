@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert, FileText, DollarSign, Calculator, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { CreditCard, Plus, Printer, CheckCircle, FileSpreadsheet, Filter, CheckSquare, Clock, AlertCircle, Building2, Layers, Lock, ShieldAlert, FileText, DollarSign, Calculator, CheckCircle2, ShieldCheck, MoreHorizontal } from 'lucide-react';
 import {
   getCOA,
   getPurchaseOrders,
@@ -23,6 +23,12 @@ import {
   exportReceiptVoucherPdf
 } from '../services/pdfService';
 import {
+  Button,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   Modal,
   useModal,
   toast,

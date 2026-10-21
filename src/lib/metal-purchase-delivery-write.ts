@@ -56,6 +56,16 @@ export function toDeliveryChargeRows(charges: CreateMetalPurchaseDeliveryInput['
 }
 
 export function metalPurchaseDeliveryColumns(body: CreateMetalPurchaseDeliveryInput) {
+  // Berat aktual selalu dijumlahkan dari baris timbangan ulang, bukan diketik ulang
+  // di header — sumber tunggalnya adalah baris, sama seperti `totalWeightGramReceived`
+  // yang ditampilkan di form.
+  const receivedWeightGram =
+    Math.round(body.lines.reduce((sum, line) => sum + line.weight_gram, 0) * 10000) / 10000;
+  const weightDiscrepancyGram =
+    body.document_weight_gram !== undefined
+      ? Math.round((receivedWeightGram - body.document_weight_gram) * 10000) / 10000
+      : null;
+
   return {
     purchaseId: body.purchase_id,
     date: toUtcDateOnly(body.date),
@@ -68,6 +78,12 @@ export function metalPurchaseDeliveryColumns(body: CreateMetalPurchaseDeliveryIn
     sppbNo: body.sppb_no,
     mawbNo: body.mawb_no,
     barSerialNumbers: body.bar_serial_numbers,
+    assayCertificateNo: body.assay_certificate_no,
+    safeBoxSlot: body.safe_box_slot,
+    securitySealNo: body.security_seal_no,
+    documentWeightGram: body.document_weight_gram ?? null,
+    receivedWeightGram,
+    weightDiscrepancyGram,
     notes: body.notes,
   };
 }

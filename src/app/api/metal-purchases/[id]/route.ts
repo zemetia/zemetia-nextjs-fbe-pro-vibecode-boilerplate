@@ -13,6 +13,7 @@ import {
   assertPartnerMatchesType,
   assertProductsUsable,
   deleteMetalPurchase,
+  linkMetalPurchaseRequest,
   metalPurchaseColumns,
   prepareMetalPurchaseItems,
   toMetalPurchaseCharges,
@@ -47,12 +48,15 @@ export async function PATCH(request: Request, { params }: Params) {
     await assertMetalPurchaseDraft(id);
     const body = updateMetalPurchaseSchema.parse(await request.json());
 
-    await Promise.all([
+    const [, , prLink] = await Promise.all([
       assertPartnerMatchesType(body.partner_id, body.type),
       assertProductsUsable(body.items.map((item) => item.product_id)),
+      body.purchase_request_id
+        ? linkMetalPurchaseRequest(body.purchase_request_id, body.type)
+        : Promise.resolve(null),
     ]);
 
-    const items = await prepareMetalPurchaseItems(body.items);
+    const items = await prepareMetalPurchaseItems(body.items, prLink?.itemProductById);
     const goodsAmount = Math.round(items.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
 
     const purchase = await prisma.$transaction(async (tx) => {
@@ -63,6 +67,7 @@ export async function PATCH(request: Request, { params }: Params) {
         where: { id },
         data: {
           ...metalPurchaseColumns(body, goodsAmount),
+          purchaseRequestId: prLink?.id ?? null,
           items: { create: items },
           charges: { create: toMetalPurchaseCharges(body.charges) },
         },

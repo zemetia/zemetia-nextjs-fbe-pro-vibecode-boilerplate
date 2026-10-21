@@ -1,28 +1,33 @@
-'use client';
+import { redirect } from 'next/navigation';
+import type { Metadata } from 'next';
 
-import dynamic from 'next/dynamic';
-import { AdminPageWrapper } from '@/components/layout/AdminPageWrapper';
+import { requirePermission } from '@/lib/rbac';
+import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
+import { Typography } from '@/components/ui/Typography';
+import { LocalPurchasesView } from './_components/LocalPurchasesView';
 
-interface PageViewProps {
-  setActivePage: (pageId: string) => void;
-}
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
-const View = dynamic<PageViewProps>(() => import('@/views/LmLocalTrading'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-64 items-center justify-center">
-      <div className="flex items-center gap-2 text-fg-soft font-medium">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
-        <span>Memuat modul...</span>
-      </div>
-    </div>
-  ),
-});
+export default async function LocalPurchasesPage() {
+  try {
+    await requirePermission('local-purchases:list');
+  } catch (error) {
+    if (error instanceof UnauthorizedError) redirect('/sign-in');
+    if (error instanceof ForbiddenError) redirect('/admin');
+    throw error;
+  }
 
-export default function Page() {
   return (
-    <AdminPageWrapper>
-      {({ setActivePage }) => <View setActivePage={setActivePage} />}
-    </AdminPageWrapper>
+    <div className="space-y-6">
+      <div>
+        <Typography variant="h2">PO Emas Lokal</Typography>
+        <Typography variant="muted">
+          Pembelian emas dari mitra dalam negeri, tunai maupun tempo.
+        </Typography>
+      </div>
+      <LocalPurchasesView />
+    </div>
   );
 }

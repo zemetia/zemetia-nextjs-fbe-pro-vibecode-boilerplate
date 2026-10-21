@@ -40,6 +40,10 @@ function decimal(value: Prisma.Decimal | null): number {
   return value ? Number(value) : 0;
 }
 
+function nullableDecimal(value: Prisma.Decimal | null): number | null {
+  return value !== null ? Number(value) : null;
+}
+
 export function toMetalPurchaseDeliveryDTO(row: MetalPurchaseDeliveryRow): MetalPurchaseDeliveryDTO {
   return {
     id: row.id,
@@ -63,6 +67,12 @@ export function toMetalPurchaseDeliveryDTO(row: MetalPurchaseDeliveryRow): Metal
     sppb_no: row.sppbNo,
     mawb_no: row.mawbNo,
     bar_serial_numbers: row.barSerialNumbers,
+    assay_certificate_no: row.assayCertificateNo,
+    safe_box_slot: row.safeBoxSlot,
+    security_seal_no: row.securitySealNo,
+    document_weight_gram: nullableDecimal(row.documentWeightGram),
+    received_weight_gram: nullableDecimal(row.receivedWeightGram),
+    weight_discrepancy_gram: nullableDecimal(row.weightDiscrepancyGram),
     notes: row.notes,
     created_at: row.createdAt.toISOString(),
   };

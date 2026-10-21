@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  PackagePlus,
   Pencil,
   Trash2,
   XCircle,
@@ -36,7 +37,7 @@ import {
   PurchaseRequestStatusDialog,
   type PurchaseRequestDialogAction,
 } from './PurchaseRequestStatusDialog';
-import { requestEditHref, requestListHref } from './routes';
+import { requestConvertHref, requestEditHref, requestListHref } from './routes';
 
 function stageBadgeVariant(stage: PurchaseRequestStage): BadgeProps['variant'] {
   switch (stage) {
@@ -136,6 +137,22 @@ export function PurchaseRequestDetailView({ id }: PurchaseRequestDetailViewProps
               </Button>
             </Link>
           )}
+
+          {request.canConvert &&
+            (can('local-purchases:create') || can('import-purchases:create')) && (
+              <Link
+                href={
+                  requestConvertHref(
+                    request.id,
+                    request.category as 'GOLD_IMPORT' | 'GOLD_LOCAL',
+                  ) as Route
+                }
+              >
+                <Button variant="primary" leftIcon={<PackagePlus className="h-4 w-4" />}>
+                  Konversi ke PO
+                </Button>
+              </Link>
+            )}
 
           {request.canApprove && can('purchase-requests:approve') && (
             <Button
@@ -261,6 +278,8 @@ export function PurchaseRequestDetailView({ id }: PurchaseRequestDetailViewProps
                 <TableHead>Nama Barang / Produk</TableHead>
                 <TableHead className="w-32">Kode</TableHead>
                 <TableHead className="w-36 text-right">Kuantitas Diminta</TableHead>
+                <TableHead className="w-36 text-right">Sudah Di-PO</TableHead>
+                <TableHead className="w-36 text-right">Sisa</TableHead>
                 <TableHead className="w-36 text-right">Est. Harga Satuan</TableHead>
                 <TableHead className="w-40 text-right">Est. Subtotal</TableHead>
               </TableRow>
@@ -282,6 +301,16 @@ export function PurchaseRequestDetailView({ id }: PurchaseRequestDetailViewProps
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums text-foreground">
                     {item.quantityLabel}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-foreground-muted">
+                    {item.orderedQuantityLabel}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-mono tabular-nums ${
+                      item.isFulfilled ? 'text-foreground-subtle' : 'text-foreground font-medium'
+                    }`}
+                  >
+                    {item.outstandingQuantityLabel}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums text-foreground-muted">
                     {item.estUnitPriceLabel}

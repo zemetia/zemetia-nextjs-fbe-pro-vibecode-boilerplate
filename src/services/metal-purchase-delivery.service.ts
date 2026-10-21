@@ -47,6 +47,18 @@ function toVO(dto: MetalPurchaseDeliveryDTO): MetalPurchaseDeliveryVO {
     sppbNo: dto.sppb_no ?? '',
     mawbNo: dto.mawb_no ?? '',
     barSerialNumbers: dto.bar_serial_numbers ?? '',
+    assayCertificateNo: dto.assay_certificate_no ?? '',
+    safeBoxSlot: dto.safe_box_slot ?? '',
+    securitySealNo: dto.security_seal_no ?? '',
+    documentWeightGram: dto.document_weight_gram,
+    receivedWeightGram: dto.received_weight_gram,
+    weightDiscrepancyGram: dto.weight_discrepancy_gram,
+    weightDiscrepancyLabel:
+      dto.weight_discrepancy_gram === null
+        ? EMPTY
+        : dto.weight_discrepancy_gram === 0
+          ? 'Pas / klop (0 g)'
+          : `${dto.weight_discrepancy_gram > 0 ? 'Lebih' : 'Kurang'} ${formatNumber(Math.abs(dto.weight_discrepancy_gram))} g`,
     notes: dto.notes ?? '',
     isEditable: editable,
     isVoidable: isMetalPurchaseDeliveryVoidable(dto.status),
@@ -129,6 +141,10 @@ export interface MetalPurchaseDeliveryWritePayload {
   sppb_no?: string;
   mawb_no?: string;
   bar_serial_numbers?: string;
+  assay_certificate_no?: string;
+  safe_box_slot?: string;
+  security_seal_no?: string;
+  document_weight_gram?: number;
   lines: MetalPurchaseDeliveryLinePayload[];
   charges: MetalPurchaseDeliveryChargePayload[];
   notes?: string;

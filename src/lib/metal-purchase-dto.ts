@@ -51,6 +51,7 @@ export function toMetalPurchaseDTO(row: MetalPurchaseRow): MetalPurchaseDTO {
     mawb_number: row.mawbNumber,
     courier_name: row.courierName,
     courier_mandate_number: row.courierMandateNumber,
+    pickup_location: row.pickupLocation,
     goods_amount: decimal(row.goodsAmount),
     notes: row.notes,
     payment_status: row.paymentStatus,

@@ -1,84 +1,147 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { Plus, Trash2, CheckCircle2, Ban } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Ban, RefreshCw, Calculator, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
   apiErrorMessage,
+  exchangeRateService,
   metalPurchaseService,
+  purchaseRequestService,
   type MetalPurchaseItemPayload,
   type MetalPurchaseWritePayload,
 } from '@/services';
 import { toDateOnly, today } from '@/lib/date';
-import {
-  METAL_PURCHASE_PAYMENT_TYPE_LABELS,
-  METAL_PURCHASE_STATUS_BADGE,
-} from '@/lib/metal-purchase';
+import { METAL_PURCHASE_PRICE_SCALE, METAL_PURCHASE_STATUS_BADGE } from '@/lib/metal-purchase';
+import { formatCurrency, roundTo } from '@/lib/number';
+import { convertPricePerUnit, convertWeight, toGram, WEIGHT_UNIT_LABELS } from '@/lib/weight';
+import { cn } from '@/lib/cn';
 import type { PermissionKey } from '@/lib/permissions';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Combobox } from '@/components/ui/Combobox';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { Segmented } from '@/components/ui/Segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Typography } from '@/components/ui/Typography';
 import { PartnerPicker } from '@/components/shared/PartnerPicker';
 import { ProductPicker } from '@/components/shared/ProductPicker';
-import type { PartnerVO, ProductVO } from '@/types/value-objects';
+import type { PartnerVO, ProductVO, WeightUnit } from '@/types/value-objects';
 
 const PAGE_SIZE = 20;
-
-const PAYMENT_TYPE_OPTIONS = [
-  { value: 'PO', label: METAL_PURCHASE_PAYMENT_TYPE_LABELS.PO ?? 'PO (Tempo)' },
-  { value: 'DP', label: METAL_PURCHASE_PAYMENT_TYPE_LABELS.DP ?? 'DP (Direct Payment)' },
-];
 
 const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD' },
   { value: 'SGD', label: 'SGD' },
 ];
 
+/**
+ * Dua tombol, bukan dropdown — satuan yang sedang berlaku adalah keterangan
+ * yang dibaca berkali-kali sambil mengetik, bukan pilihan yang dibuka sekali
+ * lalu ditutup (pola sama dengan `PurchaseItemsInput` di app referensi).
+ */
+const WEIGHT_UNIT_TABS = [
+  { value: 'GRAM', label: WEIGHT_UNIT_LABELS.GRAM },
+  { value: 'TROY_OUNCE', label: WEIGHT_UNIT_LABELS.TROY_OUNCE },
+] as const satisfies readonly { value: WeightUnit; label: string }[];
+
 interface ItemDraft {
   key: string;
   product?: ProductVO;
-  weightGram?: number;
+  weight?: number;
   purityPercent?: number;
+  /** Harga per satu satuan `FormState.weightUnit`. */
   pricePerUnit?: number;
+  /**
+   * Buffer nilai dua arah, tidak pernah dikirim ke API. Nilai yang tersimpan
+   * selalu turunan harga × berat; ini menampung apa yang sedang diketik, dan
+   * dikembalikan ke angka turunannya saat kolomnya ditinggalkan (`commitAmount`).
+   */
+  amount?: number;
+  /** Baris PR asal, saat draft ini datang dari "Konversi ke PO". */
+  purchaseRequestItemId?: string;
 }
 
 function emptyItem(): ItemDraft {
   return { key: crypto.randomUUID() };
 }
 
+/** Pratinjau nilai baris — harga × berat, dalam satuan berlaku dokumen ini. */
+function previewAmount(item: ItemDraft): number | undefined {
+  if (item.weight === undefined || item.pricePerUnit === undefined) return undefined;
+  return roundTo(item.weight * item.pricePerUnit, 2);
+}
+
+/**
+ * PO impor selalu 1 barang (batangan LBMA per kesepakatan) — satuan berat
+ * (gram/oz) karena itu satu toggle dokumen-level, bukan per-baris. Menukarnya
+ * memindahkan **angkanya ikut pindah**: 1.000 g adalah 32,1507 oz, bukan
+ * 1.000 oz. Harganya ikut ke arah sebaliknya supaya nilai kesepakatannya
+ * tidak bergerak — yang berubah cuma dalam satuan apa itu dituliskan.
+ */
+function withWeightUnit(form: FormState, nextUnit: WeightUnit): FormState {
+  if (form.weightUnit === nextUnit) return form;
+
+  const converted: ItemDraft = {
+    ...form.item,
+    weight: form.item.weight === undefined ? undefined : convertWeight(form.item.weight, form.weightUnit, nextUnit),
+    pricePerUnit:
+      form.item.pricePerUnit === undefined
+        ? undefined
+        : convertPricePerUnit(form.item.pricePerUnit, form.weightUnit, nextUnit, METAL_PURCHASE_PRICE_SCALE),
+  };
+
+  return { ...form, weightUnit: nextUnit, item: { ...converted, amount: previewAmount(converted) } };
+}
+
 interface FormState {
-  paymentType: 'PO' | 'DP';
   partnerId: string;
   partner?: PartnerVO;
   date: string;
   supplierInvoiceNumber: string;
   currency: 'USD' | 'SGD';
   exchangeRate?: number;
+  /** `true` setelah user mengetik kursnya sendiri — sinkronisasi BCA otomatis berhenti menimpa. */
+  exchangeRateTouched: boolean;
   courierName: string;
-  items: ItemDraft[];
+  mawbNumber: string;
+  courierMandateNumber: string;
+  /** Satuan berat dokumen — PO impor selalu 1 barang, jadi satu toggle untuk seluruh dokumen. */
+  weightUnit: WeightUnit;
+  item: ItemDraft;
   notes: string;
+  /** PR asal, saat draft ini datang dari "Konversi ke PO". */
+  purchaseRequestId?: string;
+  purchaseRequestNumber?: string;
 }
 
 function emptyForm(): FormState {
   return {
-    paymentType: 'PO',
     partnerId: '',
     date: toDateOnly(today()),
     supplierInvoiceNumber: '',
     currency: 'USD',
+    exchangeRateTouched: false,
     courierName: '',
-    items: [emptyItem()],
+    mawbNumber: '',
+    courierMandateNumber: '',
+    weightUnit: 'GRAM',
+    item: emptyItem(),
     notes: '',
   };
 }
@@ -96,10 +159,107 @@ export function ImportPurchasesView() {
   const permissions = new Set(session?.user.permissions ?? []);
   const can = (key: PermissionKey) => permissions.has(key);
 
+  const searchParams = useSearchParams();
+  const fromRequestId = searchParams.get('from_request');
+
   const [page, setPage] = useState(1);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [voidTarget, setVoidTarget] = useState<{ id: string; number: string } | null>(null);
   const [voidReason, setVoidReason] = useState('');
+
+  // Referensi PR **opsional** — datang otomatis dari URL saat dibuka lewat
+  // "Konversi ke PO" di halaman PR, atau dipilih manual lewat picker di form.
+  // Tidak ada PO impor yang diblokir hanya karena tidak punya PR.
+  const [prId, setPrId] = useState<string | null>(fromRequestId);
+
+  const { data: sourceRequest } = useQuery({
+    queryKey: ['purchase-requests', prId],
+    queryFn: () => purchaseRequestService.detail(prId as string),
+    enabled: prId !== null,
+  });
+
+  // Daftar PR yang bisa dipilih dari picker — disetujui, kategori impor, dan
+  // masih ada sisa untuk dipesan.
+  const { data: pickablePrs, isLoading: isLoadingPrOptions } = useQuery({
+    queryKey: ['purchase-requests', 'pickable', 'GOLD_IMPORT'],
+    queryFn: () => purchaseRequestService.list({ status: 'APPROVED', category: 'GOLD_IMPORT', limit: 50 }),
+  });
+  const prOptions = [
+    { value: '', label: 'Tanpa referensi PR' },
+    ...(pickablePrs?.items ?? [])
+      .filter((pr) => pr.canConvert)
+      .map((pr) => ({ value: pr.id, label: `${pr.number} — ${pr.suggestedPartnerName || 'Tanpa supplier'}` })),
+  ];
+
+  // Prefill sekali dari PR yang dikonversi, disesuaikan di badan render (bukan
+  // efek) mengikuti pola "Adjusting state during rendering" React — hanya
+  // baris yang belum tertutup PO ("Sisa" > 0) yang dibawa.
+  const [prefilledRequestId, setPrefilledRequestId] = useState<string | null>(null);
+  if (sourceRequest && prefilledRequestId !== sourceRequest.id) {
+    setPrefilledRequestId(sourceRequest.id);
+
+    const [source, ...rest] = sourceRequest.items.filter((item) => !item.isFulfilled);
+    if (source) {
+      // PO impor selalu 1 barang — hanya baris pertama yang belum tertutup
+      // yang dibawa ke sini; sisanya tetap di PR untuk dikonversi terpisah.
+      if (rest.length > 0) {
+        toast.warning(
+          `PR ${sourceRequest.number} punya ${rest.length + 1} baris tersisa — hanya baris pertama yang dibawa karena PO impor cuma 1 barang. Sisanya tetap di PR.`,
+        );
+      }
+      const item: ItemDraft = {
+        key: crypto.randomUUID(),
+        // ProductPicker hanya membaca `.id` dari sini untuk menandai pilihan
+        // awal — nama/kode barangnya diambil dari daftar produk yang
+        // dimuatnya sendiri, bukan dari objek ini.
+        product: source.productId ? ({ id: source.productId } as ProductVO) : undefined,
+        // Berat PR sudah dalam gram; harganya dikonversi dari satuan yang
+        // diketik di PR-nya sendiri lewat faktor konversi baris itu.
+        weight: source.outstandingQuantity,
+        pricePerUnit: source.estUnitPrice / source.unit.conversionFactor,
+        purchaseRequestItemId: source.id,
+      };
+      setForm({
+        ...emptyForm(),
+        partnerId: sourceRequest.suggestedPartnerId ?? '',
+        currency:
+          sourceRequest.currencyCode === 'IDR' ? 'USD' : (sourceRequest.currencyCode as 'USD' | 'SGD'),
+        purchaseRequestId: sourceRequest.id,
+        purchaseRequestNumber: sourceRequest.number,
+        item: { ...item, amount: previewAmount(item) },
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (sourceRequest && sourceRequest.items.every((item) => item.isFulfilled)) {
+      toast.error(`PR ${sourceRequest.number} sudah tidak punya sisa untuk dipesan.`);
+    }
+  }, [sourceRequest]);
+
+  // Kurs BCA e-Rate otomatis, mengikuti mata uang PO — sinkron ulang setiap
+  // ganti mata uang, berhenti begitu user mengetik kursnya sendiri
+  // (`exchangeRateTouched`). Sama seperti `@/lib/exchange-rate`: saran
+  // tampilan, bukan bukti — yang mengikat adalah angka yang tersimpan di
+  // dokumennya sendiri.
+  const {
+    data: fxQuote,
+    isFetching: isFetchingRate,
+    refetch: refetchRate,
+  } = useQuery({
+    queryKey: ['exchange-rate', form.currency],
+    queryFn: () => exchangeRateService.quote(form.currency, 'IDR'),
+    staleTime: 60_000,
+  });
+
+  // Dibandingkan langsung ke `form.exchangeRate` (bukan key terpisah yang
+  // diingat sendiri) — form yang di-reset (submit sukses, ganti referensi PR)
+  // mengosongkan `exchangeRate` lagi walau mata uang & kursnya sama, dan
+  // perbandingan tidak langsung akan menganggap itu "sudah pernah diterapkan"
+  // lalu diam-diam membiarkan field itu kosong.
+  if (fxQuote && !form.exchangeRateTouched && form.exchangeRate !== fxQuote.rate) {
+    setForm((prev) => ({ ...prev, exchangeRate: fxQuote.rate }));
+  }
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['metal-purchases', { page, type: 'IMPORT' }],
@@ -110,7 +270,7 @@ export function ImportPurchasesView() {
   const createMutation = useMutation({
     mutationFn: (payload: MetalPurchaseWritePayload) => metalPurchaseService.create(payload),
     onSuccess: (created) => {
-      toast.success(`PO ${created.number} berhasil dibuat sebagai draft.`);
+      toast.success(`PO ${created.number} berhasil dibuat.`);
       void queryClient.invalidateQueries({ queryKey: ['metal-purchases'] });
       setForm(emptyForm());
     },
@@ -141,21 +301,39 @@ export function ImportPurchasesView() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => metalPurchaseService.remove(id),
     onSuccess: () => {
-      toast.success('Draft PO berhasil dihapus.');
+      toast.success('PO berhasil dihapus.');
       void queryClient.invalidateQueries({ queryKey: ['metal-purchases'] });
     },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Gagal menghapus draft PO.')),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Gagal menghapus PO.')),
   });
 
-  function updateItem(key: string, patch: Partial<ItemDraft>): void {
-    setForm((prev) => ({
-      ...prev,
-      items: prev.items.map((item) => (item.key === key ? { ...item, ...patch } : item)),
-    }));
+  function updateItemWith(transform: (item: ItemDraft) => ItemDraft): void {
+    setForm((prev) => ({ ...prev, item: transform(prev.item) }));
   }
 
-  function removeItem(key: string): void {
-    setForm((prev) => ({ ...prev, items: prev.items.filter((item) => item.key !== key) }));
+  function updateItem(patch: Partial<ItemDraft>): void {
+    updateItemWith((item) => ({ ...item, ...patch }));
+  }
+
+  /**
+   * Berat, harga dan nilai barang adalah satu persamaan dengan tiga suku
+   * bersama nilainya, jadi mengubah salah satunya harus menggerakkan yang
+   * lain — tapi hanya saat orangnya selesai mengetik (`onBlur`). Menurunkan
+   * di `onChange` menganggap satu digit yang baru separuh diketik sudah
+   * jawaban akhir, dan nilai turunan akan memicu penurunan balik sehingga
+   * kedua field saling mengejar.
+   */
+  function syncAmount(): void {
+    updateItemWith((item) => ({ ...item, amount: previewAmount(item) }));
+  }
+
+  /** Nilai barang diketik langsung — harga per satuan yang mengikutinya. */
+  function commitAmount(): void {
+    updateItemWith((item) => {
+      if (item.amount === undefined || !item.weight) return item;
+      const priced = { ...item, pricePerUnit: roundTo(item.amount / item.weight, METAL_PURCHASE_PRICE_SCALE) };
+      return { ...priced, amount: previewAmount(priced) };
+    });
   }
 
   function handleSubmit(e: React.FormEvent): void {
@@ -170,35 +348,37 @@ export function ImportPurchasesView() {
       return;
     }
 
-    const items: MetalPurchaseItemPayload[] = [];
-    for (const item of form.items) {
-      if (!item.product || !item.weightGram || !item.purityPercent || !item.pricePerUnit) {
-        toast.error('Lengkapi seluruh baris barang sebelum menyimpan.');
-        return;
-      }
-      items.push({
-        product_id: item.product.id,
-        weight_unit: 'GRAM',
-        weight_gram: item.weightGram,
-        purity_percent: item.purityPercent,
-        price_per_unit: item.pricePerUnit,
-      });
-    }
-
-    if (items.length === 0) {
-      toast.error('Tambahkan minimal satu barang.');
+    const item = form.item;
+    if (!item.product || !item.weight || !item.purityPercent || !item.pricePerUnit) {
+      toast.error('Lengkapi barang sebelum menyimpan.');
       return;
     }
 
+    const items: MetalPurchaseItemPayload[] = [
+      {
+        product_id: item.product.id,
+        purchase_request_item_id: item.purchaseRequestItemId,
+        weight_unit: form.weightUnit,
+        weight_gram: item.weight,
+        purity_percent: item.purityPercent,
+        price_per_unit: item.pricePerUnit,
+      },
+    ];
+
     createMutation.mutate({
       type: 'IMPORT',
-      payment_type: form.paymentType,
+      // Import tidak punya jalur "Direct Purchase" — dengan atau tanpa PR,
+      // cara bayarnya selalu PO.
+      payment_type: 'PO',
       partner_id: form.partnerId,
       date: form.date,
       supplier_invoice_number: form.supplierInvoiceNumber || undefined,
       currency_code: form.currency,
       exchange_rate: form.exchangeRate,
       courier_name: form.courierName || undefined,
+      mawb_number: form.mawbNumber || undefined,
+      courier_mandate_number: form.courierMandateNumber || undefined,
+      purchase_request_id: form.purchaseRequestId,
       items,
       charges: [],
       notes: form.notes || undefined,
@@ -236,22 +416,44 @@ export function ImportPurchasesView() {
                 leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
                 isLoading={createMutation.isPending}
               >
-                Simpan Draft
+                Simpan PO
               </Button>
             </div>
           </div>
 
           <form id="import-purchase-form" onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label className="text-foreground mb-1 block text-xs font-semibold">Cara Bayar</label>
-                <Combobox
-                  options={PAYMENT_TYPE_OPTIONS}
-                  value={form.paymentType}
-                  onValueChange={(v) => setForm((prev) => ({ ...prev, paymentType: v as 'PO' | 'DP' }))}
-                  className="text-xs"
-                />
-              </div>
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-semibold">
+                Referensi Purchase Request <span className="text-foreground-subtle font-normal">(opsional)</span>
+              </label>
+              <Combobox
+                options={prOptions}
+                value={form.purchaseRequestId ?? ''}
+                loading={isLoadingPrOptions}
+                onValueChange={(v) => {
+                  if (v === '') {
+                    setPrId(null);
+                    setPrefilledRequestId(null);
+                    setForm((prev) => ({
+                      ...prev,
+                      purchaseRequestId: undefined,
+                      purchaseRequestNumber: undefined,
+                      item: { ...prev.item, purchaseRequestItemId: undefined },
+                    }));
+                    return;
+                  }
+                  setPrId(v);
+                }}
+                className="text-xs"
+              />
+              {form.purchaseRequestNumber && (
+                <Typography variant="muted" className="mt-1 text-[11px]">
+                  Terisi dari PR {form.purchaseRequestNumber} — hanya baris yang masih bersisa yang dibawa.
+                </Typography>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-foreground mb-1 block text-xs font-semibold">Tgl PO Impor</label>
                 <Input
@@ -279,18 +481,44 @@ export function ImportPurchasesView() {
                 <Combobox
                   options={CURRENCY_OPTIONS}
                   value={form.currency}
-                  onValueChange={(v) => setForm((prev) => ({ ...prev, currency: v as 'USD' | 'SGD' }))}
+                  onValueChange={(v) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      currency: v as 'USD' | 'SGD',
+                      exchangeRateTouched: false,
+                    }))
+                  }
                   className="text-xs"
                 />
               </div>
               <div>
-                <label className="text-foreground mb-1 block text-xs font-semibold">Kurs {form.currency} ke IDR</label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="text-foreground block text-xs font-semibold">Kurs {form.currency} ke IDR</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, exchangeRateTouched: false }));
+                      void refetchRate();
+                    }}
+                    className="text-gold-dark hover:text-gold flex items-center gap-1 text-[11px]"
+                  >
+                    <RefreshCw className={cn('h-3 w-3', isFetchingRate && 'animate-spin')} aria-hidden="true" />
+                    Sync BCA
+                  </button>
+                </div>
                 <NumberInput
                   value={form.exchangeRate}
-                  onChange={(v) => setForm((prev) => ({ ...prev, exchangeRate: v }))}
+                  onChange={(v) =>
+                    setForm((prev) => ({ ...prev, exchangeRate: v, exchangeRateTouched: true }))
+                  }
                   placeholder="Contoh: 16250"
                   className="h-9 text-xs"
                 />
+                {fxQuote && (
+                  <Typography variant="muted" className="mt-1 text-[11px]">
+                    {fxQuote.source} · {fxQuote.asOf.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                  </Typography>
+                )}
               </div>
               <div>
                 <label className="text-foreground mb-1 block text-xs font-semibold">Kargo Pengamanan & Pengiriman</label>
@@ -299,6 +527,27 @@ export function ImportPurchasesView() {
                   onChange={(e) => setForm((prev) => ({ ...prev, courierName: e.target.value }))}
                   className="h-9 text-xs"
                   placeholder="Contoh: Brinks / YLG Logistics"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-foreground mb-1 block text-xs font-semibold">No. MAWB</label>
+                <Input
+                  value={form.mawbNumber}
+                  onChange={(e) => setForm((prev) => ({ ...prev, mawbNumber: e.target.value }))}
+                  className="h-9 text-xs"
+                  placeholder="Contoh: 618-12345678"
+                />
+              </div>
+              <div>
+                <label className="text-foreground mb-1 block text-xs font-semibold">No. Surat Kuasa Kurir</label>
+                <Input
+                  value={form.courierMandateNumber}
+                  onChange={(e) => setForm((prev) => ({ ...prev, courierMandateNumber: e.target.value }))}
+                  className="h-9 text-xs"
+                  placeholder="Contoh: SK-KURIR-2026-0801"
                 />
               </div>
             </div>
@@ -312,76 +561,154 @@ export function ImportPurchasesView() {
             />
 
             <div className="border-border/60 bg-surface/40 space-y-3 rounded-lg border p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-foreground text-xs font-bold">Barang</span>
-                <Button
-                  type="button"
-                  variant="ghost"
+              <div className="flex items-center justify-end gap-3">
+                <Segmented
+                  aria-label="Satuan berat dokumen"
                   size="sm"
-                  onClick={() => setForm((prev) => ({ ...prev, items: [...prev.items, emptyItem()] }))}
-                  leftIcon={<Plus className="h-3.5 w-3.5" />}
-                >
-                  Tambah Baris
-                </Button>
+                  options={WEIGHT_UNIT_TABS}
+                  value={form.weightUnit}
+                  onValueChange={(unit) => setForm((prev) => withWeightUnit(prev, unit))}
+                />
               </div>
 
-              {form.items.map((item) => (
-                <div key={item.key} className="border-border/40 grid grid-cols-1 gap-2 rounded-md border p-2 sm:grid-cols-12">
-                  <div className="sm:col-span-4">
-                    <ProductPicker
-                      value={item.product?.id ?? ''}
-                      onChange={(product) =>
-                        updateItem(item.key, {
-                          product,
-                          purityPercent: product.defaultPurityPercent ?? item.purityPercent,
-                        })
-                      }
-                      label="Produk"
-                    />
+              {(() => {
+                const item = form.item;
+                const purityLocked = item.product?.purityLocked === true;
+                const unitLabel = WEIGHT_UNIT_LABELS[form.weightUnit];
+                const otherUnit: WeightUnit = form.weightUnit === 'GRAM' ? 'TROY_OUNCE' : 'GRAM';
+                const priceOtherUnit =
+                  item.pricePerUnit === undefined
+                    ? undefined
+                    : convertPricePerUnit(item.pricePerUnit, form.weightUnit, otherUnit, METAL_PURCHASE_PRICE_SCALE);
+
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
+                      <div className={purityLocked ? 'sm:col-span-6' : 'sm:col-span-4'}>
+                        <ProductPicker
+                          value={item.product?.id ?? ''}
+                          onChange={(product) =>
+                            updateItem({
+                              product,
+                              purityPercent: product.defaultPurityPercent ?? item.purityPercent,
+                            })
+                          }
+                          label="Produk"
+                        />
+                      </div>
+
+                      <div className={purityLocked ? 'sm:col-span-6' : 'sm:col-span-4'}>
+                        <label className="text-foreground-subtle mb-1 block text-[11px]">Berat ({unitLabel})</label>
+                        <NumberInput
+                          value={item.weight}
+                          onChange={(v) => updateItem({ weight: v })}
+                          onBlur={syncAmount}
+                          decimalScale={4}
+                          rightAddon={<span className="text-xs">{unitLabel}</span>}
+                          className="h-9 text-xs"
+                        />
+                      </div>
+
+                      {/* Kadar tidak ditanyakan sama sekali untuk produk berkadar tetap
+                          (mis. batangan LBMA 99,99%) — nilainya sudah terisi otomatis
+                          dari master produk saat dipilih di atas. */}
+                      {!purityLocked && (
+                        <div className="sm:col-span-4">
+                          <label className="text-foreground-subtle mb-1 block text-[11px]">Kadar (%)</label>
+                          <NumberInput
+                            value={item.purityPercent}
+                            onChange={(v) => updateItem({ purityPercent: v })}
+                            decimalScale={4}
+                            className="h-9 text-xs"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
+                      <div className="sm:col-span-6">
+                        <label className="text-foreground-subtle mb-1 block text-[11px]">
+                          Harga per {unitLabel} ({form.currency})
+                        </label>
+                        <NumberInput
+                          value={item.pricePerUnit}
+                          onChange={(v) => updateItem({ pricePerUnit: v })}
+                          onBlur={syncAmount}
+                          decimalScale={4}
+                          className="h-9 text-xs"
+                          hint={
+                            priceOtherUnit !== undefined
+                              ? `≈ ${formatAmount(priceOtherUnit, form.currency)}/${WEIGHT_UNIT_LABELS[otherUnit]}`
+                              : undefined
+                          }
+                        />
+                      </div>
+                      <div className="sm:col-span-6">
+                        <label className="text-foreground-subtle mb-1 block text-[11px]">
+                          Total Kesepakatan ({form.currency})
+                        </label>
+                        <NumberInput
+                          value={item.amount}
+                          onChange={(v) => updateItem({ amount: v })}
+                          onBlur={commitAmount}
+                          decimalScale={2}
+                          className="h-9 text-xs"
+                          hint="Boleh diisi langsung — harga per satuan menyesuaikan, dan sebaliknya."
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-foreground-subtle mb-1 block text-[11px]">Berat (g)</label>
-                    <NumberInput
-                      value={item.weightGram}
-                      onChange={(v) => updateItem(item.key, { weightGram: v })}
-                      decimalScale={4}
-                      className="h-9 text-xs"
-                    />
+                );
+              })()}
+            </div>
+
+            {(() => {
+              const item = form.item;
+              if (item.amount === undefined) return null;
+              const totalValue = item.amount;
+
+              const weightGramTotal = item.weight === undefined ? 0 : toGram(item.weight, form.weightUnit);
+              const totalLandedCostIdr = form.exchangeRate ? totalValue * form.exchangeRate : undefined;
+              const hppPerGram =
+                totalLandedCostIdr !== undefined && weightGramTotal
+                  ? totalLandedCostIdr / weightGramTotal
+                  : undefined;
+
+              return (
+                <div className="rounded-lg border border-gold/40 bg-surface/60 p-4">
+                  <div className="text-gold-light mb-3 flex items-center gap-2 text-sm font-bold">
+                    <Calculator className="h-4 w-4" aria-hidden="true" />
+                    Rincian Struktur Harga Beli Emas Impor (Buku PT TAN)
                   </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-foreground-subtle mb-1 block text-[11px]">Kadar (%)</label>
-                    <NumberInput
-                      value={item.purityPercent}
-                      onChange={(v) => updateItem(item.key, { purityPercent: v })}
-                      decimalScale={4}
-                      disabled={item.product?.purityLocked}
-                      className="h-9 text-xs"
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="text-foreground-subtle mb-1 block text-[11px]">
-                      Harga/{form.currency === 'USD' ? 'oz' : 'gram'}
-                    </label>
-                    <NumberInput
-                      value={item.pricePerUnit}
-                      onChange={(v) => updateItem(item.key, { pricePerUnit: v })}
-                      className="h-9 text-xs"
-                    />
-                  </div>
-                  <div className="flex items-end justify-end sm:col-span-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeItem(item.key)}
-                      disabled={form.items.length === 1}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <div>
+                      <div className="stat-lbl">1. Nilai Total Beli ({form.currency})</div>
+                      <div className="text-gold-light text-lg font-extrabold">
+                        {formatAmount(totalValue, form.currency)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="stat-lbl">2. Kurs Acuan Transaksi</div>
+                      <div className="text-foreground text-lg font-bold">
+                        {formatCurrency(form.exchangeRate ?? 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="stat-lbl">3. Total Landed Cost (IDR)</div>
+                      <div className="text-emerald-light text-lg font-extrabold">
+                        {formatCurrency(totalLandedCostIdr ?? 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="stat-lbl">4. Estimasi HPP / Gram</div>
+                      <div className="text-sky-light text-lg font-extrabold">
+                        {formatCurrency(Math.round(hppPerGram ?? 0))} / g
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             <div>
               <label className="text-foreground mb-1 block text-xs font-semibold">Catatan</label>
@@ -417,18 +744,19 @@ export function ImportPurchasesView() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nomor</TableHead>
+                <TableHead>Ref PR</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Cara Bayar</TableHead>
                 <TableHead className="text-right">Nilai</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-40" />
+                <TableHead className="w-16 text-center">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-foreground-subtle py-10 text-center text-sm">
+                  <TableCell colSpan={8} className="text-foreground-subtle py-10 text-center text-sm">
                     Belum ada PO impor.
                   </TableCell>
                 </TableRow>
@@ -436,6 +764,15 @@ export function ImportPurchasesView() {
               {items.map((purchase) => (
                 <TableRow key={purchase.id}>
                   <TableCell className="font-mono text-xs font-semibold">{purchase.number}</TableCell>
+                  <TableCell className="text-xs">
+                    {purchase.purchaseRequestNumber ? (
+                      <Badge variant="info" size="sm">
+                        {purchase.purchaseRequestNumber}
+                      </Badge>
+                    ) : (
+                      <span className="text-foreground-subtle">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm">{purchase.partnerName}</TableCell>
                   <TableCell className="text-foreground-muted text-xs">{purchase.dateLabel}</TableCell>
                   <TableCell className="text-xs">{purchase.paymentTypeLabel}</TableCell>
@@ -447,39 +784,53 @@ export function ImportPurchasesView() {
                       {purchase.statusLabel}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1.5">
-                      {purchase.isEditable && can('import-purchases:confirm') && (
+                  <TableCell className="text-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          onClick={() => confirmMutation.mutate(purchase.id)}
-                          leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                          size="icon-sm"
+                          className="h-8 w-8 p-0 text-foreground-muted hover:text-foreground hover:bg-surface-raised cursor-pointer mx-auto"
+                          aria-label={`Aksi untuk ${purchase.number}`}
                         >
-                          Konfirmasi
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                      )}
-                      {purchase.isEditable && can('import-purchases:delete') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteMutation.mutate(purchase.id)}
-                          leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                        >
-                          Hapus
-                        </Button>
-                      )}
-                      {purchase.isVoidable && can('import-purchases:void') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setVoidTarget({ id: purchase.id, number: purchase.number })}
-                          leftIcon={<Ban className="h-3.5 w-3.5" />}
-                        >
-                          Batalkan
-                        </Button>
-                      )}
-                    </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 z-[1100]">
+                        {purchase.isEditable && can('import-purchases:confirm') && (
+                          <DropdownMenuItem
+                            onClick={() => confirmMutation.mutate(purchase.id)}
+                            className="flex items-center gap-2 text-emerald-500 focus:text-emerald-500 cursor-pointer"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>Konfirmasi</span>
+                          </DropdownMenuItem>
+                        )}
+                        {purchase.isEditable && can('import-purchases:delete') && (
+                          <DropdownMenuItem
+                            onClick={() => deleteMutation.mutate(purchase.id)}
+                            className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span>Hapus draft</span>
+                          </DropdownMenuItem>
+                        )}
+                        {purchase.isVoidable && can('import-purchases:void') && (
+                          <DropdownMenuItem
+                            onClick={() => setVoidTarget({ id: purchase.id, number: purchase.number })}
+                            className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <Ban className="h-4 w-4" />
+                            <span>Batalkan (Void)</span>
+                          </DropdownMenuItem>
+                        )}
+                        {!purchase.isEditable && !purchase.isVoidable && (
+                          <DropdownMenuItem disabled>
+                            <span className="text-foreground-subtle text-xs">Tidak ada aksi</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

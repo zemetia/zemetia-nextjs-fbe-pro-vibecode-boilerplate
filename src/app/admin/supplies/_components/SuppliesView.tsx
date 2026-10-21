@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { Pencil, Plus, Search } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Power, Search } from 'lucide-react';
 
 import { apiErrorMessage, supplyService } from '@/services';
 import { useDebouncedValue, useToast } from '@/hooks';
@@ -13,6 +13,12 @@ import type { PermissionKey } from '@/lib/permissions';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Combobox } from '@/components/ui/Combobox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -157,7 +163,7 @@ export function SuppliesView() {
               <TableHead className="w-32">Satuan Beli</TableHead>
               <TableHead className="w-40 text-right">Harga Terakhir</TableHead>
               <TableHead className="w-28 text-center">Status</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-16 text-center">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -218,35 +224,50 @@ export function SuppliesView() {
                     {item.statusLabel}
                   </Badge>
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-1">
-                    {can('supplies:update') && (
+                <TableCell className="text-center">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditing(item);
-                          setFormOpen(true);
-                        }}
-                        title="Ubah barang"
-                        aria-label={`Ubah ${item.code}`}
+                        size="icon-sm"
+                        className="mx-auto h-8 w-8 cursor-pointer p-0 text-foreground-muted hover:bg-surface-raised hover:text-foreground"
+                        aria-label={`Aksi untuk ${item.code}`}
                       >
-                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                        <MoreHorizontal className="h-4 w-4" />
                       </Button>
-                    )}
-                    {can('supplies:set-status') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={statusMutation.isPending}
-                        onClick={() =>
-                          statusMutation.mutate({ id: item.id, isActive: !item.isActive })
-                        }
-                      >
-                        {item.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                      </Button>
-                    )}
-                  </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="z-[1100] w-48">
+                      {can('supplies:update') && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditing(item);
+                            setFormOpen(true);
+                          }}
+                          className="flex cursor-pointer items-center gap-2 text-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span>Ubah barang</span>
+                        </DropdownMenuItem>
+                      )}
+                      {can('supplies:set-status') && (
+                        <DropdownMenuItem
+                          disabled={statusMutation.isPending}
+                          onClick={() =>
+                            statusMutation.mutate({ id: item.id, isActive: !item.isActive })
+                          }
+                          className="flex cursor-pointer items-center gap-2 text-foreground hover:text-foreground"
+                        >
+                          <Power className="h-4 w-4" />
+                          <span>{item.isActive ? 'Nonaktifkan' : 'Aktifkan'}</span>
+                        </DropdownMenuItem>
+                      )}
+                      {!can('supplies:update') && !can('supplies:set-status') && (
+                        <DropdownMenuItem disabled>
+                          <span className="text-xs text-foreground-subtle">Tidak ada aksi</span>
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))}

@@ -72,7 +72,13 @@ export async function GET(request: Request) {
   }
 }
 
-/** PO/kuitansi baru selalu draft — belum menyentuh stok maupun buku besar. */
+/**
+ * PO/kuitansi baru — belum menyentuh stok maupun buku besar (jurnalnya baru
+ * lahir saat TTB dikonfirmasi, lihat `[id]/status/route.ts`). Lokal/scrap
+ * masih lahir sebagai draft yang bisa diedit/dihapus bebas sebelum
+ * dikonfirmasi eksplisit; PO impor langsung `CONFIRMED` sejak baris pertama
+ * disimpan — tidak ada draft PO impor.
+ */
 export async function POST(request: Request) {
   try {
     await requirePermission('local-purchases:create');
@@ -89,7 +95,7 @@ export async function POST(request: Request) {
       ? await linkMetalPurchaseRequest(body.purchase_request_id, body.type)
       : null;
 
-    const items = await prepareMetalPurchaseItems(body.items);
+    const items = await prepareMetalPurchaseItems(body.items, prLink?.itemProductById);
     const goodsAmount = Math.round(items.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
     const date = toUtcDateOnly(body.date);
 
@@ -98,6 +104,12 @@ export async function POST(request: Request) {
         data: {
           ...metalPurchaseColumns(body, goodsAmount),
           ...(prLink ? { purchaseRequestId: prLink.id } : {}),
+          // PO impor tidak punya jalur draft: sekali disimpan, sudah jadi PO
+          // resmi — beda dengan lokal/scrap yang masih punya jeda draft
+          // sebelum dikonfirmasi eksplisit.
+          ...(body.type === 'IMPORT'
+            ? { status: 'CONFIRMED', confirmedById: session.user.id, confirmedAt: new Date() }
+            : {}),
           number,
           createdById: session.user.id,
           items: { create: items },
@@ -107,7 +119,9 @@ export async function POST(request: Request) {
       }),
     );
 
-    // Konversi PR → PO: kunci PR-nya sebagai CONVERTED (cermin markPRAsConverted legacy).
+    // Jejak PO terakhir yang lahir dari PR ini — catatan, bukan status; PR boleh
+    // dikonversi lagi selama masih ada baris yang belum tertutup PO (lihat
+    // orderedQuantityByRequestItem()).
     if (prLink) {
       await prisma.purchaseRequest.update({
         where: { id: prLink.id },

@@ -20,7 +20,7 @@ const inputVariants = cva(
         lg: 'h-10 px-4 text-base file:text-base',
       },
       inputState: {
-        default: 'border-input hover:border-border-strong',
+        default: 'border-border-strong hover:border-foreground-subtle',
         error: 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/25',
         success: 'border-success focus-visible:border-success focus-visible:ring-success/25',
       },

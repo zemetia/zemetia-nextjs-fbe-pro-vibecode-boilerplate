@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { Plus, Ship, CheckCircle2, Ban, Trash2 } from 'lucide-react';
+import { Plus, Ship, CheckCircle2, Ban, Trash2, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -22,20 +22,18 @@ import { Card } from '@/components/ui/Card';
 import { CertificatesInput } from '@/components/ui/CertificatesInput';
 import { Combobox } from '@/components/ui/Combobox';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Typography } from '@/components/ui/Typography';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 const PAGE_SIZE = 20;
 
@@ -59,6 +57,11 @@ interface FormState {
   sppbNo: string;
   mawbNo: string;
   barSerialNumbers: string;
+  assayCertificateNo: string;
+  safeBoxSlot: string;
+  securitySealNo: string;
+  documentWeightGram: number | null;
+  notes: string;
   lines: LineDraft[];
 }
 
@@ -76,6 +79,11 @@ function emptyForm(): FormState {
     sppbNo: '',
     mawbNo: '',
     barSerialNumbers: '',
+    assayCertificateNo: '',
+    safeBoxSlot: '',
+    securitySealNo: '',
+    documentWeightGram: null,
+    notes: '',
     lines: [],
   };
 }
@@ -87,7 +95,6 @@ export function GoodsReceiptView() {
   const can = (key: PermissionKey) => permissions.has(key);
 
   const [page, setPage] = useState(1);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [voidTarget, setVoidTarget] = useState<{ id: string; number: string } | null>(null);
   const [voidReason, setVoidReason] = useState('');
@@ -101,19 +108,7 @@ export function GoodsReceiptView() {
   const { data: confirmedPurchases } = useQuery({
     queryKey: ['metal-purchases', 'confirmed'],
     queryFn: () => metalPurchaseService.list({ status: 'CONFIRMED', limit: 50 }),
-    enabled: isCreateOpen,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (payload: MetalPurchaseDeliveryWritePayload) =>
-      metalPurchaseDeliveryService.create(payload),
-    onSuccess: (created) => {
-      toast.success(`TTB ${created.number} berhasil dibuat sebagai draft.`);
-      void queryClient.invalidateQueries({ queryKey: ['metal-purchase-deliveries'] });
-      setIsCreateOpen(false);
-      setForm(emptyForm());
-    },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Gagal membuat TTB.')),
+    enabled: can('goods-receipts:create'),
   });
 
   const shipMutation = useMutation({
@@ -134,6 +129,19 @@ export function GoodsReceiptView() {
       void queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
     },
     onError: (err) => toast.error(apiErrorMessage(err, 'Gagal mengonfirmasi penerimaan.')),
+  });
+
+  // TTB dibuat langsung atas barang yang sudah ada di tangan — dibuat sebagai
+  // DRAFT lalu langsung dikonfirmasi diterima dalam satu aksi submit, bukan
+  // disimpan sebagai draft yang menunggu langkah "Terima barang" terpisah.
+  const createMutation = useMutation({
+    mutationFn: (payload: MetalPurchaseDeliveryWritePayload) =>
+      metalPurchaseDeliveryService.create(payload),
+    onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ['metal-purchase-deliveries'] });
+      confirmMutation.mutate(created.id, { onSuccess: () => setForm(emptyForm()) });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Gagal membuat TTB.')),
   });
 
   const voidMutation = useMutation({
@@ -235,6 +243,11 @@ export function GoodsReceiptView() {
       sppb_no: form.sppbNo || undefined,
       mawb_no: form.mawbNo || undefined,
       bar_serial_numbers: form.barSerialNumbers || undefined,
+      assay_certificate_no: form.assayCertificateNo || undefined,
+      safe_box_slot: form.safeBoxSlot || undefined,
+      security_seal_no: form.securitySealNo || undefined,
+      document_weight_gram: form.documentWeightGram ?? undefined,
+      notes: form.notes || undefined,
       lines,
       charges: [],
     });
@@ -249,157 +262,41 @@ export function GoodsReceiptView() {
   const totalWeightGramReceived =
     Math.round(form.lines.reduce((sum, line) => sum + (Number(line.weightGram) || 0), 0) * 10000) /
     10000;
+  const weightDiscrepancyGram =
+    form.documentWeightGram === null
+      ? null
+      : Math.round((totalWeightGramReceived - form.documentWeightGram) * 10000) / 10000;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Typography variant="muted" className="text-xs">
-          {data ? `${data.total} TTB` : ''}
-        </Typography>
-        {can('goods-receipts:create') && (
-          <Button
-            size="sm"
-            onClick={() => {
-              setForm(emptyForm());
-              setIsCreateOpen(true);
-            }}
-            leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
-          >
-            Buat TTB
-          </Button>
-        )}
-      </div>
-
-      {isLoading && (
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      )}
-
-      {isError && (
-        <ErrorState
-          variant="inline"
-          message={apiErrorMessage(error, 'Daftar TTB gagal dimuat.')}
-          onRetry={() => void refetch()}
-        />
-      )}
-
-      {!isLoading && !isError && (
-        <Card className="overflow-hidden p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nomor</TableHead>
-                <TableHead>PO</TableHead>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-56" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-foreground-subtle py-10 text-center text-sm">
-                    Belum ada TTB.
-                  </TableCell>
-                </TableRow>
-              )}
-              {items.map((delivery) => (
-                <TableRow key={delivery.id}>
-                  <TableCell className="font-mono text-xs font-semibold">{delivery.number}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span>{delivery.purchaseNumber}</span>
-                      <Badge variant={delivery.purchaseType === 'IMPORT' ? 'info' : 'secondary'} size="sm">
-                        {delivery.purchaseTypeLabel}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-foreground-muted text-xs">{delivery.dateLabel}</TableCell>
-                  <TableCell>
-                    <Badge variant={METAL_PURCHASE_DELIVERY_STATUS_BADGE[delivery.status]} size="sm" dot>
-                      {delivery.statusLabel}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1.5">
-                      {delivery.status === 'DRAFT' && can('goods-receipts:confirm') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => shipMutation.mutate(delivery.id)}
-                          leftIcon={<Ship className="h-3.5 w-3.5" />}
-                        >
-                          Berangkatkan
-                        </Button>
-                      )}
-                      {(delivery.status === 'DRAFT' || delivery.status === 'IN_TRANSIT') &&
-                        can('goods-receipts:confirm') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => confirmMutation.mutate(delivery.id)}
-                            leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                          >
-                            Terima
-                          </Button>
-                        )}
-                      {delivery.isDeletable && can('goods-receipts:delete') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteMutation.mutate(delivery.id)}
-                          leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                        >
-                          Hapus
-                        </Button>
-                      )}
-                      {delivery.isVoidable && can('goods-receipts:void') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setVoidTarget({ id: delivery.id, number: delivery.number })}
-                          leftIcon={<Ban className="h-3.5 w-3.5" />}
-                        >
-                          Batalkan
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-
-      {data && data.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <Typography variant="muted" className="text-xs">
-            Halaman {data.page} dari {data.totalPages}
-          </Typography>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={!data.hasPrevPage} onClick={() => setPage((p) => p - 1)}>
-              Sebelumnya
-            </Button>
-            <Button variant="outline" size="sm" disabled={!data.hasNextPage} onClick={() => setPage((p) => p + 1)}>
-              Berikutnya
-            </Button>
+      {can('goods-receipts:create') && (
+        <Card className="p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <Typography variant="h3" className="text-base font-semibold">
+                Form TTB Baru
+              </Typography>
+              <Typography variant="muted" className="text-xs">
+                {data ? `${data.total} TTB tersimpan` : 'Input TTB di atas tabel'}
+              </Typography>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setForm(emptyForm())}>
+                Reset Form
+              </Button>
+              <Button
+                type="submit"
+                form="goods-receipt-form"
+                size="sm"
+                leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
+                isLoading={createMutation.isPending || confirmMutation.isPending}
+              >
+                Terima Barang
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
 
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>TTB Baru</DialogTitle>
-            <DialogDescription>
-              Pilih PO yang sudah dikonfirmasi. Berat/kadar bisa disesuaikan hasil timbang ulang.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <form id="goods-receipt-form" onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="text-foreground mb-1 block text-xs font-semibold">PO Referensi</label>
               <Combobox
@@ -507,7 +404,31 @@ export function GoodsReceiptView() {
 
             {form.lines.length > 0 && (
               <div className="border-border/60 bg-surface/40 space-y-2 rounded-lg border p-3">
-                <span className="text-foreground text-xs font-bold">Barang Diterima</span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-foreground text-xs font-bold">Barang Diterima</span>
+                  {weightDiscrepancyGram !== null &&
+                    (weightDiscrepancyGram === 0 ? (
+                      <Badge variant="success" size="sm">
+                        Timbangan pas / klop (0 g)
+                      </Badge>
+                    ) : (
+                      <Badge variant={weightDiscrepancyGram > 0 ? 'success' : 'destructive'} size="sm">
+                        Selisih {weightDiscrepancyGram > 0 ? '+' : ''}
+                        {weightDiscrepancyGram.toLocaleString('id-ID', { maximumFractionDigits: 4 })} g
+                      </Badge>
+                    ))}
+                </div>
+                <div className="max-w-xs">
+                  <label className="text-foreground-subtle mb-1 block text-[11px]">
+                    Berat Menurut Surat Jalan Supplier (g)
+                  </label>
+                  <NumberInput
+                    value={form.documentWeightGram}
+                    onChange={(v) => setForm((prev) => ({ ...prev, documentWeightGram: v ?? null }))}
+                    decimalScale={4}
+                    className="h-9 text-xs"
+                  />
+                </div>
                 {form.lines.map((line) => (
                   <div
                     key={line.purchaseItemId}
@@ -556,17 +477,199 @@ export function GoodsReceiptView() {
               />
             )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
-                Batal
-              </Button>
-              <Button type="submit" size="sm" isLoading={createMutation.isPending}>
-                Simpan Draft
-              </Button>
-            </DialogFooter>
+            <div className="border-border/60 bg-surface/40 space-y-3 rounded-lg border p-3">
+              <span className="text-foreground text-xs font-bold">
+                Verifikasi Fisik &amp; Keamanan Brankas
+              </span>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-foreground-subtle mb-1 block text-[11px]">
+                    Lokasi Laci / Slot Brankas
+                  </label>
+                  <Input
+                    value={form.safeBoxSlot}
+                    onChange={(e) => setForm((prev) => ({ ...prev, safeBoxSlot: e.target.value }))}
+                    placeholder="BRANKAS-01 / LACI-A1"
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-foreground-subtle mb-1 block text-[11px]">
+                    No. Segel Pengaman Kargo/Vault
+                  </label>
+                  <Input
+                    value={form.securitySealNo}
+                    onChange={(e) => setForm((prev) => ({ ...prev, securitySealNo: e.target.value }))}
+                    placeholder="SEAL-BRINKS-99120"
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-foreground-subtle mb-1 block text-[11px]">
+                    No. Sertifikat Assay Kemurnian
+                  </label>
+                  <Input
+                    value={form.assayCertificateNo}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, assayCertificateNo: e.target.value }))
+                    }
+                    placeholder="ASSAY-VAL-88912"
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-semibold">
+                Catatan / Deskripsi Fisik Barang Diterima
+              </label>
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="Kondisi fisik emas dan segel Certificate Assay…"
+                className="h-9 text-xs"
+              />
+            </div>
           </form>
-        </DialogContent>
-      </Dialog>
+        </Card>
+      )}
+
+      {isLoading && (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      )}
+
+      {isError && (
+        <ErrorState
+          variant="inline"
+          message={apiErrorMessage(error, 'Daftar TTB gagal dimuat.')}
+          onRetry={() => void refetch()}
+        />
+      )}
+
+      {!isLoading && !isError && (
+        <Card className="overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nomor</TableHead>
+                <TableHead>PO</TableHead>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-16 text-center">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-foreground-subtle py-10 text-center text-sm">
+                    Belum ada TTB.
+                  </TableCell>
+                </TableRow>
+              )}
+              {items.map((delivery) => (
+                <TableRow key={delivery.id}>
+                  <TableCell className="font-mono text-xs font-semibold">{delivery.number}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span>{delivery.purchaseNumber}</span>
+                      <Badge variant={delivery.purchaseType === 'IMPORT' ? 'info' : 'secondary'} size="sm">
+                        {delivery.purchaseTypeLabel}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-foreground-muted text-xs">{delivery.dateLabel}</TableCell>
+                  <TableCell>
+                    <Badge variant={METAL_PURCHASE_DELIVERY_STATUS_BADGE[delivery.status]} size="sm" dot>
+                      {delivery.statusLabel}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-8 w-8 p-0 text-foreground-muted hover:text-foreground hover:bg-surface-raised cursor-pointer mx-auto"
+                          aria-label={`Aksi untuk ${delivery.number}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 z-[1100]">
+                        {delivery.status === 'DRAFT' && can('goods-receipts:confirm') && (
+                          <DropdownMenuItem
+                            onClick={() => shipMutation.mutate(delivery.id)}
+                            className="flex items-center gap-2 text-sky-500 focus:text-sky-500 cursor-pointer"
+                          >
+                            <Ship className="h-4 w-4" />
+                            <span>Berangkatkan</span>
+                          </DropdownMenuItem>
+                        )}
+                        {(delivery.status === 'DRAFT' || delivery.status === 'IN_TRANSIT') &&
+                          can('goods-receipts:confirm') && (
+                            <DropdownMenuItem
+                              onClick={() => confirmMutation.mutate(delivery.id)}
+                              className="flex items-center gap-2 text-emerald-500 focus:text-emerald-500 cursor-pointer"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span>Terima barang</span>
+                            </DropdownMenuItem>
+                          )}
+                        {delivery.isDeletable && can('goods-receipts:delete') && (
+                          <DropdownMenuItem
+                            onClick={() => deleteMutation.mutate(delivery.id)}
+                            className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span>Hapus draft</span>
+                          </DropdownMenuItem>
+                        )}
+                        {delivery.isVoidable && can('goods-receipts:void') && (
+                          <DropdownMenuItem
+                            onClick={() => setVoidTarget({ id: delivery.id, number: delivery.number })}
+                            className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                          >
+                            <Ban className="h-4 w-4" />
+                            <span>Batalkan (Void)</span>
+                          </DropdownMenuItem>
+                        )}
+                        {!(delivery.status === 'DRAFT' && can('goods-receipts:confirm')) &&
+                          !((delivery.status === 'DRAFT' || delivery.status === 'IN_TRANSIT') && can('goods-receipts:confirm')) &&
+                          !(delivery.isDeletable && can('goods-receipts:delete')) &&
+                          !(delivery.isVoidable && can('goods-receipts:void')) && (
+                            <DropdownMenuItem disabled>
+                              <span className="text-foreground-subtle text-xs">Tidak ada aksi</span>
+                            </DropdownMenuItem>
+                          )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {data && data.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <Typography variant="muted" className="text-xs">
+            Halaman {data.page} dari {data.totalPages}
+          </Typography>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={!data.hasPrevPage} onClick={() => setPage((p) => p - 1)}>
+              Sebelumnya
+            </Button>
+            <Button variant="outline" size="sm" disabled={!data.hasNextPage} onClick={() => setPage((p) => p + 1)}>
+              Berikutnya
+            </Button>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={voidTarget !== null}

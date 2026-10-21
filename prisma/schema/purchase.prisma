@@ -137,8 +137,13 @@ model PurchaseOrder {
   /// Master Air Waybill.
   mawbNumber String?
 
-  /// Kurir yang dikuasakan mengurus kiriman impor ini, berikut nomor surat
+  /// Kurir yang dikuasakan mengurus dokumen ini, berikut nomor surat
   /// kuasanya (`SK-KURIR-2026-0801`).
+  ///
+  /// Dipakai kedua rail dengan makna yang sama, cuma konteksnya beda: di
+  /// impor ini kurir/kargo yang mengurus kiriman refinery; di lokal ini kurir
+  /// internal PT TAN yang dikirim mengambil emas & membayar tunai ke
+  /// supplier — surat kuasanya di sini juga disebut "surat tugas".
   ///
   /// **Ini bukan kurir penerimaan.** Yang di `GoodsReceipt` menjawab
   /// "siapa yang mengantar kiriman ini" — satu dokumen yang dikirim tiga kali
@@ -155,6 +160,12 @@ model PurchaseOrder {
   /// dipesan, dan surat kuasanya terbit setelah kurirnya ditunjuk.
   courierName          String?
   courierMandateNumber String?
+
+  /// Lokasi fisik pengambilan barang — khusus rail lokal, saat kurir internal
+  /// PT TAN yang berangkat ke tempat supplier alih-alih supplier yang mengirim.
+  /// Teks bebas (mis. "Toko Emas ABC, Jl. Pasar Baru No. 12"), bukan relasi ke
+  /// mitra: alamat pengambilan bisa berbeda dari alamat terdaftar supplier.
+  pickupLocation String?
 
   /// Transaction currency. `IDR` for LOCAL.
   currencyCode String

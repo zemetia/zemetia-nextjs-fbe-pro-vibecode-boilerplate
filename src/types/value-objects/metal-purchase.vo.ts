@@ -59,8 +59,12 @@ export interface MetalPurchaseVO {
   mawbNumber: string;
   courierName: string;
   courierMandateNumber: string;
+  pickupLocation: string;
   goodsAmount: number;
   goodsAmountLabel: string;
+  /** Referensi Purchase Request asal, bila dokumen ini konversi dari PR. */
+  purchaseRequestId: string | null;
+  purchaseRequestNumber: string;
   notes: string;
   isEditable: boolean;
   isVoidable: boolean;
@@ -124,6 +128,13 @@ export interface MetalPurchaseDeliveryVO {
   sppbNo: string;
   mawbNo: string;
   barSerialNumbers: string;
+  assayCertificateNo: string;
+  safeBoxSlot: string;
+  securitySealNo: string;
+  documentWeightGram: number | null;
+  receivedWeightGram: number | null;
+  weightDiscrepancyGram: number | null;
+  weightDiscrepancyLabel: string;
   notes: string;
   isEditable: boolean;
   isVoidable: boolean;

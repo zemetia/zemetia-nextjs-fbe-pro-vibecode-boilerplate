@@ -7,6 +7,7 @@ import {
   CheckCircle,
   Eye,
   MoreHorizontal,
+  PackagePlus,
   Pencil,
   Trash2,
   XCircle,
@@ -26,7 +27,7 @@ import {
   PurchaseRequestStatusDialog,
   type PurchaseRequestDialogAction,
 } from './PurchaseRequestStatusDialog';
-import { requestDetailHref, requestEditHref } from './routes';
+import { requestConvertHref, requestDetailHref, requestEditHref } from './routes';
 
 export interface PurchaseRequestRowMenuProps {
   request: PurchaseRequestVO;
@@ -60,6 +61,24 @@ export function PurchaseRequestRowMenu({ request, can }: PurchaseRequestRowMenuP
               </Link>
             </DropdownMenuItem>
           )}
+
+          {request.canConvert &&
+            (can('local-purchases:create') || can('import-purchases:create')) && (
+              <DropdownMenuItem asChild>
+                <Link
+                  href={
+                    requestConvertHref(
+                      request.id,
+                      request.category as 'GOLD_IMPORT' | 'GOLD_LOCAL',
+                    ) as Route
+                  }
+                  className="flex items-center gap-2"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  <span>Konversi ke PO</span>
+                </Link>
+              </DropdownMenuItem>
+            )}
 
           {request.canApprove && can('purchase-requests:approve') && (
             <DropdownMenuItem

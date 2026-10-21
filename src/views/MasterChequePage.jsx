@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, CheckCircle, AlertTriangle, ShieldCheck, Filter, Search, Ban, Clock, CheckSquare, Layers, Lock, BookOpen } from 'lucide-react';
+import { CreditCard, Plus, CheckCircle, AlertTriangle, ShieldCheck, Filter, Search, Ban, Clock, CheckSquare, Layers, Lock, BookOpen, MoreHorizontal } from 'lucide-react';
 import { getChequeBooks, saveChequeBooks } from '../services/storageService';
 import {
+  Button,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
   Modal,
   useModal,
   toast,
@@ -306,7 +311,7 @@ export default function MasterChequePage() {
                   <TableHead className="text-right">Nominal Digunakan</TableHead>
                   <TableHead>Jatuh Tempo Kliring</TableHead>
                   <TableHead>Status Pencairan</TableHead>
-                  <TableHead>Aksi</TableHead>
+                  <TableHead className="w-16 text-center">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -336,15 +341,34 @@ export default function MasterChequePage() {
                           leaf.isCleared ? <span className="badge badge-emerald">✅ CAIR DI BANK</span> : <span className="badge badge-gold">⏳ MENUNGGU KLIRING</span>
                         ) : '-'}
                       </TableCell>
-                      <TableCell>
-                        {leaf.status === 'AVAILABLE' && (
-                          <button
-                            className="btn-primary py-1 px-2 text-[0.7rem] bg-[rgba(239,68,68,0.2)] border border-danger text-danger"
-                            onClick={() => handleVoidLeaf(book.id || book.bookNumber, leaf.checkNumber)}
-                          >
-                            <Ban size={12} /> Batalkan (Void)
-                          </button>
-                        )}
+                      <TableCell className="text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-8 w-8 p-0 text-fg-soft hover:text-fg hover:bg-surface-raised cursor-pointer mx-auto"
+                              aria-label={`Aksi untuk lembar ${leaf.checkNumber}`}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 z-[1100]">
+                            {leaf.status === 'AVAILABLE' ? (
+                              <DropdownMenuItem
+                                onClick={() => handleVoidLeaf(book.id || book.bookNumber, leaf.checkNumber)}
+                                className="flex items-center gap-2 text-danger cursor-pointer hover:bg-danger/10 focus:bg-danger/10 focus:text-danger"
+                              >
+                                <Ban className="h-4 w-4 text-danger" />
+                                <span>Batalkan (Void)</span>
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem disabled>
+                                <span className="text-fg-muted text-xs">Tidak ada aksi</span>
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
